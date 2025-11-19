@@ -7,9 +7,9 @@ import requests
 st.set_page_config(page_title="Raptors FR - TTFL", layout="wide", page_icon="🦖")
 
 # --- FONCTION : CHARGER LES DONNÉES ---
-@st.cache_data(ttl=600) # Mise à jour toutes les 10 min
+@st.cache_data(ttl=600)
 def load_data():
-    # On récupère le lien CSV depuis les secrets
+    # 1. Récupération du lien
     if "GOOGLE_SHEET_URL" in st.secrets:
         csv_url = st.secrets["GOOGLE_SHEET_URL"]
     else:
@@ -17,135 +17,133 @@ def load_data():
         st.stop()
     
     try:
-        # Lecture du CSV
-        df = pd.read_csv(csv_url, header=None)
+        # 2. Lecture brute du fichier pour trouver les repères
+        df_raw = pd.read_csv(csv_url, header=None)
         
-        # Le fichier Excel a une structure complexe, on s'adapte :
-        # La ligne 2 (index 2) contient les numéros de Pick [nan, 1, 2, 3...]
-        picks_row = df.iloc[2, 1:] 
+        # --- LOGIQUE INTELLIGENTE ---
+        # On cherche la ligne qui contient le mot "Pick" dans la première colonne
+        # C'est notre point de repère pour les entêtes
+        start_row_index = df_raw[df_raw[0].astype(str).str.contains("Pick", case=False, na=False)].index[0]
         
-        # On cherche où s'arrêtent les joueurs (avant "Team Raptors" ou "Score BP")
-        # On prend large, on filtrera après
-        players_data = df.iloc[3:20].copy()
+        # La ligne des Picks (1, 2, 3...) est celle juste trouvée
+        # On nettoie les valeurs pour qu'elles soient numériques
+        picks_row = pd.to_numeric(df_raw.iloc[start_row_index, 1:], errors='coerce')
         
-        # On renomme : Colonne 0 = Player, les autres = les Picks
-        cols = ['Player'] + list(picks_row)
-        # On s'assure qu'on a le même nombre de colonnes
-        players_data = players_data.iloc[:, :len(cols)]
-        players_data.columns = cols
+        # Les joueurs commencent à la ligne suivante
+        data_start_index = start_row_index + 1
         
-        # On ne garde que les lignes qui ont un nom de joueur valide
-        # (On exclut les lignes vides ou les totaux comme "Team Raptors")
-        # Liste des mots clés à exclure
-        exclude_list = ["Team Raptors", "Score BP", "Classic", "0 et négatif", "BP", "nan"]
-        players_data = players_data[~players_data['Player'].isin(exclude_list)]
-        players_data = players_data.dropna(subset=['Player'])
+        # On cherche la fin (quand on tombe sur "Team Raptors" ou "Score BP")
+        # On coupe large par sécurité (50 lignes max après le début)
+        df_players = df_raw.iloc[data_start_index:data_start_index+50].copy()
+        
+        # On nettoie la première colonne (Noms des joueurs)
+        df_players = df_players.rename(columns={0: 'Player'})
+        
+        # Liste des mots qui signalent la fin du tableau des joueurs
+        stop_words = ["Team Raptors", "Score BP", "Classic", "BP", "nan", "Moyenne"]
+        df_players = df_players[~df_players['Player'].astype(str).isin(stop_words)]
+        df_players = df_players.dropna(subset=['Player']) # Enlève les lignes vides
+        
+        # --- RECONSTRUCTION ---
+        # On mappe les colonnes des joueurs avec les numéros de Pick trouvés plus haut
+        # On crée un dictionnaire {Index_Colonne: Numéro_Pick}
+        valid_cols = {}
+        for idx, pick_num in picks_row.items():
+            if pd.notna(pick_num): # Si c'est un vrai numéro de pick
+                valid_cols[idx] = pick_num
+                
+        # On ne garde que les colonnes valides dans le dataframe des joueurs
+        # Colonne 0 (Player) + les colonnes identifiées
+        cols_to_keep = [0] + list(valid_cols.keys())
+        df_final = df_players.loc[:, cols_to_keep]
+        
+        # On renomme les colonnes avec les vrais numéros de Pick
+        new_col_names = {0: 'Player'}
+        new_col_names.update(valid_cols)
+        df_final = df_final.rename(columns=new_col_names)
 
-        # Transformation en format long
-        df_long = players_data.melt(id_vars=['Player'], var_name='Pick', value_name='Score')
+        # Transformation en format long (Player | Pick | Score)
+        df_long = df_final.melt(id_vars=['Player'], var_name='Pick', value_name='Score')
         
-        # Nettoyage des types
+        # Nettoyage final des types
         df_long['Score'] = pd.to_numeric(df_long['Score'], errors='coerce')
         df_long['Pick'] = pd.to_numeric(df_long['Pick'], errors='coerce')
         
-        # On garde seulement les scores existants (pas les futurs) et valides (>0 ou 0)
+        # On supprime les lignes sans score (futur)
         df_clean = df_long.dropna(subset=['Score', 'Pick'])
         
         return df_clean
         
     except Exception as e:
-        st.error(f"Erreur de lecture : {e}")
+        st.error(f"Erreur lors de l'analyse du fichier : {e}")
         return pd.DataFrame()
 
-# --- FONCTION : ENVOYER SUR DISCORD ---
+# --- FONCTION : DISCORD ---
 def send_discord_summary(top_player, avg_score, pick_num):
     if "DISCORD_WEBHOOK" not in st.secrets:
-        st.error("Webhook Discord manquant dans les Secrets !")
+        st.error("Webhook manquant !")
         return False
 
     webhook_url = st.secrets["DISCORD_WEBHOOK"]
-    
     message = {
         "username": "Raptors Bot 🦖",
         "embeds": [{
-            "title": f"🏀 Récap TTFL - Pick {int(pick_num)}",
-            "color": 13504833, # Rouge Raptors
+            "title": f"🏀 Récap Pick {int(pick_num)}",
+            "color": 13504833,
             "fields": [
-                {"name": "🔥 MVP du Jour", "value": f"**{top_player['Player']}** avec {int(top_player['Score'])} pts", "inline": True},
-                {"name": "📊 Moyenne Équipe", "value": f"{int(avg_score)} pts", "inline": True},
-                {"name": "🔗 Dashboard", "value": "[Voir les stats complètes](https://ttfl-raptors.streamlit.app)", "inline": False}
+                {"name": "🔥 MVP", "value": f"{top_player['Player']} ({int(top_player['Score'])})", "inline": True},
+                {"name": "📊 Moyenne", "value": f"{int(avg_score)} pts", "inline": True},
+                {"name": "🔗 Lien", "value": "[Voir Dashboard](https://ttfl-raptors.streamlit.app)", "inline": False}
             ]
         }]
     }
-    
     try:
         requests.post(webhook_url, json=message)
         return True
     except:
         return False
 
-# --- INTERFACE PRINCIPALE ---
+# --- INTERFACE ---
 try:
     df = load_data()
     
     if not df.empty:
         latest_pick = df['Pick'].max()
-        
-        # Filtrer les données du dernier jour
         day_df = df[df['Pick'] == latest_pick].sort_values('Score', ascending=False)
         
         if not day_df.empty:
             top_player = day_df.iloc[0]
             team_avg = day_df['Score'].mean()
 
-            # Titre
             st.title(f"🦖 RAPTORS FR | PICK {int(latest_pick)}")
-
-            # KPIS
-            kpi1, kpi2, kpi3 = st.columns(3)
-            kpi1.metric("MVP du Jour", top_player['Player'], f"{int(top_player['Score'])} pts")
-            kpi2.metric("Moyenne Équipe", f"{int(team_avg)} pts")
             
-            # Calcul Leader Saison
-            total_scores = df.groupby('Player')['Score'].sum().sort_values(ascending=False)
-            leader = total_scores.index[0]
-            kpi3.metric("Leader Saison", leader, f"{int(total_scores.iloc[0])} pts")
-
+            c1, c2, c3 = st.columns(3)
+            c1.metric("MVP", top_player['Player'], f"{int(top_player['Score'])}")
+            c2.metric("Moyenne", f"{int(team_avg)}")
+            
+            total = df.groupby('Player')['Score'].sum().sort_values(ascending=False)
+            c3.metric("Leader", total.index[0], f"{int(total.iloc[0])}")
+            
             st.divider()
-
-            # Graphique d'évolution
-            st.subheader("📈 Évolution de la Saison")
             
-            # Calcul du cumulatif
+            # Graphique
             df = df.sort_values('Pick')
             df['Cumul'] = df.groupby('Player')['Score'].cumsum()
-            
-            # Filtre Joueurs
-            players_list = df['Player'].unique()
-            selection = st.multiselect("Comparer les joueurs :", players_list, default=players_list[:min(5, len(players_list))])
-            
-            if selection:
-                chart_data = df[df['Player'].isin(selection)]
-                fig = px.line(chart_data, x='Pick', y='Cumul', color='Player', markers=True, title="Course au score total")
-                st.plotly_chart(fig, use_container_width=True)
+            players = df['Player'].unique()
+            sel = st.multiselect("Joueurs", players, default=players[:5])
+            if sel:
+                st.plotly_chart(px.line(df[df['Player'].isin(sel)], x='Pick', y='Cumul', color='Player'))
 
-            # --- SECTION ADMIN (SIDEBAR) ---
+            # Admin
             with st.sidebar:
-                st.header("⚙️ Admin Zone")
-                st.info("Une fois le Excel rempli le matin, clique ici pour notifier l'équipe.")
-                
-                if st.button("📢 Envoyer Récap Discord"):
-                    with st.spinner("Envoi en cours..."):
-                        success = send_discord_summary(top_player, team_avg, latest_pick)
-                        if success:
-                            st.success("Envoyé sur Discord !")
-                        else:
-                            st.error("Erreur d'envoi.")
+                st.header("Admin")
+                if st.button("Envoyer Discord"):
+                    if send_discord_summary(top_player, team_avg, latest_pick):
+                        st.success("Envoyé !")
         else:
-            st.warning("Aucune donnée trouvée pour le dernier pick.")
+            st.warning("Pas de scores pour ce pick.")
     else:
-        st.info("En attente de données...")
+        st.info("Impossible de lire les données. Vérifiez le lien Secret.")
 
 except Exception as e:
-    st.error("Une erreur est survenue.")
-    st.expander("Détails techniques").write(e)
+    st.error(f"Erreur globale : {e}")

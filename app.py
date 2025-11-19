@@ -9,7 +9,7 @@ import requests
 
 # --- 1. CONFIGURATION & CORE SETTINGS ---
 st.set_page_config(
-    page_title="Raptors Ultimate",
+    page_title="Raptors War Room",
     layout="wide",
     page_icon="🦖",
     initial_sidebar_state="expanded"
@@ -73,6 +73,9 @@ st.markdown("""
     /* TABLES & PLOTS CLEANUP */
     div[data-testid="stDataFrame"] { border: none !important; }
     .js-plotly-plot .plotly .main-svg { background: transparent !important; }
+    
+    /* SIDEBAR */
+    section[data-testid="stSidebar"] { background-color: #020202; border-right: 1px solid #222; }
     
 </style>
 """, unsafe_allow_html=True)
@@ -139,7 +142,32 @@ def compute_stats(df):
         })
     return pd.DataFrame(stats)
 
-# --- 4. UI HELPERS ---
+# --- 4. AUTOMATION DISCORD ---
+def send_discord_webhook(top_player, avg_score, pick_num, url_app):
+    if "DISCORD_WEBHOOK" not in st.secrets: return "missing_secret"
+    webhook_url = st.secrets["DISCORD_WEBHOOK"]
+    
+    data = {
+        "username": "Raptors War Room",
+        "avatar_url": "https://upload.wikimedia.org/wikipedia/en/thumb/3/36/Toronto_Raptors_logo.svg/1200px-Toronto_Raptors_logo.svg.png",
+        "embeds": [{
+            "title": f"🦖 RAPPORT TTFL • PICK #{int(pick_num)}",
+            "description": "Les résultats de la nuit sont disponibles.",
+            "color": 13504833,
+            "fields": [
+                {"name": "🔥 MVP", "value": f"**{top_player['Player']}**\n`{int(top_player['Score'])}` pts", "inline": True},
+                {"name": "📊 Moyenne", "value": f"`{int(avg_score)}` pts", "inline": True},
+                {"name": "🔗 Dashboard", "value": f"[Accéder à la War Room]({url_app})", "inline": False}
+            ],
+            "footer": {"text": "Raptors Elite System • We The North"}
+        }]
+    }
+    try:
+        result = requests.post(webhook_url, json=data)
+        return "success" if result.status_code == 204 else f"error: {result.status_code}"
+    except Exception as e: return f"error: {e}"
+
+# --- 5. UI HELPERS ---
 def kpi(label, value, sub=""):
     st.markdown(f"""
     <div class="kpi-box">
@@ -149,7 +177,7 @@ def kpi(label, value, sub=""):
     </div>
     """, unsafe_allow_html=True)
 
-# --- 5. MAIN APPLICATION ---
+# --- 6. MAIN APPLICATION ---
 try:
     df = load_data()
     
@@ -157,6 +185,7 @@ try:
         latest_pick = df['Pick'].max()
         day_df = df[df['Pick'] == latest_pick].sort_values('Score', ascending=False)
         full_stats = compute_stats(df)
+        leader = full_stats.sort_values('Total', ascending=False).iloc[0]
         
         # --- SIDEBAR ---
         with st.sidebar:
@@ -166,7 +195,11 @@ try:
                 options=["Dashboard", "Team HQ", "Player Lab", "Momentum", "Hall of Fame", "Admin"],
                 icons=["grid-fill", "people-fill", "person-bounding-box", "graph-up-arrow", "trophy-fill", "shield-lock"],
                 default_index=0,
-                styles={"nav-link-selected": {"background-color": "#CE1141", "color": "white"}}
+                styles={
+                    "container": {"background-color": "transparent"},
+                    "nav-link-selected": {"background-color": "#CE1141", "color": "white"},
+                    "icon": {"color": "#CE1141"}
+                }
             )
             st.markdown(f"<div style='text-align:center; color:#444; font-size:11px; margin-top:20px'>PICK #{int(latest_pick)}</div>", unsafe_allow_html=True)
 
@@ -175,22 +208,18 @@ try:
             st.markdown(f"<h1>RAPTORS <span style='color:#CE1141'>DASHBOARD</span></h1>", unsafe_allow_html=True)
             st.markdown(f"<p class='subtitle'>Rapport du Pick #{int(latest_pick)}</p>", unsafe_allow_html=True)
             
-            # KPIs Nuit
             top = day_df.iloc[0]
             avg = day_df['Score'].mean()
-            total_pts = day_df['Score'].sum()
             
             c1, c2, c3, c4 = st.columns(4)
             with c1: kpi("MVP DU JOUR", top['Player'], f"{int(top['Score'])} PTS")
             with c2: kpi("MOYENNE TEAM", int(avg), "POINTS")
-            with c3: kpi("TOTAL NUIT", int(total_pts), "POINTS CUMULÉS")
-            with c4: kpi("JOUEURS ACTIFS", len(day_df), "SUR LE PONT")
+            with c3: kpi("TOTAL NUIT", int(day_df['Score'].sum()), "POINTS CUMULÉS")
+            with c4: kpi("MAILLOT JAUNE", leader['Player'], f"AVANCE: {int(leader['Total'] - full_stats.sort_values('Total', ascending=False).iloc[1]['Total'])}")
             
             st.markdown("<br>", unsafe_allow_html=True)
             
-            # Split Chart / Table
             c_left, c_right = st.columns([2, 1])
-            
             with c_left:
                 st.markdown("### 📊 Performance du Soir")
                 fig = px.bar(day_df, x='Player', y='Score', text='Score', color='Score', color_continuous_scale=['#333', '#CE1141'])
@@ -204,8 +233,7 @@ try:
                 
             with c_right:
                 st.markdown("### 📋 Classement")
-                # Tableau HTML custom pour le look
-                html = "<div style='background:#111; border-radius:8px; overflow:hidden; border:1px solid #222'>"
+                html = "<div style='background:#0F0F0F; border-radius:8px; overflow:hidden; border:1px solid #222'>"
                 for i, r in day_df.reset_index().iterrows():
                     color = "#CE1141" if i==0 else "#eee"
                     bg = "#1a1a1a" if i%2==0 else "#111"
@@ -218,23 +246,28 @@ try:
         # --- 2. TEAM HQ (L'EQUIPE) ---
         elif menu == "Team HQ":
             st.markdown("<h1>TEAM <span style='color:#CE1141'>HEADQUARTERS</span></h1>", unsafe_allow_html=True)
-            st.markdown(f"<p class='subtitle'>Vue d'ensemble de la saison</p>", unsafe_allow_html=True)
             
-            # Course au titre
             st.markdown("### 📈 La Course au Titre")
             df_sorted = df.sort_values('Pick')
             df_sorted['Cumul'] = df_sorted.groupby('Player')['Score'].cumsum()
+            top5_total = full_stats.sort_values('Total', ascending=False).head(5)['Player'].tolist()
             
-            fig = px.line(df_sorted, x='Pick', y='Cumul', color='Player', color_discrete_sequence=px.colors.qualitative.Bold)
-            fig.update_layout(
-                plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
-                font={'color': '#AAA'}, xaxis=dict(showgrid=False), yaxis=dict(showgrid=True, gridcolor='#222'),
-                height=500, hovermode="x unified"
-            )
-            st.plotly_chart(fig, use_container_width=True)
+            # Filtre
+            selected_players = st.multiselect("Comparer les joueurs", df['Player'].unique(), default=top5_total)
+            if selected_players:
+                fig = px.line(
+                    df_sorted[df_sorted['Player'].isin(selected_players)], 
+                    x='Pick', y='Cumul', color='Player', 
+                    color_discrete_sequence=px.colors.qualitative.Bold
+                )
+                fig.update_layout(
+                    plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+                    font={'color': '#AAA'}, xaxis=dict(showgrid=False), yaxis=dict(showgrid=True, gridcolor='#222'),
+                    height=450, hovermode="x unified"
+                )
+                st.plotly_chart(fig, use_container_width=True)
             
-            # Distribution
-            st.markdown("### 🎯 Densité des Scores")
+            st.markdown("### 🎯 Distribution des Scores")
             fig_dist = px.box(df, x='Player', y='Score', color='Player', color_discrete_sequence=px.colors.qualitative.Bold)
             fig_dist.update_layout(
                 plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
@@ -246,13 +279,11 @@ try:
         elif menu == "Player Lab":
             st.markdown("<h1>PLAYER <span style='color:#CE1141'>LAB</span></h1>", unsafe_allow_html=True)
             
-            players = sorted(df['Player'].unique())
-            sel_player = st.selectbox("Sélectionner un joueur :", players)
+            sel_player = st.selectbox("Sélectionner un joueur :", sorted(df['Player'].unique()))
             
             p_stats = full_stats[full_stats['Player'] == sel_player].iloc[0]
             p_history = df[df['Player'] == sel_player].sort_values('Pick')
             
-            # Profil KPI
             k1, k2, k3, k4 = st.columns(4)
             with k1: kpi("TOTAL SAISON", int(p_stats['Total']), f"Rank #{int(full_stats.sort_values('Total', ascending=False).reset_index()[full_stats.sort_values('Total', ascending=False).reset_index()['Player'] == sel_player].index[0] + 1)}")
             with k2: kpi("MOYENNE", f"{p_stats['Moyenne']:.1f}", f"vs Team: {df['Score'].mean():.1f}")
@@ -264,9 +295,7 @@ try:
             c_graph, c_pie = st.columns([2, 1])
             with c_graph:
                 st.markdown("### 📊 Historique & Tendance")
-                # Moyenne mobile
                 p_history['MA5'] = p_history['Score'].rolling(5).mean()
-                
                 fig = go.Figure()
                 fig.add_trace(go.Bar(x=p_history['Pick'], y=p_history['Score'], name='Score', marker_color='#333'))
                 fig.add_trace(go.Scatter(x=p_history['Pick'], y=p_history['MA5'], name='Moy. 5j', line=dict(color='#CE1141', width=3)))
@@ -279,12 +308,10 @@ try:
                 
             with c_pie:
                 st.markdown("### 🍰 Répartition")
-                # Buckets
-                bins = [0, 20, 30, 40, 100]
+                bins = [0, 20, 30, 40, 150]
                 labels = ['Brique (<20)', 'Moyen (20-30)', 'Bon (30-40)', 'Top (>40)']
                 p_history['Cat'] = pd.cut(p_history['Score'], bins=bins, labels=labels)
                 counts = p_history['Cat'].value_counts()
-                
                 fig_pie = px.pie(values=counts.values, names=counts.index, hole=0.6, color_discrete_sequence=px.colors.sequential.RdBu)
                 fig_pie.update_layout(height=350, margin=dict(l=0, r=0, t=0, b=0), paper_bgcolor='rgba(0,0,0,0)', font={'color':'#fff'})
                 st.plotly_chart(fig_pie, use_container_width=True)
@@ -292,9 +319,7 @@ try:
         # --- 4. MOMENTUM (FORMES) ---
         elif menu == "Momentum":
             st.markdown("<h1>MOMENTUM <span style='color:#CE1141'>TRACKER</span></h1>", unsafe_allow_html=True)
-            st.markdown(f"<p class='subtitle'>Analyse de la forme sur les 5 et 10 derniers matchs</p>", unsafe_allow_html=True)
             
-            # Calculs Momentum
             full_stats['Momentum_Score'] = full_stats['Last5'] - full_stats['Moyenne']
             hot = full_stats.sort_values('Last5', ascending=False).head(3)
             cold = full_stats.sort_values('Last5', ascending=True).head(3)
@@ -311,8 +336,7 @@ try:
                             <span class="badge badge-fire">+{r['Momentum_Score']:.1f} pts vs Moy.</span>
                         </div>
                         <div style="font-family:Rajdhani; font-size:2rem; font-weight:700;">{r['Last5']:.1f} <span style="font-size:0.8rem; color:#666">MOYENNE 5j</span></div>
-                    </div>
-                    """, unsafe_allow_html=True)
+                    </div>""", unsafe_allow_html=True)
 
             with c_cold:
                 st.markdown("### ❄️ ICE COLD (Dur dur...)")
@@ -324,13 +348,15 @@ try:
                             <span class="badge badge-ice">{r['Momentum_Score']:.1f} pts vs Moy.</span>
                         </div>
                         <div style="font-family:Rajdhani; font-size:2rem; font-weight:700;">{r['Last5']:.1f} <span style="font-size:0.8rem; color:#666">MOYENNE 5j</span></div>
-                    </div>
-                    """, unsafe_allow_html=True)
+                    </div>""", unsafe_allow_html=True)
             
             st.markdown("### 🌡️ Heatmap des 15 derniers jours")
-            # Heatmap
             min_pick = max(1, latest_pick - 14)
             df_heat = df[df['Pick'] >= min_pick].pivot(index='Player', columns='Pick', values='Score')
+            # Tri par score total récent
+            df_heat['sum'] = df_heat.sum(axis=1)
+            df_heat = df_heat.sort_values('sum', ascending=False).drop(columns='sum')
+            
             fig_heat = px.imshow(df_heat, text_auto=True, aspect="auto", color_continuous_scale=['#111', '#CE1141'])
             fig_heat.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'})
             fig_heat.update_coloraxes(showscale=False)
@@ -340,11 +366,10 @@ try:
         elif menu == "Hall of Fame":
             st.markdown("<h1>HALL OF <span style='color:#CE1141'>FAME</span></h1>", unsafe_allow_html=True)
             
-            # Logic
             sniper = full_stats.sort_values('Moyenne', ascending=False).iloc[0]
             bricklayer = full_stats.sort_values('Bricks', ascending=False).iloc[0]
             streaker = full_stats.sort_values('Streak30', ascending=False).iloc[0]
-            nuker = full_stats.sort_values('Best', ascending=False).iloc[0]
+            nuker = full_stats.sort_values('Nukes', ascending=False).iloc[0]
             
             c1, c2 = st.columns(2)
             
@@ -367,10 +392,10 @@ try:
             with c2:
                 st.markdown(f"""
                 <div class="card" style="margin-bottom:20px;">
-                    <div class="badge badge-fire" style="border-color:#fff; color:#fff;">💣 THE NUKE</div>
+                    <div class="badge badge-fire" style="border-color:#fff; color:#fff;">💣 ATOMIC BOMB</div>
                     <h3>{nuker['Player']}</h3>
-                    <p style="color:#888">Record absolu sur un match.</p>
-                    <div class="kpi-val">{int(nuker['Best'])} PTS</div>
+                    <p style="color:#888">Le plus de scores > 50 pts.</p>
+                    <div class="kpi-val">{int(nuker['Nukes'])} NUKES</div>
                 </div>
                 <div class="card">
                     <div class="badge badge-ice">🧱 LE MAÇON</div>
@@ -383,10 +408,28 @@ try:
         # --- 6. ADMIN ---
         elif menu == "Admin":
             st.markdown("<h1>ZONE <span style='color:#CE1141'>ADMIN</span></h1>", unsafe_allow_html=True)
-            st.info("Envoyer le récapitulatif journalier sur le serveur Discord.")
-            if st.button("🚀 ENVOYER NOTIFICATION"):
-                # Fonction fictive ici, reprendre le code précédent si besoin d'activer réellement
-                st.success("Signal envoyé !")
+            
+            st.warning("⚠️ Attention : Cette action envoie une notification publique sur le serveur Discord.")
+            
+            col_btn, col_info = st.columns([1, 3])
+            
+            with col_btn:
+                if st.button("🚀 LANCER LA NOTIF", type="primary"):
+                    top_p = day_df.iloc[0]
+                    avg_s = day_df['Score'].mean()
+                    # Mettez l'URL de votre app ici
+                    app_url = "https://ttfl-raptors.streamlit.app" 
+                    
+                    with st.spinner("Transmission au QG..."):
+                        status = send_discord_webhook(top_p, avg_s, latest_pick, app_url)
+                        
+                    if status == "success":
+                        st.success("✅ Rapport envoyé avec succès !")
+                        st.balloons()
+                    elif status == "missing_secret":
+                        st.error("❌ Erreur : Le secret 'DISCORD_WEBHOOK' est manquant.")
+                    else:
+                        st.error(f"❌ Erreur lors de l'envoi : {status}")
 
     else:
         st.info("Chargement des données...")

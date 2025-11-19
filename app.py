@@ -3,190 +3,282 @@ from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 import plotly.express as px
 import requests
+from streamlit_extras.metric_cards import style_metric_cards
+from streamlit_extras.let_it_rain import rain
 
 # --- CONFIGURATION DE LA PAGE ---
-st.set_page_config(page_title="Raptors FR - TTFL", layout="wide", page_icon="🦖")
+st.set_page_config(
+    page_title="Raptors FR - War Room",
+    layout="wide",
+    page_icon="🦖",
+    initial_sidebar_state="expanded"
+)
 
-# --- FONCTION DE CHARGEMENT DES DONNÉES (CONNEXION NATIVE) ---
-@st.cache_data(ttl=600) # Mise à jour du cache toutes les 10 min
-def load_data():
-    # Création de la connexion sécurisée avec le robot
-    conn = st.connection("gsheets", type=GSheetsConnection)
+# --- CSS PERSONNALISÉ (LOOK RAPTORS) ---
+st.markdown("""
+<style>
+    /* Fond sombre et accents rouges */
+    .stApp { background-color: #0E1117; }
+    h1, h2, h3 { color: #CE1141 !important; font-family: 'Impact', sans-serif; }
+    .stMetricValue { color: #FFFFFF !important; }
     
-    try:
-        # Récupération de l'URL depuis les secrets
-        if "SPREADSHEET_URL" not in st.secrets:
-            st.error("L'URL du Google Sheet manque dans les Secrets Streamlit !")
-            st.stop()
-            
-        url = st.secrets["SPREADSHEET_URL"]
+    /* Style des cartes de stats */
+    div[data-testid="metric-container"] {
+        background-color: #1F2937;
+        border: 1px solid #374151;
+        padding: 15px;
+        border-radius: 10px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+    
+    /* Badge Styles */
+    .badge { padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 0.8em; }
+    .badge-gold { background-color: #FFD700; color: black; }
+    .badge-brick { background-color: #5c2a2a; color: white; }
+</style>
+""", unsafe_allow_html=True)
 
-        # Lecture de la feuille "Valeurs" (Nom exact de l'onglet)
-        # On lit tout sans header pour scanner le fichier nous-mêmes
+# --- FONCTIONS UTILITAIRES ---
+
+def get_medal(rank):
+    if rank == 1: return "🥇"
+    if rank == 2: return "🥈"
+    if rank == 3: return "🥉"
+    return f"{rank}."
+
+def calculate_advanced_stats(df):
+    """Calcule des stats avancées pour chaque joueur."""
+    stats = []
+    players = df['Player'].unique()
+    
+    for player in players:
+        p_data = df[df['Player'] == player]
+        scores = p_data['Score']
+        
+        total_score = scores.sum()
+        avg_score = scores.mean()
+        matches_played = len(scores)
+        best_score = scores.max()
+        worst_score = scores.min()
+        
+        # Stats funs
+        bricks = len(scores[scores < 20]) # Nombre de fois sous 20 pts
+        bombs = len(scores[scores >= 45]) # Nombre de fois au dessus de 45 pts
+        
+        stats.append({
+            'Joueur': player,
+            'Total Pts': int(total_score),
+            'Moyenne': round(avg_score, 1),
+            'Matchs': matches_played,
+            'Best': int(best_score),
+            'Worst': int(worst_score),
+            '🧱 Briques': bricks,
+            '💣 Bombes': bombs
+        })
+        
+    return pd.DataFrame(stats).sort_values('Total Pts', ascending=False).reset_index(drop=True)
+
+# --- CHARGEMENT DES DONNÉES (Même logique robuste) ---
+@st.cache_data(ttl=600)
+def load_data():
+    conn = st.connection("gsheets", type=GSheetsConnection)
+    try:
+        if "SPREADSHEET_URL" not in st.secrets:
+            st.error("URL manquante")
+            st.stop()
+        url = st.secrets["SPREADSHEET_URL"]
         df_raw = conn.read(spreadsheet=url, worksheet="Valeurs", usecols=None, header=None)
         
-        # --- ALGORITHME DE NETTOYAGE ROBUSTE ---
-        
-        # 1. Trouver la ligne des Picks (1, 2, 3...)
-        # On cherche la première ligne qui contient le chiffre 1, 2 et 3 dans les colonnes
-        # Généralement c'est la ligne index 2 (3ème ligne du fichier)
         pick_row_idx = 2
-        
-        # On récupère cette ligne pour avoir les numéros de Picks
         picks_series = pd.to_numeric(df_raw.iloc[pick_row_idx, 1:], errors='coerce')
-        
-        # 2. Isoler les joueurs
-        # Les joueurs commencent juste après la ligne des picks
         data_start_idx = pick_row_idx + 1
-        
-        # On prend une tranche large (50 lignes) pour être sûr d'avoir tout le monde
         df_players = df_raw.iloc[data_start_idx:data_start_idx+50].copy()
-        
-        # On renomme la première colonne "Player"
         df_players = df_players.rename(columns={0: 'Player'})
-        
-        # 3. Filtrer les lignes inutiles (Totaux, Scores BP, Lignes vides)
         stop_words = ["Team Raptors", "Score BP", "Classic", "BP", "nan", "Moyenne", "Somme", "0 et négatif"]
-        # On garde seulement les lignes où 'Player' n'est pas dans la liste interdite
         df_players = df_players[~df_players['Player'].astype(str).isin(stop_words)]
-        df_players = df_players.dropna(subset=['Player']) # Enlève les lignes vides
+        df_players = df_players.dropna(subset=['Player'])
 
-        # 4. Reconstruire le tableau propre
-        # On crée un dictionnaire {Index_Colonne: Numéro_Pick}
         valid_cols_map = {}
         for col_idx, pick_num in picks_series.items():
             if pd.notna(pick_num) and pick_num > 0:
                 valid_cols_map[col_idx] = int(pick_num)
         
-        # On ne garde que les colonnes utiles dans le dataframe joueurs
         cols_to_keep = ['Player'] + list(valid_cols_map.keys())
-        # Petite sécurité : vérifier que les colonnes existent bien
         cols_to_keep = [c for c in cols_to_keep if c in df_players.columns]
-        
         df_clean = df_players[cols_to_keep].copy()
-        
-        # On renomme les colonnes (Ex: Colonne 5 devient "Pick 4")
         df_clean = df_clean.rename(columns=valid_cols_map)
-
-        # 5. Transformer en format long (Base de données)
-        df_long = df_clean.melt(id_vars=['Player'], var_name='Pick', value_name='Score')
         
-        # Conversion finale des types
+        df_long = df_clean.melt(id_vars=['Player'], var_name='Pick', value_name='Score')
         df_long['Score'] = pd.to_numeric(df_long['Score'], errors='coerce')
         df_long['Pick'] = pd.to_numeric(df_long['Pick'], errors='coerce')
-        
-        # On supprime les lignes sans score (les jours futurs)
-        df_final = df_long.dropna(subset=['Score', 'Pick'])
-        
-        return df_final
+        return df_long.dropna(subset=['Score', 'Pick'])
 
     except Exception as e:
-        st.error(f"Erreur lors de la lecture du Google Sheet : {e}")
+        st.error(f"Erreur data : {e}")
         return pd.DataFrame()
 
-# --- FONCTION : ENVOI DISCORD ---
-def send_discord_summary(top_player, avg_score, pick_num):
+# --- FONCTION DISCORD ---
+def send_discord_summary(top_player, avg_score, pick_num, total_points):
     if "DISCORD_WEBHOOK" not in st.secrets:
-        st.error("Webhook Discord manquant !")
+        st.error("Webhook manquant")
         return False
-
     webhook_url = st.secrets["DISCORD_WEBHOOK"]
-    
     message = {
         "username": "Raptors Bot 🦖",
         "embeds": [{
-            "title": f"🏀 Récap TTFL - Pick {int(pick_num)}",
-            "color": 13504833, # Rouge Raptors
+            "title": f"🦖 DEBRIEF - Pick {int(pick_num)}",
+            "description": "Les résultats sont tombés !",
+            "color": 13504833,
             "fields": [
-                {"name": "🔥 MVP du Jour", "value": f"**{top_player['Player']}** ({int(top_player['Score'])})", "inline": True},
-                {"name": "📊 Moyenne Équipe", "value": f"{int(avg_score)} pts", "inline": True},
-                {"name": "🔗 Dashboard", "value": "[Voir les stats complètes](https://ttfl-raptors.streamlit.app)", "inline": False}
-            ]
+                {"name": "👑 MVP", "value": f"**{top_player['Player']}**\nScore: `{int(top_player['Score'])}`", "inline": True},
+                {"name": "📊 Équipe", "value": f"Moyenne: `{int(avg_score)}`\nTotal: `{int(total_points)}`", "inline": True},
+                {"name": "🔗 War Room", "value": "[Voir le Dashboard Complet](https://ttfl-raptors.streamlit.app)", "inline": False}
+            ],
+            "footer": {"text": "We The North!"}
         }]
     }
-    
     try:
         requests.post(webhook_url, json=message)
         return True
     except:
         return False
 
-# --- APPLICATION PRINCIPALE ---
+# --- MAIN APP ---
 try:
     df = load_data()
     
     if not df.empty:
-        # Trouver le dernier pick joué
         latest_pick = df['Pick'].max()
-        
-        # Données du jour
         day_df = df[df['Pick'] == latest_pick].sort_values('Score', ascending=False)
         
-        if not day_df.empty:
-            top_player = day_df.iloc[0]
-            team_avg = day_df['Score'].mean()
+        # Calcul des stats globales
+        global_stats = calculate_advanced_stats(df)
+        leader_season = global_stats.iloc[0]
+        
+        # --- SIDEBAR (Navigation) ---
+        with st.sidebar:
+            st.image("https://upload.wikimedia.org/wikipedia/en/thumb/3/36/Toronto_Raptors_logo.svg/1200px-Toronto_Raptors_logo.svg.png", width=100)
+            st.title(f"Pick #{int(latest_pick)}")
             
-            # --- HEADER ---
-            st.title(f"🦖 RAPTORS FR | PICK {int(latest_pick)}")
-            st.markdown(f"**Mise à jour :** {latest_pick}ème journée")
+            st.write("---")
+            st.header("🛠️ Admin")
+            if st.button("📢 Envoyer Rapport Discord"):
+                with st.spinner("Transmission..."):
+                    total_day_score = day_df['Score'].sum()
+                    if send_discord_summary(day_df.iloc[0], day_df['Score'].mean(), latest_pick, total_day_score):
+                        st.success("Envoyé !")
+                    else:
+                        st.error("Échec")
 
-            # --- KPIs ---
-            kpi1, kpi2, kpi3 = st.columns(3)
-            
-            kpi1.metric("🔥 MVP du Jour", top_player['Player'], f"{int(top_player['Score'])} pts")
-            kpi2.metric("📊 Moyenne Équipe", f"{int(team_avg)} pts")
-            
-            # Calcul Leader Saison
-            total_scores = df.groupby('Player')['Score'].sum().sort_values(ascending=False)
-            leader_name = total_scores.index[0]
-            leader_score = total_scores.iloc[0]
-            
-            kpi3.metric("👑 Leader Saison", leader_name, f"{int(leader_score)} pts")
+        # --- ONGLET 1 : DAILY RECAP (L'Essentiel) ---
+        tab1, tab2, tab3 = st.tabs(["🔥 Daily Recap", "📊 Stats Avancées", "🏆 Hall of Fame"])
+        
+        with tab1:
+            # Header dynamique
+            if not day_df.empty:
+                top_player = day_df.iloc[0]
+                
+                # Animation Confettis si score > 50
+                if top_player['Score'] >= 50:
+                    rain(emoji="🔥", font_size=54, falling_speed=5, animation_length="1s")
 
-            st.divider()
+                col1, col2, col3, col4 = st.columns(4)
+                col1.metric("Meilleur Score", f"{int(top_player['Score'])}", f"{top_player['Player']}")
+                col2.metric("Moyenne Équipe", f"{int(day_df['Score'].mean())}")
+                col3.metric("Total Équipe", f"{int(day_df['Score'].sum())}")
+                col4.metric("Leader Saison", f"{leader_season['Joueur']}", f"{int(leader_season['Total Pts'])}")
+                style_metric_cards(background_color="#1F2937", border_left_color="#CE1141")
+                
+                st.write("---")
+                
+                # Podium du jour
+                c1, c2 = st.columns([2, 1])
+                with c1:
+                    st.subheader("Le Podium du Jour")
+                    podium_df = day_df.head(3).copy()
+                    podium_df['Rang'] = ["🥇", "🥈", "🥉"]
+                    st.dataframe(
+                        podium_df[['Rang', 'Player', 'Score']].set_index('Rang'),
+                        use_container_width=True,
+                        column_config={"Score": st.column_config.ProgressColumn("Score", format="%d", min_value=0, max_value=100)}
+                    )
+                
+                with c2:
+                    st.subheader("🧱 Le Mur des Briques")
+                    flops = day_df[day_df['Score'] < 25].sort_values('Score')
+                    if not flops.empty:
+                        for _, row in flops.iterrows():
+                            st.error(f"**{row['Player']}** : {int(row['Score'])} pts")
+                    else:
+                        st.success("Aucune brique aujourd'hui ! 💪")
 
-            # --- GRAPHIQUE ---
-            st.subheader("📈 La Course au Titre")
+        # --- ONGLET 2 : STATS AVANCÉES (Pour les nerds) ---
+        with tab2:
+            st.subheader("Analyse de l'Équipe")
             
-            # Préparation des données cumulées
+            # Graphique de course
             df_sorted = df.sort_values('Pick')
             df_sorted['Cumul'] = df_sorted.groupby('Player')['Score'].cumsum()
             
-            # Sélecteur de joueurs
             players_list = df['Player'].unique()
-            default_selection = players_list[:5] if len(players_list) > 0 else []
-            selection = st.multiselect("Comparer les joueurs :", players_list, default=default_selection)
+            selected_players = st.multiselect("Comparer les joueurs :", players_list, default=players_list[:5])
             
-            if selection:
-                chart_data = df_sorted[df_sorted['Player'].isin(selection)]
-                fig = px.line(chart_data, x='Pick', y='Cumul', color='Player', markers=True)
+            if selected_players:
+                fig = px.line(
+                    df_sorted[df_sorted['Player'].isin(selected_players)], 
+                    x='Pick', y='Cumul', color='Player', markers=True,
+                    color_discrete_sequence=px.colors.qualitative.Bold
+                )
+                fig.update_layout(
+                    paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                    font=dict(color="white"), xaxis=dict(showgrid=False), yaxis=dict(showgrid=True, gridcolor="#333")
+                )
                 st.plotly_chart(fig, use_container_width=True)
             
-            # --- TABLEAUX ---
-            c1, c2 = st.columns([2, 1])
-            with c1:
-                st.subheader("Classement Général")
-                st.dataframe(total_scores, use_container_width=True)
-            with c2:
-                st.subheader("Scores du Jour")
-                st.dataframe(day_df[['Player', 'Score']].set_index('Player'), use_container_width=True)
+            st.write("---")
+            
+            # Tableau détaillé
+            st.subheader("Tableau de Bord Complet")
+            
+            # On utilise le dataframe calculé plus haut
+            st.dataframe(
+                global_stats,
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "Total Pts": st.column_config.NumberColumn(format="%d pts"),
+                    "Moyenne": st.column_config.NumberColumn(format="%.1f pts"),
+                    "🧱 Briques": st.column_config.NumberColumn(help="Scores inférieurs à 20"),
+                    "💣 Bombes": st.column_config.NumberColumn(help="Scores supérieurs à 45"),
+                }
+            )
 
-            # --- SIDEBAR ADMIN ---
-            with st.sidebar:
-                st.header("⚙️ Zone Admin")
-                st.info("Clique ci-dessous une fois le fichier Excel rempli.")
-                if st.button("📢 Envoyer sur Discord"):
-                    with st.spinner("Envoi en cours..."):
-                        if send_discord_summary(top_player, team_avg, latest_pick):
-                            st.success("Envoyé avec succès !")
-                        else:
-                            st.error("Erreur lors de l'envoi.")
+        # --- ONGLET 3 : HALL OF FAME (Awards) ---
+        with tab3:
+            st.subheader("🏆 Les Trophées de la Saison")
+            
+            # Calcul des awards
+            sniper = global_stats.sort_values('Moyenne', ascending=False).iloc[0]
+            macon = global_stats.sort_values('🧱 Briques', ascending=False).iloc[0]
+            bomber = global_stats.sort_values('💣 Bombes', ascending=False).iloc[0]
+            
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.info(f"🎯 **Le Sniper**\n\n**{sniper['Joueur']}**\n\nMeilleure Moyenne : {sniper['Moyenne']}")
+            
+            with col2:
+                st.warning(f"💣 **L'Artificier**\n\n**{bomber['Joueur']}**\n\n{bomber['💣 Bombes']} scores > 45")
+                
+            with col3:
+                st.error(f"🧱 **Le Maçon**\n\n**{macon['Joueur']}**\n\n{macon['🧱 Briques']} scores < 20")
+            
+            st.write("---")
+            st.markdown("*Les trophées sont calculés automatiquement sur l'ensemble des picks joués.*")
 
-        else:
-            st.warning("Aucun score trouvé pour le dernier pick.")
     else:
-        st.info("Connexion réussie, mais le tableau semble vide ou mal formaté.")
+        st.warning("En attente de données...")
 
 except Exception as e:
-    st.error("Une erreur critique est survenue.")
-    st.expander("Voir l'erreur").write(e)
+    st.error("Erreur critique")
+    st.expander("Logs").write(e)

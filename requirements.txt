@@ -3,5 +3,5 @@ pandas
 plotly
 requests
 st-gsheets-connection
-streamlit-extras
 streamlit-option-menu
+numpy

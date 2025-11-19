@@ -415,10 +415,12 @@ try:
             
             with col_btn:
                 if st.button("🚀 LANCER LA NOTIF", type="primary"):
+                    # On récupère les infos fraîches
                     top_p = day_df.iloc[0]
                     avg_s = day_df['Score'].mean()
-                    # Mettez l'URL de votre app ici
-                    app_url = "https://ttfl-raptors.streamlit.app" 
+                    
+                    # --- TON LIEN EXACT ICI ---
+                    app_url = "https://dino-fant-tvewyye4t3dmqfeuvqsvmg.streamlit.app/" 
                     
                     with st.spinner("Transmission au QG..."):
                         status = send_discord_webhook(top_p, avg_s, latest_pick, app_url)
@@ -430,6 +432,14 @@ try:
                         st.error("❌ Erreur : Le secret 'DISCORD_WEBHOOK' est manquant.")
                     else:
                         st.error(f"❌ Erreur lors de l'envoi : {status}")
+            
+            with col_info:
+                st.markdown("""
+                **Checklist avant envoi :**
+                1. Le fichier Excel est bien rempli pour tous les joueurs.
+                2. Le numéro de Pick est correct.
+                3. Vous avez vérifié les KPIs sur le Dashboard.
+                """)
 
     else:
         st.info("Chargement des données...")

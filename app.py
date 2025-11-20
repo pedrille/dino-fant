@@ -24,6 +24,7 @@ C_SILVER = "#C0C0C0"
 C_BRONZE = "#CD7F32"
 C_GREEN = "#10B981"
 C_BLUE = "#3B82F6"
+C_PURPLE = "#8B5CF6"
 
 # --- 2. CSS PREMIUM (DESIGN SYSTEM) ---
 st.markdown(f"""
@@ -66,7 +67,7 @@ st.markdown(f"""
         box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
     }}
 
-    /* --- TRENDS NEW LAYOUT --- */
+    /* --- TRENDS LAYOUT --- */
     .trend-section-title {{
         font-family: 'Rajdhani'; font-size: 1.2rem; font-weight: 700; color: #FFF; margin-bottom: 5px; border-left: 4px solid #555; padding-left: 10px;
     }}
@@ -121,68 +122,86 @@ st.markdown(f"""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 3. DATA ENGINE (CACHE 60s) ---
+# --- 3. DATA ENGINE (V4 - INTELLIGENT PARSING) ---
 @st.cache_data(ttl=60) 
 def load_data():
     conn = st.connection("gsheets", type=GSheetsConnection)
     try:
-        if "SPREADSHEET_URL" not in st.secrets: return pd.DataFrame(), 0
+        if "SPREADSHEET_URL" not in st.secrets: return pd.DataFrame(), 0, pd.Series()
         
         # 1. LECTURE ONGLET VALEURS (Joueurs)
+        # On lit tout pour attraper la ligne "Score BP" qui est souvent ligne 16 (index 15)
         df_raw = conn.read(spreadsheet=st.secrets["SPREADSHEET_URL"], worksheet="Valeurs", header=None, ttl=0)
         
+        # Extraction Ligne Pick
         pick_row_idx = 2
         picks_series = pd.to_numeric(df_raw.iloc[pick_row_idx, 1:], errors='coerce')
-        data_start_idx = pick_row_idx + 1
         
+        # Extraction Ligne Score BP (Best Pick) - Ligne 16 dans le CSV fourni
+        # On cherche la ligne qui commence par "Score BP"
+        bp_row_data = df_raw[df_raw[0].astype(str).str.contains("Score BP", na=False)]
+        if not bp_row_data.empty:
+            bp_series = pd.to_numeric(bp_row_data.iloc[0, 1:], errors='coerce')
+        else:
+            bp_series = pd.Series(index=picks_series.index, data=0)
+
+        # Nettoyage Joueurs
+        data_start_idx = pick_row_idx + 1
         df_players = df_raw.iloc[data_start_idx:data_start_idx+50].copy()
         df_players = df_players.rename(columns={0: 'Player'})
         stop_words = ["Team Raptors", "Score BP", "Classic", "BP", "nan", "Moyenne", "Somme"]
         df_players = df_players[~df_players['Player'].astype(str).isin(stop_words)].dropna(subset=['Player'])
 
+        # Mapping des colonnes valides
         valid_cols_map = {idx: int(val) for idx, val in picks_series.items() if pd.notna(val) and val > 0}
+        
+        # Dataframe Clean
         cols_to_keep = ['Player'] + list(valid_cols_map.keys())
         cols_to_keep = [c for c in cols_to_keep if c in df_players.columns]
-        
         df_clean = df_players[cols_to_keep].copy().rename(columns=valid_cols_map)
+        
+        # Dataframe Long (Pour les calculs)
         df_long = df_clean.melt(id_vars=['Player'], var_name='Pick', value_name='Score')
         df_long['Score'] = pd.to_numeric(df_long['Score'], errors='coerce')
         df_long['Pick'] = pd.to_numeric(df_long['Pick'], errors='coerce')
-        
         final_df = df_long.dropna(subset=['Score', 'Pick'])
 
+        # Mapping BP (Best Pick) pour comparaison
+        # On crée un dictionnaire {Pick_Num : Score_BP}
+        bp_map = {int(picks_series[idx]): val for idx, val in bp_series.items() if idx in valid_cols_map}
+
         # 2. LECTURE ONGLET STATS (Pour le Team Rank)
-        # On tente de lire le classement "Team Raptors" dans la colonne AK (index 36 env.)
+        # Le classement est dans le bloc de droite "Classement" (colonne AK environ)
+        team_rank = 0
         try:
             df_stats = conn.read(spreadsheet=st.secrets["SPREADSHEET_URL"], worksheet="Stats_Raptors_FR", header=None, ttl=0)
-            # On cherche la ligne où il y a "Team Raptors" dans la colonne AJ (index 35) ou autour
-            # Selon le screen, c'est vers la ligne 14, colonne AK pour le score.
-            # Une méthode plus robuste : chercher "Team Raptors" dans la zone de droite et prendre la valeur à côté
-            team_rank = 0
-            # On scanne la colonne AJ (35) pour trouver "Team Raptors"
-            for idx, row in df_stats.iterrows():
-                if str(row[35]) == "Team Raptors": # AJ
-                    team_rank = row[36] # AK
-                    break
+            # Recherche de "Team Raptors" dans la colonne AJ (35) ou AK (36)
+            # Selon le CSV, "Team Raptors" est en ligne 14, Col AK (36), et le rang est en fin de ligne
             
-            # Fallback si pas trouvé (au cas où structure bouge)
-            if team_rank == 0:
-                 # On essaye hardcodé ligne 14 (index 13) col AK (index 36)
-                 val = df_stats.iloc[13, 36]
-                 if pd.to_numeric(val, errors='coerce') > 0:
-                     team_rank = val
+            # On scanne la zone pour trouver "Team Raptors" et prendre la dernière valeur non nulle de sa ligne
+            for idx, row in df_stats.iterrows():
+                # On convertit la ligne en string pour chercher
+                row_str = row.astype(str).values
+                if "Team Raptors" in row_str:
+                    # On cherche des nombres dans cette ligne
+                    numeric_values = [x for x in row if isinstance(x, (int, float, np.number)) and not pd.isna(x)]
+                    if numeric_values:
+                        team_rank = numeric_values[-1] # Le dernier chiffre est le classement actuel
+                    break
         except:
-            team_rank = 999 # Valeur par défaut si erreur lecture
+            team_rank = 0
 
-        return final_df, team_rank
-    except: return pd.DataFrame(), 0
+        return final_df, int(team_rank), bp_map
+    except: return pd.DataFrame(), 0, {}
 
-def compute_stats(df):
+def compute_stats(df, bp_map):
     stats = []
     for p in df['Player'].unique():
         d = df[df['Player'] == p].sort_values('Pick')
         scores = d['Score'].values
+        picks = d['Pick'].values
         
+        # Streak 30
         streak_30 = 0
         for s in reversed(scores):
             if s >= 30: streak_30 += 1
@@ -192,6 +211,13 @@ def compute_stats(df):
         last5_avg = last_5.mean() if len(scores) >= 5 else scores.mean()
         momentum = last5_avg - scores.mean()
         
+        # Calcul des Best Picks (BP)
+        # On compare le score du joueur au score BP du pick correspondant
+        bp_count = 0
+        for pick_num, score in zip(picks, scores):
+            if pick_num in bp_map and score >= bp_map[pick_num] and score > 0:
+                bp_count += 1
+
         stats.append({
             'Player': p,
             'Total': scores.sum(),
@@ -207,6 +233,8 @@ def compute_stats(df):
             'Count40': len(scores[scores >= 40]),
             'Carottes': len(scores[scores < 20]),
             'Nukes': len(scores[scores >= 50]),
+            'Zeros': len(scores[scores == 0]), # Nouveau Stat Ghost
+            'BP_Count': bp_count, # Nouveau Stat Sniper
             'Momentum': momentum,
             'Games': len(scores)
         })
@@ -230,7 +258,7 @@ def get_comparative_stats(df, current_pick, lookback=15):
     return stats_delta
 
 # --- 4. DISCORD ---
-def send_discord_webhook(day_df, pick_num, url_app):
+def send_discord_webhook(day_df, pick_num, url_app, team_rank):
     if "DISCORD_WEBHOOK" not in st.secrets: return "missing_secret"
     webhook_url = st.secrets["DISCORD_WEBHOOK"]
     
@@ -241,13 +269,14 @@ def send_discord_webhook(day_df, pick_num, url_app):
         podium_text += f"{medals[i]} **{row['Player']}** • {int(row['Score'])} pts\n"
     
     avg_score = int(day_df['Score'].mean())
+    rank_txt = f"#{team_rank}" if team_rank > 0 else "N/A"
 
     data = {
         "username": "Raptors Intelligence",
         "avatar_url": "https://cdn-icons-png.flaticon.com/512/2592/2592242.png", 
         "embeds": [{
             "title": f"🦖 DEBRIEF • PICK #{int(pick_num)}",
-            "description": f"La nuit est terminée. Voici le rapport officiel.\n\n**MOYENNE TEAM :** `{avg_score} pts`",
+            "description": f"La nuit est terminée. Voici le rapport officiel.\n\n**MOYENNE TEAM :** `{avg_score} pts`\n**CLASSEMENT :** `{rank_txt}`",
             "color": 13504833,
             "fields": [
                 {"name": "🏆 PODIUM", "value": podium_text, "inline": False},
@@ -276,12 +305,12 @@ def section_title(title, subtitle):
 
 # --- 6. MAIN APP ---
 try:
-    df, team_rank = load_data()
+    df, team_rank, bp_map = load_data()
     
     if not df.empty:
         latest_pick = df['Pick'].max()
         day_df = df[df['Pick'] == latest_pick].sort_values('Score', ascending=False)
-        full_stats = compute_stats(df)
+        full_stats = compute_stats(df, bp_map)
         leader = full_stats.sort_values('Total', ascending=False).iloc[0]
         
         # --- SIDEBAR ---
@@ -321,7 +350,7 @@ try:
             <div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'>
                 <div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>
                     Data Pick #{int(latest_pick)}<br>
-                    War Room v3.5
+                    War Room v4.0
                 </div>
             </div>
             """, unsafe_allow_html=True)
@@ -334,9 +363,12 @@ try:
             c1, c2, c3, c4 = st.columns(4)
             with c1: kpi_card("MVP DU JOUR", top['Player'], f"{int(top['Score'])} PTS", C_GOLD)
             with c2: kpi_card("MOYENNE TEAM", int(day_df['Score'].mean()), "POINTS")
-            # Affichage du rang d'équipe récupéré dans l'onglet 2
+            
+            # Affichage CLASSEMENT TEAM récupéré dynamiquement
             rank_display = f"#{int(team_rank)}" if team_rank > 0 else "N/A"
-            with c3: kpi_card("CLASSEMENT TEAM", rank_display, "GENERAL")
+            rank_color = C_GOLD if team_rank > 0 and team_rank <= 20 else (C_GREEN if team_rank <= 100 else "#FFF")
+            
+            with c3: kpi_card("CLASSEMENT TEAM", rank_display, "GENERAL", rank_color)
             with c4: kpi_card("LEADER SAISON", leader['Player'], f"TOTAL: {int(leader['Total'])}", C_ACCENT)
             
             col_chart, col_rank = st.columns([2, 1])
@@ -372,11 +404,13 @@ try:
             st.plotly_chart(fig_dist, use_container_width=True)
             
             st.markdown("### 📈 CLASSEMENT GÉNÉRAL")
-            st.dataframe(full_stats[['Player', 'Total', 'Moyenne', 'Best', 'Nukes', 'Carottes']].sort_values('Total', ascending=False), hide_index=True, use_container_width=True, column_config={
+            st.dataframe(full_stats[['Player', 'Total', 'Moyenne', 'BP_Count', 'Nukes', 'Carottes', 'Zeros']].sort_values('Total', ascending=False), hide_index=True, use_container_width=True, column_config={
                 "Total": st.column_config.ProgressColumn("Total Pts", format="%d", min_value=0, max_value=full_stats['Total'].max()), 
                 "Moyenne": st.column_config.NumberColumn("Moyenne", format="%.1f"),
                 "Carottes": st.column_config.NumberColumn("🥕", help="Scores < 20"),
-                "Nukes": st.column_config.NumberColumn("☢️", help="Scores > 50")
+                "Nukes": st.column_config.NumberColumn("☢️", help="Scores > 50"),
+                "BP_Count": st.column_config.NumberColumn("🎯", help="Best Picks"),
+                "Zeros": st.column_config.NumberColumn("👻", help="Bulles (0 pts)")
             })
 
         # --- PLAYER LAB ---
@@ -414,7 +448,7 @@ try:
                     color = "#4ADE80" if s >= 40 else ("#F87171" if s < 20 else "#FFF")
                     cols[i].markdown(f"<div style='text-align:center; font-family:Rajdhani; font-size:1.2rem; font-weight:800; color:{color}; background:rgba(255,255,255,0.05); border-radius:8px; padding:10px'>{int(s)}</div>", unsafe_allow_html=True)
 
-        # --- TRENDS (VERSION 3.5 - ROW BY ROW) ---
+        # --- TRENDS ---
         elif menu == "Trends":
             section_title("MARKET <span class='highlight'>WATCH</span>", "Analyse des tendances sur 15 jours")
             
@@ -483,31 +517,11 @@ try:
                 st.markdown("<div style='margin-bottom:30px'></div>", unsafe_allow_html=True) # Spacer
 
             # --- DISPLAY BLOCKS ---
-            
-            # 1. GENERAL AVERAGE
-            render_comparison_row("MOYENNE GÉNÉRALE (15 JOURS)", 
-                                  "Les joueurs les plus réguliers vs ceux en difficulté sur la quinzaine.", 
-                                  top_hot_avg, top_cold_avg, "raw", "pts")
-            
-            # 2. SHORT TERM BURST (7 Jours)
-            render_comparison_row("EXPLOSIVITÉ (7 JOURS VS SAISON)", 
-                                  "Écart de points entre la semaine passée et la moyenne habituelle.", 
-                                  top_hot_7, top_cold_7, "diff", "pts diff")
-            
-            # 3. % EVOLUTION
-            render_comparison_row("DYNAMIQUE DE FORME (15J VS SAISON)", 
-                                  "Pourcentage de progression ou régression sur la quinzaine.", 
-                                  top_hot_pct, top_cold_pct, "pct", "")
-
-            # 4. EXTREMES
-            render_comparison_row("PICKS MARQUANTS (15 JOURS)", 
-                                  "Accumulation de scores > 50pts (Nukes) vs scores < 20pts (Carottes).", 
-                                  nukes_15, carrots_15, "int", "picks")
-
-            # 5. RANKING
-            render_comparison_row("MOUVEMENTS AU CLASSEMENT", 
-                                  "Gains et pertes de places au général sur 15 jours.", 
-                                  top_hot_rank[top_hot_rank>0], top_cold_rank[top_cold_rank<0], "diff", "places")
+            render_comparison_row("MOYENNE GÉNÉRALE (15 JOURS)", "Les joueurs les plus réguliers vs ceux en difficulté sur la quinzaine.", top_hot_avg, top_cold_avg, "raw", "pts")
+            render_comparison_row("EXPLOSIVITÉ (7 JOURS VS SAISON)", "Écart de points entre la semaine passée et la moyenne habituelle.", top_hot_7, top_cold_7, "diff", "pts diff")
+            render_comparison_row("DYNAMIQUE DE FORME (15J VS SAISON)", "Pourcentage de progression ou régression sur la quinzaine.", top_hot_pct, top_cold_pct, "pct", "")
+            render_comparison_row("PICKS MARQUANTS (15 JOURS)", "Accumulation de scores > 50pts (Nukes) vs scores < 20pts (Carottes).", nukes_15, carrots_15, "int", "picks")
+            render_comparison_row("MOUVEMENTS AU CLASSEMENT", "Gains et pertes de places au général sur 15 jours.", top_hot_rank[top_hot_rank>0], top_cold_rank[top_cold_rank<0], "diff", "places")
 
 
         # --- HALL OF FAME ---
@@ -524,6 +538,9 @@ try:
             nuke = full_stats.sort_values('Nukes', ascending=False).iloc[0]
             floor = full_stats.sort_values('Worst', ascending=True).iloc[0]
             lapin = full_stats.sort_values('Carottes', ascending=False).iloc[0]
+            # NOUVEAUX STATS
+            best_picker = full_stats.sort_values('BP_Count', ascending=False).iloc[0]
+            ghost = full_stats.sort_values('Zeros', ascending=False).iloc[0]
 
             def hof_card(title, icon, color, p_name, val, unit, desc):
                 return f"""
@@ -546,6 +563,7 @@ try:
             c1, c2 = st.columns(2)
             with c1:
                 st.markdown(hof_card("THE GOAT", "🏆", C_GOLD, sniper['Player'], f"{sniper['Moyenne']:.1f}", "PTS MOY", "Meilleure moyenne générale"), unsafe_allow_html=True)
+                st.markdown(hof_card("THE SNIPER", "🎯", C_PURPLE, best_picker['Player'], int(best_picker['BP_Count']), "BEST PICKS", "A trouvé le meilleur score le plus souvent"), unsafe_allow_html=True)
                 st.markdown(hof_card("HUMAN TORCH", "🔥", "#FF5252", torche['Player'], f"{torche['Last15']:.1f}", "PTS / 15J", "Le plus chaud du mois"), unsafe_allow_html=True)
                 st.markdown(hof_card("RISING STAR", "🚀", C_GREEN, fusee['Player'], f"+{fusee['Momentum']:.1f}", "PTS GAIN", "Progression vs Saison"), unsafe_allow_html=True)
                 st.markdown(hof_card("THE CEILING", "🏔️", "#A78BFA", peak['Player'], int(peak['Best']), "PTS MAX", "Record absolu en un match"), unsafe_allow_html=True)
@@ -557,6 +575,7 @@ try:
                 st.markdown(hof_card("NUCLEAR", "☢️", "#EF4444", nuke['Player'], int(nuke['Nukes']), "BOMBS", "Scores > 50pts"), unsafe_allow_html=True)
                 st.markdown(hof_card("THE FLOOR", "🧱", "#9CA3AF", floor['Player'], int(floor['Worst']), "PTS MIN", "Pire score enregistré"), unsafe_allow_html=True)
                 st.markdown(hof_card("THE FARMER", "🥕", "#F97316", lapin['Player'], int(lapin['Carottes']), "CAROTTES", "Scores < 20pts"), unsafe_allow_html=True)
+                st.markdown(hof_card("THE GHOST", "👻", "#888", ghost['Player'], int(ghost['Zeros']), "BULLES", "Scores à 0 point"), unsafe_allow_html=True)
 
         # --- ADMIN ---
         elif menu == "Admin":
@@ -591,7 +610,7 @@ try:
                     st.markdown("#### 📡 DISCORD")
                     st.write("Envoi du rapport quotidien.")
                     if st.button("🚀 ENVOYER RAPPORT DISCORD", type="primary"):
-                        res = send_discord_webhook(day_df, latest_pick, "https://dino-fant-tvewyye4t3dmqfeuvqsvmg.streamlit.app/")
+                        res = send_discord_webhook(day_df, latest_pick, "https://dino-fant-tvewyye4t3dmqfeuvqsvmg.streamlit.app/", team_rank)
                         if res == "success": st.success("✅ Envoyé !")
                         else: st.error(f"Erreur : {res}")
                     st.markdown("</div>", unsafe_allow_html=True)

@@ -125,8 +125,8 @@ st.markdown(f"""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 3. DATA ENGINE (OPTIMISÉ CACHE 60s) ---
-@st.cache_data(ttl=60) # Remis à 60s pour éviter la lenteur extrême
+# --- 3. DATA ENGINE (CACHE 60s) ---
+@st.cache_data(ttl=60) 
 def load_data():
     conn = st.connection("gsheets", type=GSheetsConnection)
     try:
@@ -300,7 +300,7 @@ try:
             <div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'>
                 <div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>
                     Data Pick #{int(latest_pick)}<br>
-                    War Room v3.0
+                    War Room v3.1
                 </div>
             </div>
             """, unsafe_allow_html=True)
@@ -330,7 +330,6 @@ try:
                 st.markdown("<div class='glass-card' style='height:100%'>", unsafe_allow_html=True)
                 st.markdown("<h3 style='margin-bottom:20px'>📋 CLASSEMENT</h3>", unsafe_allow_html=True)
                 
-                # --- FIX DU BUG D'AFFICHAGE HTML ---
                 medals = {0: "🥇", 1: "🥈", 2: "🥉"}
                 rows_html = ""
                 for i, r in day_df.reset_index().iterrows():
@@ -338,7 +337,6 @@ try:
                     hl_style = f"border-left: 3px solid {C_ACCENT}; background: rgba(255,255,255,0.03);" if i == 0 else "border-left: 3px solid transparent;"
                     score_col = C_ACCENT if i == 0 else "#FFF"
                     
-                    # Attention à l'indentation ici ! Tout doit être collé à gauche dans la f-string pour Markdown
                     rows_html += f"""<div class='rank-row' style='{hl_style}'><div class='rank-pos'>{pos_disp}</div><div class='rank-name' style='color:{'#FFF' if i < 3 else '#AAA'}'>{r['Player']}</div><div class='rank-score' style='color:{score_col}'>{int(r['Score'])}</div></div>"""
                 
                 st.markdown(f"<div style='display:flex; flex-direction:column; gap:5px'>{rows_html}</div></div>", unsafe_allow_html=True)
@@ -394,7 +392,7 @@ try:
                     color = "#4ADE80" if s >= 40 else ("#F87171" if s < 20 else "#FFF")
                     cols[i].markdown(f"<div style='text-align:center; font-family:Rajdhani; font-size:1.2rem; font-weight:800; color:{color}; background:rgba(255,255,255,0.05); border-radius:8px; padding:10px'>{int(s)}</div>", unsafe_allow_html=True)
 
-        # --- TRENDS (CORRECTION HTML BUG) ---
+        # --- TRENDS ---
         elif menu == "Trends":
             section_title("MARKET <span class='highlight'>WATCH</span>", "Analyse des tendances sur 15 jours")
             
@@ -411,7 +409,6 @@ try:
             merged['PctDiff'] = ((merged['Mean15'] - merged['SeasonAvg']) / merged['SeasonAvg']) * 100
             
             def render_trend_block(title, desc, icon, color, data_rows, type_metric):
-                # Début du bloc
                 html = f"""
                 <div class="trend-container">
                     <div class="{'hot' if color==C_ACCENT else 'cold'}-header">
@@ -451,7 +448,6 @@ try:
                             val_html = f"{val} <span style='font-size:0.8rem'>{'picks' if 'Highs' in row else 'carottes'}</span>"
                             sub_html = f"soit {pct:.0f}% des matchs"
 
-                        # Construction ligne par ligne sans indentation pour éviter le bug Markdown
                         html += f"""<div class="trend-row"><div class="trend-name">{p_name}</div><div class="trend-val-block"><div class="trend-val-main" style="color:{c_val}">{val_html}</div><div class="trend-val-sub">{sub_html}</div></div></div>"""
                 
                 html += "</div>"
@@ -539,24 +535,54 @@ try:
 
         # --- ADMIN ---
         elif menu == "Admin":
-            section_title("ADMIN <span class='highlight'>PANEL</span>", "Gestion des flux")
+            section_title("ADMIN <span class='highlight'>PANEL</span>", "Accès Restreint")
             
-            col_refresh, col_discord = st.columns(2)
-            
-            with col_refresh:
-                st.markdown("#### 🔄 DONNÉES")
-                st.info("Utiliser ce bouton si les scores ne semblent pas à jour.")
-                if st.button("FORCER LA MISE À JOUR (PURGE CACHE)", type="secondary"):
-                    st.cache_data.clear()
+            # 1. Init Session
+            if "admin_access" not in st.session_state:
+                st.session_state["admin_access"] = False
+
+            # 2. Login
+            if not st.session_state["admin_access"]:
+                c1, c2, c3 = st.columns([1, 2, 1])
+                with c2:
+                    st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
+                    st.markdown("#### 🔒 ZONE SÉCURISÉE")
+                    pwd = st.text_input("Mot de passe", type="password", key="admin_pwd")
+                    
+                    if st.button("DÉVERROUILLER"):
+                        if "ADMIN_PASSWORD" in st.secrets and pwd == st.secrets["ADMIN_PASSWORD"]:
+                            st.session_state["admin_access"] = True
+                            st.rerun()
+                        else:
+                            st.error("⛔ Accès refusé")
+                    st.markdown("</div>", unsafe_allow_html=True)
+
+            # 3. Admin Content
+            else:
+                col_refresh, col_discord = st.columns(2)
+                
+                with col_refresh:
+                    st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
+                    st.markdown("#### 🔄 DONNÉES")
+                    st.info("Utiliser si les données ne sont pas à jour.")
+                    if st.button("FORCER LA MISE À JOUR (PURGE)", type="secondary"):
+                        st.cache_data.clear()
+                        st.rerun()
+                    st.markdown("</div>", unsafe_allow_html=True)
+                
+                with col_discord:
+                    st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
+                    st.markdown("#### 📡 DISCORD")
+                    st.write("Envoi du rapport quotidien.")
+                    if st.button("🚀 ENVOYER RAPPORT DISCORD", type="primary"):
+                        res = send_discord_webhook(day_df, latest_pick, "https://dino-fant-tvewyye4t3dmqfeuvqsvmg.streamlit.app/")
+                        if res == "success": st.success("✅ Envoyé !")
+                        else: st.error(f"Erreur : {res}")
+                    st.markdown("</div>", unsafe_allow_html=True)
+                
+                if st.button("🔒 VERROUILLER L'ACCÈS"):
+                    st.session_state["admin_access"] = False
                     st.rerun()
-            
-            with col_discord:
-                st.markdown("#### 📡 DISCORD")
-                st.write("Envoi du rapport quotidien.")
-                if st.button("🚀 ENVOYER RAPPORT DISCORD", type="primary"):
-                    res = send_discord_webhook(day_df, latest_pick, "https://dino-fant-tvewyye4t3dmqfeuvqsvmg.streamlit.app/")
-                    if res == "success": st.success("✅ Envoyé !")
-                    else: st.error(f"Erreur : {res}")
 
     else: st.warning("⚠️ Aucune donnée trouvée dans la Spreadsheet. Vérifiez l'URL et le format.")
 except Exception as e: st.error(f"🔥 Critical Error: {e}")

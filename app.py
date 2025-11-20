@@ -34,6 +34,7 @@ C_IRON = "#A1A1AA"
 C_BONUS = "#06B6D4"
 C_PURE = "#14B8A6"
 C_ORANGE = "#F97316"
+C_RED = "#F87171" # Correction pour les carottes
 
 # --- 2. CSS PREMIUM ---
 st.markdown(f"""
@@ -313,7 +314,7 @@ try:
             st.image("raptors-ttfl-min.png", use_container_width=True) 
             st.markdown("</div>", unsafe_allow_html=True)
             menu = option_menu(menu_title=None, options=["Dashboard", "Team HQ", "Player Lab", "Bonus x2", "Trends", "Hall of Fame", "Admin"], icons=["grid-fill", "people-fill", "person-bounding-box", "lightning-charge-fill", "fire", "trophy-fill", "shield-lock"], default_index=0, styles={"container": {"padding": "0!important", "background-color": "#000000"}, "icon": {"color": "#666", "font-size": "1.1rem"}, "nav-link": {"font-family": "Rajdhani, sans-serif", "font-weight": "700", "font-size": "15px", "text-transform": "uppercase", "color": "#AAA", "text-align": "left", "margin": "5px 0px", "--hover-color": "#111"}, "nav-link-selected": {"background-color": C_ACCENT, "color": "#FFF", "icon-color": "#FFF", "box-shadow": "0px 4px 20px rgba(206, 17, 65, 0.4)"}})
-            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v11.6 Final</div></div>""", unsafe_allow_html=True)
+            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v11.7 Final</div></div>""", unsafe_allow_html=True)
             
             # SCRIPT JS POUR FERMER SIDEBAR
             components.html("""<script>const options = window.parent.document.querySelectorAll('.nav-link'); options.forEach((option) => { option.addEventListener('click', () => { const sidebar = window.parent.document.querySelector('section[data-testid="stSidebar"]'); if (sidebar) {} }); });</script>""", height=0, width=0)
@@ -357,7 +358,7 @@ try:
                     rows += f"""<div class='rank-row' style='{style}'><div class='rank-pos'>{pos}</div><div class='rank-name' style='color:{'#FFF' if i < 3 else '#AAA'}'>{r['Player']}{bonus_icon}</div><div class='rank-score' style='color:{col}'>{int(r['Score'])}</div></div>"""
                 st.markdown(f"<div style='display:flex; flex-direction:column; gap:5px'>{rows}</div></div>", unsafe_allow_html=True)
 
-            # --- UPDATED: DASHBOARD FOOTER ---
+            # --- DASHBOARD FOOTER ---
             st.markdown("<div style='margin-bottom:30px'></div>", unsafe_allow_html=True)
             st.markdown("### 🏆 LEADERS & FORME DU MOMENT")
             c_podium, c_forme = st.columns(2)
@@ -397,6 +398,7 @@ try:
         elif menu == "Team HQ":
             section_title("TEAM <span class='highlight'>HQ</span>", "Vue d'ensemble de l'effectif")
             
+            # CALCULATION BEFORE USE
             total_pts_season = df['Score'].sum()
             daily_agg = df.groupby('Pick')['Score'].sum()
             best_night = daily_agg.max()
@@ -415,11 +417,21 @@ try:
 
             nb_matchs_joues = latest_pick 
             daily_totals = df.groupby('Pick')['Score'].sum()
-            avg_team_15 = daily_totals[daily_totals.index > (latest_pick - 15)].mean()
+            # Handle cases where we have less than 15 days
+            if len(daily_totals) > 15:
+                avg_team_15 = daily_totals[daily_totals.index > (latest_pick - 15)].mean()
+            else:
+                avg_team_15 = daily_totals.mean()
+                
             avg_team_season = daily_totals.mean()
             diff_team = avg_team_15 - avg_team_season
             col_dyn = C_GREEN if diff_team > 0 else C_ORANGE
             sign_dyn = "+" if diff_team > 0 else ""
+            
+            # Pre-calc chart data
+            team_daily_totals = df.groupby('Pick')['Score'].sum().reset_index()
+            last_15_team = team_daily_totals[team_daily_totals['Pick'] > (latest_pick - 15)]
+            team_season_avg_total = team_daily_totals['Score'].mean()
 
             c_stats, c_info = st.columns([3, 2])
 
@@ -485,7 +497,6 @@ try:
             fig_dist = px.violin(df, x='Player', y='Score', box=True, points="all", color='Player', color_discrete_sequence=px.colors.qualitative.Prism)
             fig_dist.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, showlegend=False, height=400, yaxis=dict(gridcolor='#222'))
             st.plotly_chart(fig_dist, use_container_width=True)
-            
             st.markdown("### 📊 DATA ROOM")
             st.markdown("<div class='chart-desc'>Tableau de bord détaillé de tous les joueurs.</div>", unsafe_allow_html=True)
             st.dataframe(full_stats[['Player', 'Total', 'Moyenne', 'BP_Count', 'Nukes', 'Carottes', 'Bonus_Gained']].sort_values('Total', ascending=False), hide_index=True, use_container_width=True, column_config={
@@ -549,7 +560,8 @@ try:
                 r1c1, r1c2, r1c3 = st.columns(3)
                 with r1c1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(p_data['ReliabilityPct'])}%</div><div class='stat-mini-lbl'>FIABILITÉ</div><div class='stat-mini-sub'>% Picks > 20pts</div></div>", unsafe_allow_html=True)
                 with r1c2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(p_data['Nukes'])}</div><div class='stat-mini-lbl'>NUKES</div><div class='stat-mini-sub'>Scores > 50pts</div></div>", unsafe_allow_html=True)
-                with r1c3: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{F87171}'>{int(p_data['Carottes'])}</div><div class='stat-mini-lbl'>CAROTTES</div><div class='stat-mini-sub'>Scores < 20pts</div></div>", unsafe_allow_html=True)
+                # ERROR FIX HERE: Added C_RED variable usage
+                with r1c3: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_RED}'>{int(p_data['Carottes'])}</div><div class='stat-mini-lbl'>CAROTTES</div><div class='stat-mini-sub'>Scores < 20pts</div></div>", unsafe_allow_html=True)
                 st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
                 
                 r2c1, r2c2, r2c3 = st.columns(3)

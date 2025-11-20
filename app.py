@@ -125,14 +125,14 @@ st.markdown(f"""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 3. DATA ENGINE (NO CACHE = REAL TIME) ---
-@st.cache_data(ttl=0) # TTL=0 FORCE LE RELOAD
+# --- 3. DATA ENGINE (OPTIMISÉ CACHE 60s) ---
+@st.cache_data(ttl=60) # Remis à 60s pour éviter la lenteur extrême
 def load_data():
     conn = st.connection("gsheets", type=GSheetsConnection)
     try:
         if "SPREADSHEET_URL" not in st.secrets: return pd.DataFrame()
         
-        # Lecture directe sans cache
+        # Lecture avec petit cache
         df_raw = conn.read(spreadsheet=st.secrets["SPREADSHEET_URL"], worksheet="Valeurs", header=None, ttl=0)
         
         pick_row_idx = 2
@@ -266,7 +266,6 @@ try:
         # --- SIDEBAR ---
         with st.sidebar:
             st.markdown("<div style='text-align:center; margin-bottom: 30px;'>", unsafe_allow_html=True)
-            # Logo image
             st.image("raptors-ttfl-min.png", use_container_width=True) 
             st.markdown("</div>", unsafe_allow_html=True)
             
@@ -301,7 +300,7 @@ try:
             <div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'>
                 <div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>
                     Data Pick #{int(latest_pick)}<br>
-                    War Room v2.5
+                    War Room v3.0
                 </div>
             </div>
             """, unsafe_allow_html=True)
@@ -330,23 +329,19 @@ try:
             with col_rank:
                 st.markdown("<div class='glass-card' style='height:100%'>", unsafe_allow_html=True)
                 st.markdown("<h3 style='margin-bottom:20px'>📋 CLASSEMENT</h3>", unsafe_allow_html=True)
-                html_rank = "<div style='display:flex; flex-direction:column; gap:5px'>"
-                medals = {0: "🥇", 1: "🥈", 2: "🥉"}
                 
+                # --- FIX DU BUG D'AFFICHAGE HTML ---
+                medals = {0: "🥇", 1: "🥈", 2: "🥉"}
+                rows_html = ""
                 for i, r in day_df.reset_index().iterrows():
                     pos_disp = medals.get(i, f"<span style='color:#666; font-size:0.9rem'>{i+1}</span>")
                     hl_style = f"border-left: 3px solid {C_ACCENT}; background: rgba(255,255,255,0.03);" if i == 0 else "border-left: 3px solid transparent;"
                     score_col = C_ACCENT if i == 0 else "#FFF"
                     
-                    html_rank += f"""
-                    <div class='rank-row' style='{hl_style}'>
-                        <div class='rank-pos'>{pos_disp}</div>
-                        <div class='rank-name' style='color:{'#FFF' if i < 3 else '#AAA'}'>{r['Player']}</div>
-                        <div class='rank-score' style='color:{score_col}'>{int(r['Score'])}</div>
-                    </div>
-                    """
-                html_rank += "</div></div>"
-                st.markdown(html_rank, unsafe_allow_html=True)
+                    # Attention à l'indentation ici ! Tout doit être collé à gauche dans la f-string pour Markdown
+                    rows_html += f"""<div class='rank-row' style='{hl_style}'><div class='rank-pos'>{pos_disp}</div><div class='rank-name' style='color:{'#FFF' if i < 3 else '#AAA'}'>{r['Player']}</div><div class='rank-score' style='color:{score_col}'>{int(r['Score'])}</div></div>"""
+                
+                st.markdown(f"<div style='display:flex; flex-direction:column; gap:5px'>{rows_html}</div></div>", unsafe_allow_html=True)
 
         # --- TEAM HQ ---
         elif menu == "Team HQ":
@@ -399,7 +394,7 @@ try:
                     color = "#4ADE80" if s >= 40 else ("#F87171" if s < 20 else "#FFF")
                     cols[i].markdown(f"<div style='text-align:center; font-family:Rajdhani; font-size:1.2rem; font-weight:800; color:{color}; background:rgba(255,255,255,0.05); border-radius:8px; padding:10px'>{int(s)}</div>", unsafe_allow_html=True)
 
-        # --- TRENDS (VERSION PREMIUM) ---
+        # --- TRENDS (CORRECTION HTML BUG) ---
         elif menu == "Trends":
             section_title("MARKET <span class='highlight'>WATCH</span>", "Analyse des tendances sur 15 jours")
             
@@ -416,6 +411,7 @@ try:
             merged['PctDiff'] = ((merged['Mean15'] - merged['SeasonAvg']) / merged['SeasonAvg']) * 100
             
             def render_trend_block(title, desc, icon, color, data_rows, type_metric):
+                # Début du bloc
                 html = f"""
                 <div class="trend-container">
                     <div class="{'hot' if color==C_ACCENT else 'cold'}-header">
@@ -423,7 +419,8 @@ try:
                         <div class="trend-desc">{desc}</div>
                     </div>
                 """
-                if data_rows.empty: html += "<div style='color:#666; font-style:italic'>Aucune donnée significative.</div>"
+                if data_rows.empty: 
+                    html += "<div style='color:#666; font-style:italic'>Aucune donnée significative.</div>"
                 else:
                     for p_name, row in data_rows.iterrows():
                         val_html = ""
@@ -435,37 +432,28 @@ try:
                             c_val = C_GREEN if diff > 0 else "#F87171"
                             val_html = f"{row['Mean15']:.1f} <span style='font-size:0.8rem'>pts</span>"
                             sub_html = f"{sign}{diff:.1f} pts ({sign}{row['PctDiff']:.0f}%) vs saison"
-                            
                         elif type_metric == 'mom':
                             val = row['mean_diff']
                             sign = "+" if val > 0 else ""
                             c_val = C_GREEN if val > 0 else "#F87171"
                             val_html = f"{sign}{val:.1f} <span style='font-size:0.8rem'>pts</span>"
                             sub_html = f"Évolution moyenne sur 15j"
-
                         elif type_metric == 'rank':
                             val = int(row['rank_diff'])
                             sign = "+" if val > 0 else ""
                             c_val = "#FFF"
                             val_html = f"{sign}{val} <span style='font-size:0.8rem'>places</span>"
                             sub_html = "au classement général"
-
                         elif type_metric == 'count':
                             val = int(row['Highs'] if 'Highs' in row else row['Lows'])
                             pct = (val/row['Count'])*100
-                            label = "picks" if 'Highs' in row else "carottes"
                             c_val = "#FFF"
-                            val_html = f"{val} <span style='font-size:0.8rem'>{label}</span>"
+                            val_html = f"{val} <span style='font-size:0.8rem'>{'picks' if 'Highs' in row else 'carottes'}</span>"
                             sub_html = f"soit {pct:.0f}% des matchs"
 
-                        html += f"""
-                        <div class="trend-row">
-                            <div class="trend-name">{p_name}</div>
-                            <div class="trend-val-block">
-                                <div class="trend-val-main" style="color:{c_val}">{val_html}</div>
-                                <div class="trend-val-sub">{sub_html}</div>
-                            </div>
-                        </div>"""
+                        # Construction ligne par ligne sans indentation pour éviter le bug Markdown
+                        html += f"""<div class="trend-row"><div class="trend-name">{p_name}</div><div class="trend-val-block"><div class="trend-val-main" style="color:{c_val}">{val_html}</div><div class="trend-val-sub">{sub_html}</div></div></div>"""
+                
                 html += "</div>"
                 return html
 
@@ -501,11 +489,10 @@ try:
                 top_lows = merged[merged['Lows'] > 0].sort_values('Lows', ascending=False).head(3)
                 st.markdown(render_trend_block("CARROT FARMERS", "Accumulation de scores < 20pts.", "🥕", C_BLUE, top_lows, 'count'), unsafe_allow_html=True)
 
-        # --- HALL OF FAME (REDESIGN) ---
+        # --- HALL OF FAME ---
         elif menu == "Hall of Fame":
             section_title("HALL OF <span class='highlight'>FAME</span>", "Records & Trophées de la saison")
             
-            # Calc Stats
             sniper = full_stats.sort_values('Moyenne', ascending=False).iloc[0]
             torche = full_stats.sort_values('Last15', ascending=False).iloc[0]
             fusee = full_stats.sort_values('Momentum', ascending=False).iloc[0]

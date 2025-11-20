@@ -41,10 +41,7 @@ st.markdown(f"""
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Rajdhani:wght@500;600;700;800&display=swap');
     .stApp {{ background-color: {C_BG}; color: {C_TEXT}; font-family: 'Inter', sans-serif; }}
     section[data-testid="stSidebar"] {{ background-color: #000000 !important; border-right: 1px solid #222; }}
-    
-    /* LOGO NON CLIQUABLE */
     section[data-testid="stSidebar"] img {{ pointer-events: none; }}
-    
     div[data-testid="stSidebarNav"] {{ display: none; }} 
     .nav-link {{ font-family: 'Rajdhani', sans-serif !important; font-weight: 700 !important; text-transform: uppercase !important; letter-spacing: 1px !important; }}
     h1, h2, h3 {{ font-family: 'Rajdhani', sans-serif; text-transform: uppercase; margin: 0; }}
@@ -274,7 +271,7 @@ def send_discord_webhook(day_df, pick_num, url_app):
         "avatar_url": DISCORD_AVATAR_URL, 
         "embeds": [{
             "title": f"🏀 RECAP DU PICK #{int(pick_num)}",
-            "description": f"Les matchs sont terminés, voici les scores de l'équipe !\n\n📊 **MOYENNE TEAM :** `{avg_score} pts`",
+            "description": f"Les matchs sont terminés, voici les scores du clan !\n\n📊 **MOYENNE TEAM :** `{avg_score} pts`",
             "color": 13504833,
             "fields": [{"name": "🏆 LE PODIUM", "value": podium_text, "inline": False}, {"name": "", "value": f"👉 [Voir tous les détails sur le Dashboard]({url_app})", "inline": False}],
             "footer": {"text": "Raptors TTFL • We The North"}
@@ -304,7 +301,7 @@ try:
             st.image("raptors-ttfl-min.png", use_container_width=True) 
             st.markdown("</div>", unsafe_allow_html=True)
             menu = option_menu(menu_title=None, options=["Dashboard", "Team HQ", "Player Lab", "Bonus x2", "Trends", "Hall of Fame", "Admin"], icons=["grid-fill", "people-fill", "person-bounding-box", "lightning-charge-fill", "fire", "trophy-fill", "shield-lock"], default_index=0, styles={"container": {"padding": "0!important", "background-color": "#000000"}, "icon": {"color": "#666", "font-size": "1.1rem"}, "nav-link": {"font-family": "Rajdhani, sans-serif", "font-weight": "700", "font-size": "15px", "text-transform": "uppercase", "color": "#AAA", "text-align": "left", "margin": "5px 0px", "--hover-color": "#111"}, "nav-link-selected": {"background-color": C_ACCENT, "color": "#FFF", "icon-color": "#FFF", "box-shadow": "0px 4px 20px rgba(206, 17, 65, 0.4)"}})
-            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v10.3</div></div>""", unsafe_allow_html=True)
+            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v11.0</div></div>""", unsafe_allow_html=True)
             
             # SCRIPT JS POUR FERMER SIDEBAR
             components.html("""<script>const options = window.parent.document.querySelectorAll('.nav-link'); options.forEach((option) => { option.addEventListener('click', () => { const sidebar = window.parent.document.querySelector('section[data-testid="stSidebar"]'); if (sidebar) {} }); });</script>""", height=0, width=0)
@@ -355,6 +352,20 @@ try:
                 fig_h.update_traces(line_color=C_ACCENT, line_width=3, marker_size=8)
                 fig_h.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, yaxis=dict(autorange="reversed", gridcolor='#222'), xaxis=dict(showgrid=False))
                 st.plotly_chart(fig_h, use_container_width=True)
+            
+            # --- NEW: TEAM TREND CHART ---
+            st.markdown("### 📈 DYNAMIQUE TEAM (15 DERNIERS MATCHS)")
+            team_daily_scores = df.groupby('Pick')['Score'].mean().reset_index()
+            last_15_team = team_daily_scores[team_daily_scores['Pick'] > (latest_pick - 15)]
+            team_season_mean = df['Score'].mean()
+            
+            fig_team_trend = px.line(last_15_team, x='Pick', y='Score', markers=True)
+            fig_team_trend.update_traces(line_color=C_ACCENT, line_width=3, marker_size=8)
+            # Add Average Line
+            fig_team_trend.add_hline(y=team_season_mean, line_dash="dot", line_color=C_TEXT, annotation_text="Moy. Saison", annotation_position="bottom right")
+            fig_team_trend.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, yaxis=dict(gridcolor='#222'), xaxis=dict(showgrid=False))
+            st.plotly_chart(fig_team_trend, use_container_width=True)
+
             st.markdown("### 🎯 RÉPARTITION DES SCORES")
             fig_dist = px.violin(df, x='Player', y='Score', box=True, points="all", color='Player', color_discrete_sequence=px.colors.qualitative.Prism)
             fig_dist.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, showlegend=False, height=400, yaxis=dict(gridcolor='#222'))
@@ -459,6 +470,8 @@ try:
                 if not last_15_data.empty:
                     fig_trend = px.line(last_15_data, x="Pick", y="Score", markers=True)
                     fig_trend.update_traces(line_color=C_GOLD, marker_color=C_ACCENT, marker_size=8)
+                    # ADD PLAYER AVERAGE LINE
+                    fig_trend.add_hline(y=p_data['Moyenne'], line_dash="dot", line_color=C_TEXT, annotation_text="Moy. Saison", annotation_position="bottom right")
                     fig_trend.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, margin=dict(l=0, r=0, t=30, b=0), height=200, xaxis_title=None, yaxis_title=None)
                     st.plotly_chart(fig_trend, use_container_width=True)
                 else: st.info("Pas assez de données")

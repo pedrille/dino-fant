@@ -274,7 +274,7 @@ def send_discord_webhook(day_df, pick_num, url_app):
         "avatar_url": DISCORD_AVATAR_URL, 
         "embeds": [{
             "title": f"🏀 RECAP DU PICK #{int(pick_num)}",
-            "description": f"Les matchs sont terminés, voici les scores du clan !\n\n📊 **MOYENNE TEAM :** `{avg_score} pts`",
+            "description": f"Les matchs sont terminés, voici les scores de l'équipe !\n\n📊 **MOYENNE TEAM :** `{avg_score} pts`",
             "color": 13504833,
             "fields": [{"name": "🏆 LE PODIUM", "value": podium_text, "inline": False}, {"name": "", "value": f"👉 [Voir tous les détails sur le Dashboard]({url_app})", "inline": False}],
             "footer": {"text": "Raptors TTFL • We The North"}

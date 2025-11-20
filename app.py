@@ -297,7 +297,7 @@ try:
             st.image("raptors-ttfl-min.png", use_container_width=True) 
             st.markdown("</div>", unsafe_allow_html=True)
             menu = option_menu(menu_title=None, options=["Dashboard", "Team HQ", "Player Lab", "Bonus x2", "Trends", "Hall of Fame", "Admin"], icons=["grid-fill", "people-fill", "person-bounding-box", "lightning-charge-fill", "fire", "trophy-fill", "shield-lock"], default_index=0, styles={"container": {"padding": "0!important", "background-color": "#000000"}, "icon": {"color": "#666", "font-size": "1.1rem"}, "nav-link": {"font-family": "Rajdhani, sans-serif", "font-weight": "700", "font-size": "15px", "text-transform": "uppercase", "color": "#AAA", "text-align": "left", "margin": "5px 0px", "--hover-color": "#111"}, "nav-link-selected": {"background-color": C_ACCENT, "color": "#FFF", "icon-color": "#FFF", "box-shadow": "0px 4px 20px rgba(206, 17, 65, 0.4)"}})
-            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v9.3</div></div>""", unsafe_allow_html=True)
+            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v9.4</div></div>""", unsafe_allow_html=True)
 
         if menu == "Dashboard":
             section_title("RAPTORS <span class='highlight'>DASHBOARD</span>", f"Daily Briefing • Pick #{int(latest_pick)}")
@@ -373,7 +373,7 @@ try:
                 r_vals = [(p_data['Moyenne'] / max_avg) * 100, (p_data['Best'] / max_best) * 100, (p_data['Last5'] / max_last5) * 100, reg_score, (p_data['Nukes'] / (max_nukes if max_nukes > 0 else 1)) * 100]
                 r_cats = ['SCORING', 'EXPLOSIVITÉ', 'FORME', 'RÉGULARITÉ', 'CLUTCH']
                 fig_radar = go.Figure(data=go.Scatterpolar(r=r_vals + [r_vals[0]], theta=r_cats + [r_cats[0]], fill='toself', line_color=C_ACCENT, fillcolor="rgba(206, 17, 65, 0.3)"))
-                fig_radar.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 100], showticklabels=False, linecolor='#333'), bgcolor='rgba(0,0,0,0)'), paper_bgcolor='rgba(0,0,0,0)', font=dict(color='white', size=12, family="Rajdhani"), margin=dict(t=20, b=20))
+                fig_radar.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 100], showticklabels=False, linecolor='#333'), bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font=dict(color='white', size=12, family="Rajdhani"), margin=dict(t=20, b=20))
                 st.markdown("<div class='glass-card'>", unsafe_allow_html=True); st.plotly_chart(fig_radar, use_container_width=True); st.markdown("</div>", unsafe_allow_html=True)
             with col_stats:
                 kpi_card("MOYENNE SAISON", f"{p_data['Moyenne']:.1f}", "PTS")
@@ -468,7 +468,9 @@ try:
             sniper_bp = full_stats.sort_values('BP_Count', ascending=False).iloc[0]
             alpha_dog = full_stats.sort_values('Alpha_Count', ascending=False).iloc[0]
             alchemist = full_stats.sort_values('Bonus_Gained', ascending=False).iloc[0]
-            jackpot = full_stats.sort_values('Best_Bonus', ascending=False).iloc[0]
+            
+            # NEW: The Rocket (Momentum)
+            rocket = full_stats.sort_values('Momentum', ascending=False).iloc[0]
             
             # Crash Test : Pire Bonus (Eviter 0)
             has_bonus = full_stats[full_stats['Worst_Bonus'] > 0]
@@ -495,7 +497,8 @@ try:
                 st.markdown(hof_card("THE ALCHEMIST", "⚗️", C_BONUS, alchemist['Player'], int(alchemist['Bonus_Gained']), "PTS BONUS", "Plus grand nombre de points gagnés grâce aux bonus"), unsafe_allow_html=True)
 
             with c2:
-                st.markdown(hof_card("JACKPOT", "🎰", C_GREEN, jackpot['Player'], int(jackpot['Best_Bonus']), "PTS MAX (X2)", "Le plus gros score réalisé avec un bonus"), unsafe_allow_html=True)
+                # REPLACEMENT DU JACKPOT PAR THE ROCKET
+                st.markdown(hof_card("THE ROCKET", "🚀", C_ORANGE, rocket['Player'], f"+{rocket['Momentum']:.1f}", "MOMENTUM", "Plus fort gain de forme (Moy. 5j vs Saison)"), unsafe_allow_html=True)
                 st.markdown(hof_card("ZEN MASTER", "🧘", "#EAB308", zen_master['Player'], f"{int(zen_master['ReliabilityPct'])}%", "FIABILITÉ", "Plus haut % de matchs sans carotte"), unsafe_allow_html=True)
                 st.markdown(hof_card("HEAVY HITTER", "🥊", "#64B5F6", heavy['Player'], int(heavy['Count40']), "PICKS >40", "Nombre de scores supérieurs à 40 points"), unsafe_allow_html=True)
                 st.markdown(hof_card("NUCLEAR", "☢️", "#EF4444", nuke['Player'], int(nuke['Nukes']), "BOMBS", "Nombre de scores supérieurs à 50 points"), unsafe_allow_html=True)

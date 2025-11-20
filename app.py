@@ -310,7 +310,7 @@ try:
             st.image("raptors-ttfl-min.png", use_container_width=True) 
             st.markdown("</div>", unsafe_allow_html=True)
             menu = option_menu(menu_title=None, options=["Dashboard", "Team HQ", "Player Lab", "Bonus x2", "Trends", "Hall of Fame", "Admin"], icons=["grid-fill", "people-fill", "person-bounding-box", "lightning-charge-fill", "fire", "trophy-fill", "shield-lock"], default_index=0, styles={"container": {"padding": "0!important", "background-color": "#000000"}, "icon": {"color": "#666", "font-size": "1.1rem"}, "nav-link": {"font-family": "Rajdhani, sans-serif", "font-weight": "700", "font-size": "15px", "text-transform": "uppercase", "color": "#AAA", "text-align": "left", "margin": "5px 0px", "--hover-color": "#111"}, "nav-link-selected": {"background-color": C_ACCENT, "color": "#FFF", "icon-color": "#FFF", "box-shadow": "0px 4px 20px rgba(206, 17, 65, 0.4)"}})
-            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v11.2 Final</div></div>""", unsafe_allow_html=True)
+            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v11.3 Final</div></div>""", unsafe_allow_html=True)
             
             # SCRIPT JS POUR FERMER SIDEBAR
             components.html("""<script>const options = window.parent.document.querySelectorAll('.nav-link'); options.forEach((option) => { option.addEventListener('click', () => { const sidebar = window.parent.document.querySelector('section[data-testid="stSidebar"]'); if (sidebar) {} }); });</script>""", height=0, width=0)
@@ -357,7 +357,6 @@ try:
         elif menu == "Team HQ":
             section_title("TEAM <span class='highlight'>HQ</span>", "Vue d'ensemble de l'effectif")
             
-            # Calculs globaux Team
             total_pts_season = df['Score'].sum()
             daily_agg = df.groupby('Pick')['Score'].sum()
             best_night = daily_agg.max()
@@ -367,18 +366,16 @@ try:
             total_nukes_team = len(df[df['Score'] >= 50])
             total_carrots_team = len(df[df['Score'] < 20])
             total_bonus_played = len(df[df['IsBonus'] == True])
-            total_picks_played = len(df) # Nombre total de picks joués par tous les joueurs
+            total_picks_played = len(df)
             
             current_rank_disp = f"#{int(team_rank)}" if team_rank > 0 else "-"
             best_rank_ever = f"#{min(team_history)}" if len(team_history) > 0 else "-"
             bonus_df = df[df['IsBonus'] == True]
             avg_bonus_team = bonus_df['Score'].mean() if not bonus_df.empty else 0
 
-            # --- NOUVELLE MISE EN PAGE 60/40 ---
             c_stats, c_info = st.columns([3, 2])
 
             with c_stats:
-                # 3x3 MATRIX
                 r1c1, r1c2, r1c3 = st.columns(3)
                 with r1c1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_GOLD}'>{int(total_pts_season)}</div><div class='stat-mini-lbl'>TOTAL SAISON</div><div class='stat-mini-sub'>Points Cumulés</div></div>", unsafe_allow_html=True)
                 with r1c2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_BONUS}'>{total_bonus_played}</div><div class='stat-mini-lbl'>BONUS JOUÉS</div><div class='stat-mini-sub'>Total Équipe</div></div>", unsafe_allow_html=True)
@@ -388,7 +385,7 @@ try:
                 r2c1, r2c2, r2c3 = st.columns(3)
                 with r2c1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_ACCENT}'>{total_nukes_team}</div><div class='stat-mini-lbl'>TOTAL NUKES</div><div class='stat-mini-sub'>Sur {total_picks_played} picks</div></div>", unsafe_allow_html=True)
                 with r2c2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_ORANGE}'>{total_carrots_team}</div><div class='stat-mini-lbl'>TOTAL CAROTTES</div><div class='stat-mini-sub'>Sur {total_picks_played} picks</div></div>", unsafe_allow_html=True)
-                with r2c3: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(len(df)/30)}</div><div class='stat-mini-lbl'>MATCHS JOUÉS</div><div class='stat-mini-sub'>Jours de compétition</div></div>", unsafe_allow_html=True) # Approx
+                with r2c3: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(len(df)/30)}</div><div class='stat-mini-lbl'>MATCHS JOUÉS</div><div class='stat-mini-sub'>Jours de compétition</div></div>", unsafe_allow_html=True)
                 st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
                 
                 r3c1, r3c2, r3c3 = st.columns(3)
@@ -397,27 +394,25 @@ try:
                 with r3c3: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{len(df['Player'].unique())}</div><div class='stat-mini-lbl'>ROSTER</div><div class='stat-mini-sub'>Joueurs Actifs</div></div>", unsafe_allow_html=True)
 
             with c_info:
-                # VERTICAL CARD FOR RECORDS
-                st.markdown(f"""
+                # CORRECTION HTML ICI
+                html_content = f"""
                 <div class="glass-card" style="height:100%; display:flex; flex-direction:column; justify-content:space-around; padding:20px;">
                     <div style="text-align:center; margin-bottom:15px; font-family:Rajdhani; font-weight:700; font-size:1.2rem; color:#AAA; letter-spacing:2px; border-bottom:1px solid #333; padding-bottom:10px;">PERFORMANCES COLLECTIVES</div>
-                    
                     <div class="hq-card-row">
                         <div class="hq-lbl">🚀 PLAFOND <span style="font-size:0.6rem; color:#666">(RECORD)</span></div>
                         <div class="hq-val" style="color:{C_GREEN}">{int(best_night)}</div>
                     </div>
-                    
                     <div class="hq-card-row">
                         <div class="hq-lbl">⚖️ MOYENNE <span style="font-size:0.6rem; color:#666">(SAISON)</span></div>
                         <div class="hq-val">{int(avg_night)}</div>
                     </div>
-                    
                     <div class="hq-card-row">
                         <div class="hq-lbl">🧱 PLANCHER <span style="font-size:0.6rem; color:#666">(PIRE SOIR)</span></div>
                         <div class="hq-val" style="color:{C_ACCENT}">{int(worst_night)}</div>
                     </div>
                 </div>
-                """, unsafe_allow_html=True)
+                """
+                st.markdown(html_content, unsafe_allow_html=True)
 
             st.markdown("<div style='margin-bottom:30px'></div>", unsafe_allow_html=True)
 

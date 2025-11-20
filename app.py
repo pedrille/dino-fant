@@ -16,6 +16,9 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# ✅ LIEN DE L'IMAGE DISCORD CORRIGÉ (RAW)
+DISCORD_AVATAR_URL = "https://raw.githubusercontent.com/pedrille/dino-fant/main/basketball_discord.png"
+
 # Palette de couleurs
 C_BG = "#050505"
 C_ACCENT = "#CE1141" # Raptors Red
@@ -266,9 +269,10 @@ def send_discord_webhook(day_df, pick_num, url_app):
         bonus_mark = " 🔥(x2)" if row['IsBonus'] else ""
         podium_text += f"{medals[i]} **{row['Player']}** • {int(row['Score'])} pts{bonus_mark}\n"
     avg_score = int(day_df['Score'].mean())
+    
     data = {
         "username": "RaptorsTTFL Dashboard",
-        "avatar_url": "https://cdn-icons-png.flaticon.com/512/296/296432.png", 
+        "avatar_url": DISCORD_AVATAR_URL, 
         "embeds": [{
             "title": f"🏀 RECAP DU PICK #{int(pick_num)}",
             "description": f"Les matchs sont terminés, voici les scores du clan !\n\n📊 **MOYENNE TEAM :** `{avg_score} pts`",
@@ -301,7 +305,7 @@ try:
             st.image("raptors-ttfl-min.png", use_container_width=True) 
             st.markdown("</div>", unsafe_allow_html=True)
             menu = option_menu(menu_title=None, options=["Dashboard", "Team HQ", "Player Lab", "Bonus x2", "Trends", "Hall of Fame", "Admin"], icons=["grid-fill", "people-fill", "person-bounding-box", "lightning-charge-fill", "fire", "trophy-fill", "shield-lock"], default_index=0, styles={"container": {"padding": "0!important", "background-color": "#000000"}, "icon": {"color": "#666", "font-size": "1.1rem"}, "nav-link": {"font-family": "Rajdhani, sans-serif", "font-weight": "700", "font-size": "15px", "text-transform": "uppercase", "color": "#AAA", "text-align": "left", "margin": "5px 0px", "--hover-color": "#111"}, "nav-link-selected": {"background-color": C_ACCENT, "color": "#FFF", "icon-color": "#FFF", "box-shadow": "0px 4px 20px rgba(206, 17, 65, 0.4)"}})
-            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v10.1</div></div>""", unsafe_allow_html=True)
+            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v10.2 Final</div></div>""", unsafe_allow_html=True)
             
             # SCRIPT JS POUR FERMER SIDEBAR
             components.html("""<script>const options = window.parent.document.querySelectorAll('.nav-link'); options.forEach((option) => { option.addEventListener('click', () => { const sidebar = window.parent.document.querySelector('section[data-testid="stSidebar"]'); if (sidebar) {} }); });</script>""", height=0, width=0)
@@ -369,10 +373,16 @@ try:
         elif menu == "Player Lab":
             section_title("PLAYER <span class='highlight'>LAB</span>", "Deep Dive Analytics")
             sel_player = st.selectbox("Sélectionner un joueur", sorted(df['Player'].unique()))
+            col_radar, col_stats = st.columns([1, 1])
             p_data = full_stats[full_stats['Player'] == sel_player].iloc[0]
             sorted_team = full_stats.sort_values('Total', ascending=False).reset_index(drop=True)
             internal_rank = sorted_team[sorted_team['Player'] == sel_player].index[0] + 1
             nb_players = len(sorted_team)
+            sniper_pct = (p_data['BP_Count'] / p_data['Games']) * 100
+            form_10 = p_data['Last10']
+            diff_form = form_10 - p_data['Moyenne']
+            sign = "+" if diff_form > 0 else ""
+            color_diff = C_GREEN if diff_form > 0 else "#F87171"
             
             # --- HEADER ---
             c1, c2, c3, c4 = st.columns(4)
@@ -382,7 +392,7 @@ try:
             with c3: kpi_card("CLASSEMENT", f"#{internal_rank}", f"SUR {nb_players}", rank_col)
             with c4: kpi_card("BEST SCORE", int(p_data['Best']), "RECORD", C_GOLD)
 
-            # --- LAST 10 PICKS (MOVED HERE) ---
+            # --- LAST 10 PICKS ---
             st.markdown("<br>", unsafe_allow_html=True)
             st.markdown("#### 🔥 10 DERNIERS MATCHS")
             p_hist_all = df[df['Player'] == sel_player]
@@ -396,7 +406,6 @@ try:
 
             # --- MAIN GRID ---
             col_radar, col_stats = st.columns([1, 2])
-            
             with col_radar:
                 st.markdown("<div class='glass-card' style='height:100%; display:flex; flex-direction:column; justify-content:center;'>", unsafe_allow_html=True)
                 max_avg = full_stats['Moyenne'].max(); max_best = full_stats['Best'].max(); max_last5 = full_stats['Last5'].max(); max_nukes = full_stats['Nukes'].max()
@@ -406,16 +415,7 @@ try:
                 fig_radar = go.Figure(data=go.Scatterpolar(r=r_vals + [r_vals[0]], theta=r_cats + [r_cats[0]], fill='toself', line_color=C_ACCENT, fillcolor="rgba(206, 17, 65, 0.3)"))
                 fig_radar.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 100], showticklabels=False, linecolor='#333'), bgcolor='rgba(0,0,0,0)'), paper_bgcolor='rgba(0,0,0,0)', font=dict(color='white', size=12, family="Rajdhani"), margin=dict(t=20, b=20, l=20, r=20), height=280)
                 st.plotly_chart(fig_radar, use_container_width=True)
-                # LEGEND DEFINITIONS
-                st.markdown("""
-                <div style='font-size:0.7rem; color:#888; text-align:center; margin-top:5px; line-height:1.4;'>
-                <span style='color:#FFF'>SCORING</span>: Moyenne Saison<br>
-                <span style='color:#FFF'>EXPLOSIVITÉ</span>: Record de points<br>
-                <span style='color:#FFF'>FORME</span>: 5 derniers matchs<br>
-                <span style='color:#FFF'>RÉGULARITÉ</span>: Stabilité (Ecart-type)<br>
-                <span style='color:#FFF'>CLUTCH</span>: Scores > 50pts
-                </div>
-                """, unsafe_allow_html=True)
+                st.markdown("""<div style='font-size:0.7rem; color:#888; text-align:center; margin-top:5px; line-height:1.4;'><span style='color:#FFF'>SCORING</span>: Moyenne Saison<br><span style='color:#FFF'>EXPLOSIVITÉ</span>: Record de points<br><span style='color:#FFF'>FORME</span>: 5 derniers matchs<br><span style='color:#FFF'>RÉGULARITÉ</span>: Stabilité (Ecart-type)<br><span style='color:#FFF'>CLUTCH</span>: Scores > 50pts</div>""", unsafe_allow_html=True)
                 st.markdown("</div>", unsafe_allow_html=True)
 
             with col_stats:
@@ -423,28 +423,19 @@ try:
                 with r1c1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(p_data['ReliabilityPct'])}%</div><div class='stat-mini-lbl'>FIABILITÉ</div><div class='stat-mini-sub'>% Picks > 20pts</div></div>", unsafe_allow_html=True)
                 with r1c2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(p_data['Nukes'])}</div><div class='stat-mini-lbl'>NUKES</div><div class='stat-mini-sub'>Scores > 50pts</div></div>", unsafe_allow_html=True)
                 with r1c3: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:#F87171'>{int(p_data['Carottes'])}</div><div class='stat-mini-lbl'>CAROTTES</div><div class='stat-mini-sub'>Scores < 20pts</div></div>", unsafe_allow_html=True)
-                
                 st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
-                
                 r2c1, r2c2, r2c3 = st.columns(3)
-                sniper_rate = (p_data['BP_Count'] / p_data['Games']) * 100 if p_data['Games'] > 0 else 0
-                with r2c1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(sniper_rate)}%</div><div class='stat-mini-lbl'>SNIPER RATE</div><div class='stat-mini-sub'>% Best Pick</div></div>", unsafe_allow_html=True)
+                with r2c1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(sniper_pct)}%</div><div class='stat-mini-lbl'>SNIPER RATE</div><div class='stat-mini-sub'>% Best Pick</div></div>", unsafe_allow_html=True)
                 with r2c2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{p_data['Avg_Bonus']:.1f}</div><div class='stat-mini-lbl'>BONUS EFF.</div><div class='stat-mini-sub'>Moyenne sous x2</div></div>", unsafe_allow_html=True)
                 with r2c3: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(p_data['Count40'])}</div><div class='stat-mini-lbl'>HEAVY HITS</div><div class='stat-mini-sub'>Scores > 40pts</div></div>", unsafe_allow_html=True)
-
                 st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
-                
                 r3c1, r3c2, r3c3 = st.columns(3)
-                diff_form = p_data['Last10'] - p_data['Moyenne']
-                sign = "+" if diff_form > 0 else ""
-                col_form = C_GREEN if diff_form > 0 else "#F87171"
                 with r3c1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{p_data['Last10']:.1f}</div><div class='stat-mini-lbl'>FORME (10j)</div><div class='stat-mini-sub'>Moyenne récente</div></div>", unsafe_allow_html=True)
-                with r3c2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{col_form}'>{sign}{diff_form:.1f}</div><div class='stat-mini-lbl'>DYNAMIQUE</div><div class='stat-mini-sub'>vs Moy. Saison</div></div>", unsafe_allow_html=True)
+                with r3c2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{color_diff}'>{sign}{diff_form:.1f}</div><div class='stat-mini-lbl'>DYNAMIQUE</div><div class='stat-mini-sub'>vs Moy. Saison</div></div>", unsafe_allow_html=True)
                 with r3c3: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(p_data['Worst'])}</div><div class='stat-mini-lbl'>FLOOR</div><div class='stat-mini-sub'>Pire Score</div></div>", unsafe_allow_html=True)
 
-            # --- CHARTS ROW ---
+            # --- CHARTS ---
             c_dist, c_trend = st.columns(2)
-            
             with c_dist:
                 st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
                 st.markdown("#### 📊 DISTRIBUTION DES SCORES", unsafe_allow_html=True)
@@ -452,20 +443,16 @@ try:
                 fig_hist.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, margin=dict(l=0, r=0, t=30, b=0), height=200, xaxis_title=None, yaxis_title=None)
                 st.plotly_chart(fig_hist, use_container_width=True)
                 st.markdown("</div>", unsafe_allow_html=True)
-
             with c_trend:
                 st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
                 st.markdown("#### 📈 TENDANCE (15 DERNIERS MATCHS)", unsafe_allow_html=True)
                 last_15_data = p_hist_all.sort_values('Pick').tail(15)
                 if not last_15_data.empty:
-                    # FIXED: Removed statsmodels dependency (trendline="lowess")
-                    # Replaced with simple line chart
                     fig_trend = px.line(last_15_data, x="Pick", y="Score", markers=True)
                     fig_trend.update_traces(line_color=C_GOLD, marker_color=C_ACCENT, marker_size=8)
                     fig_trend.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, margin=dict(l=0, r=0, t=30, b=0), height=200, xaxis_title=None, yaxis_title=None)
                     st.plotly_chart(fig_trend, use_container_width=True)
-                else:
-                    st.info("Pas assez de données")
+                else: st.info("Pas assez de données")
                 st.markdown("</div>", unsafe_allow_html=True)
 
         elif menu == "Bonus x2":
@@ -511,9 +498,7 @@ try:
                             if metric in ["diff", "pct"]:
                                 if val > 0: vf = f"+{val:.1f}"
                                 else: vf = f"{val:.1f}"
-                            else:
-                                vf = f"{val:.1f}" if metric == "raw" else str(int(val))
-                            
+                            else: vf = f"{val:.1f}" if metric == "raw" else str(int(val))
                             if metric == "pct": vf += "%"
                             h += f"<div class='t-row'><span class='t-name'>{p}</span><span class='t-val' style='color:{C_GREEN}'>{vf} <span style='font-size:0.8rem; color:#888'>{unit}</span></span></div>"
                     st.markdown(h+"</div>", unsafe_allow_html=True)
@@ -525,9 +510,7 @@ try:
                             val = float(v)
                             if metric in ["diff", "pct"]:
                                 vf = f"{val:.1f}"
-                            else:
-                                vf = f"{val:.1f}" if metric == "raw" else str(int(val))
-
+                            else: vf = f"{val:.1f}" if metric == "raw" else str(int(val))
                             if metric == "pct": vf += "%"
                             h += f"<div class='t-row'><span class='t-name'>{p}</span><span class='t-val' style='color:#F87171'>{vf} <span style='font-size:0.8rem; color:#888'>{unit}</span></span></div>"
                     st.markdown(h+"</div>", unsafe_allow_html=True)
@@ -553,7 +536,6 @@ try:
             sniper_bp = full_stats.sort_values('BP_Count', ascending=False).iloc[0]
             alpha_dog = full_stats.sort_values('Alpha_Count', ascending=False).iloc[0]
             alchemist = full_stats.sort_values('Bonus_Gained', ascending=False).iloc[0]
-            
             bad_business = full_stats.sort_values('Bonus_Gained', ascending=True).iloc[0]
             has_bonus = full_stats[full_stats['Worst_Bonus'] > 0]
             crash_test = has_bonus.sort_values('Worst_Bonus', ascending=True).iloc[0] if not has_bonus.empty else full_stats.iloc[0]

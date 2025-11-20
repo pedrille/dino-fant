@@ -34,8 +34,7 @@ st.markdown(f"""
     /* SIDEBAR FIX */
     section[data-testid="stSidebar"] {{ background-color: #000000; border-right: 1px solid #222; }}
     
-    /* OPTION MENU HACK */
-    /* Supprime les bordures blanches et force le style sombre */
+    /* OPTION MENU HACK - NO WHITE BORDERS */
     .nav-link {{
         font-family: 'Rajdhani', sans-serif !important;
         font-weight: 700 !important;
@@ -164,6 +163,7 @@ def compute_stats(df):
             'Last15': scores[-15:].mean() if len(scores) >= 15 else scores.mean(),
             'Streak30': streak_30,
             'Count30': len(scores[scores >= 30]),
+            'Count40': len(scores[scores >= 40]), # NEW STAT pour HOF
             'Carottes': len(scores[scores < 20]),
             'Nukes': len(scores[scores >= 50]),
             'Momentum': momentum,
@@ -172,25 +172,19 @@ def compute_stats(df):
     return pd.DataFrame(stats)
 
 def get_comparative_stats(df, current_pick, lookback=15):
-    """Calcule l'évolution sur les X derniers picks"""
-    # Point de départ
     start_pick = max(1, current_pick - lookback)
-    
-    # Stats actuelles
     current_stats = df.groupby('Player')['Score'].agg(['sum', 'mean'])
     current_stats['rank'] = current_stats['sum'].rank(ascending=False)
     
-    # Stats passées
     df_past = df[df['Pick'] <= start_pick]
-    if df_past.empty: return pd.DataFrame() # Pas assez de recul
+    if df_past.empty: return pd.DataFrame() 
     
     past_stats = df_past.groupby('Player')['Score'].agg(['sum', 'mean'])
     past_stats['rank'] = past_stats['sum'].rank(ascending=False)
     
-    # Delta
     stats_delta = pd.DataFrame(index=current_stats.index)
     stats_delta['mean_diff'] = current_stats['mean'] - past_stats['mean']
-    stats_delta['rank_diff'] = past_stats['rank'] - current_stats['rank'] # Positif = gain de places
+    stats_delta['rank_diff'] = past_stats['rank'] - current_stats['rank'] 
     
     return stats_delta
 
@@ -242,9 +236,8 @@ def section_title(title, subtitle):
     st.markdown(f"<h1>{title}</h1><div class='sub-header'>{subtitle}</div>", unsafe_allow_html=True)
 
 def comparison_html(title, icon, data_series, is_positive_good=True, unit="", is_rank=False):
-    """Génère une carte de comparaison Top 3"""
-    color = C_GREEN if is_positive_good else C_BLUE # Vert pour positif, Bleu pour "Froid"
-    if not is_positive_good: color = C_ACCENT # Rouge pour négatif
+    color = C_GREEN if is_positive_good else C_BLUE
+    if not is_positive_good: color = C_ACCENT
     
     html = f"""
     <div class="glass-card" style="height:100%">
@@ -253,21 +246,14 @@ def comparison_html(title, icon, data_series, is_positive_good=True, unit="", is
             <span style="font-family:Rajdhani; font-weight:700; font-size:1.2rem; color:#FFF">{title}</span>
         </div>
     """
-    
-    if data_series.empty:
-        html += "<div style='color:#666'>Données insuffisantes</div>"
+    if data_series.empty: html += "<div style='color:#666'>Données insuffisantes</div>"
     else:
         for player, val in data_series.items():
             val_fmt = f"{val:.1f}" if isinstance(val, float) else f"{int(val)}"
             if is_rank: val_fmt = f"+{int(val)}" if val > 0 else f"{int(val)}"
             elif val > 0 and not is_rank: val_fmt = f"+{val_fmt}"
             
-            html += f"""
-            <div class="vs-card">
-                <span style="font-weight:600; color:#EEE">{player}</span>
-                <span class="vs-val" style="color:{color}">{val_fmt}<span style="font-size:0.8rem; margin-left:2px">{unit}</span></span>
-            </div>
-            """
+            html += f"""<div class="vs-card"><span style="font-weight:600; color:#EEE">{player}</span><span class="vs-val" style="color:{color}">{val_fmt}<span style="font-size:0.8rem; margin-left:2px">{unit}</span></span></div>"""
     html += "</div>"
     return html
 
@@ -281,13 +267,12 @@ try:
         full_stats = compute_stats(df)
         leader = full_stats.sort_values('Total', ascending=False).iloc[0]
         
-        # --- SIDEBAR 2.0 ---
+        # --- SIDEBAR ---
         with st.sidebar:
-            st.markdown("<br>", unsafe_allow_html=True) # Spacer
-            st.image("raptors-ttfl-min.png", use_container_width=True) # LOGO XXL
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.image("raptors-ttfl-min.png", use_container_width=True) 
             st.markdown("<br>", unsafe_allow_html=True)
             
-            # MENU STYLISÉ
             menu = option_menu(
                 menu_title=None,
                 options=["Dashboard", "Team HQ", "Player Lab", "Trends", "Hall of Fame", "Admin"],
@@ -311,7 +296,8 @@ try:
             with c1: kpi_card("MVP DU JOUR", top['Player'], f"{int(top['Score'])} PTS", C_GOLD)
             with c2: kpi_card("MOYENNE TEAM", int(day_df['Score'].mean()), "POINTS")
             with c3: kpi_card("TOTAL NUIT", int(day_df['Score'].sum()), "CUMULÉ")
-            with c4: kpi_card("MAILLOT JAUNE", leader['Player'], f"TOTAL: {int(leader['Total'])}", C_ACCENT)
+            # MODIFICATION ICI : MAILLOT JAUNE -> LEADER SAISON
+            with c4: kpi_card("LEADER SAISON", leader['Player'], f"TOTAL: {int(leader['Total'])}", C_ACCENT)
             
             col_chart, col_rank = st.columns([2, 1])
             with col_chart:
@@ -365,41 +351,27 @@ try:
                     color = "#4ADE80" if s >= 30 else ("#F87171" if s < 20 else "#FFF")
                     cols[i].markdown(f"<div style='text-align:center; font-family:Rajdhani; font-weight:bold; color:{color}; border:1px solid #333; border-radius:8px; padding:5px'>{int(s)}</div>", unsafe_allow_html=True)
 
-        # --- TRENDS (NOUVELLE LOGIQUE COMPARATIVE) ---
+        # --- TRENDS ---
         elif menu == "Trends":
             section_title("MOMENTUM <span class='highlight'>TRACKER</span>", "Analyses comparatives sur 15 jours")
-            
-            # Calculs Delta
             delta_df = get_comparative_stats(df, latest_pick, lookback=15)
             df_15 = df[df['Pick'] > (latest_pick - 15)]
             
-            # 1. PROGRESSION MOYENNE (Gain vs Perte)
             avg_gain = delta_df['mean_diff'].sort_values(ascending=False).head(3)
             avg_loss = delta_df['mean_diff'].sort_values(ascending=True).head(3)
-            
-            # 2. EVOLUTION CLASSEMENT (Remontada vs Chute)
-            rank_gain = delta_df['rank_diff'].sort_values(ascending=False).head(3) # Ceux qui ont le plus gros chiffre positif
-            rank_loss = delta_df['rank_diff'].sort_values(ascending=True).head(3) # Ceux qui ont le chiffre négatif
-            
-            # 3. NUKES VS CAROTTES (Volume sur 15j)
+            rank_gain = delta_df['rank_diff'].sort_values(ascending=False).head(3)
+            rank_loss = delta_df['rank_diff'].sort_values(ascending=True).head(3)
             nuke_cnt = df_15[df_15['Score'] >= 50].groupby('Player').size().sort_values(ascending=False).head(3)
             carrot_cnt = df_15[df_15['Score'] < 20].groupby('Player').size().sort_values(ascending=False).head(3)
 
-            # --- LIGNE 1 : FORME MOYENNE ---
             c1, c2 = st.columns(2)
             with c1: st.markdown(comparison_html("MOMENTUM (Pts Moy)", "🚀", avg_gain, True, " pts"), unsafe_allow_html=True)
             with c2: st.markdown(comparison_html("DOWNSWING (Pts Moy)", "📉", avg_loss, False, " pts"), unsafe_allow_html=True)
-            
             st.markdown("<br>", unsafe_allow_html=True)
-
-            # --- LIGNE 2 : CLASSEMENT ---
             c3, c4 = st.columns(2)
             with c3: st.markdown(comparison_html("LA REMONTADA (Places)", "🧗", rank_gain, True, " places", is_rank=True), unsafe_allow_html=True)
             with c4: st.markdown(comparison_html("LA CHUTE (Places)", "🪂", rank_loss, False, " places", is_rank=True), unsafe_allow_html=True)
-            
             st.markdown("<br>", unsafe_allow_html=True)
-
-            # --- LIGNE 3 : EXPLOSIVITÉ ---
             c5, c6 = st.columns(2)
             with c5: st.markdown(comparison_html("ATOMIC BOMBS (>50pts)", "☢️", nuke_cnt, True, " nukes"), unsafe_allow_html=True)
             with c6: st.markdown(comparison_html("CARROT FIELD (<20pts)", "🥕", carrot_cnt, False, " carottes"), unsafe_allow_html=True)
@@ -407,10 +379,14 @@ try:
         # --- HALL OF FAME ---
         elif menu == "Hall of Fame":
             section_title("HALL OF <span class='highlight'>FAME</span>", "Les records de la saison")
+            
             sniper = full_stats.sort_values('Moyenne', ascending=False).iloc[0]
             torche = full_stats.sort_values('Last15', ascending=False).iloc[0]
             fusee = full_stats.sort_values('Momentum', ascending=False).iloc[0]
-            diamant = day_df.iloc[0]
+            
+            # MODIFICATION HOF 1: REMPLACEMENT DU NIGHT MVP par HEAVY HITTER
+            heavy = full_stats.sort_values('Count40', ascending=False).iloc[0]
+            
             peak = full_stats.sort_values('Best', ascending=False).iloc[0]
             intouch = full_stats.sort_values('Streak30', ascending=False).iloc[0]
             rock = full_stats.sort_values('Count30', ascending=False).iloc[0]
@@ -426,9 +402,15 @@ try:
             with c1:
                 st.markdown(hof_html("🏆", "#FFD700", "THE GOAT", sniper['Player'], f"{sniper['Moyenne']:.1f}", "PTS MOYENNE", "Meilleure moyenne générale"), unsafe_allow_html=True)
                 st.markdown(hof_html("🔥", "#FF5252", "HUMAN TORCH", torche['Player'], f"{torche['Last15']:.1f}", "PTS / 15J", "Le plus chaud du mois"), unsafe_allow_html=True)
-                st.markdown(hof_html("🚀", "#4ADE80", "RISING STAR", fusee['Player'], f"+{fusee['Momentum']:.1f}", "DIFF", "Plus forte progression"), unsafe_allow_html=True)
+                
+                # MODIFICATION HOF 2: RISING STAR EXPLICATIF
+                st.markdown(hof_html("🚀", "#4ADE80", "RISING STAR", fusee['Player'], f"+{fusee['Momentum']:.1f}", "PTS DE GAIN", "Moyenne 5 derniers vs Saison"), unsafe_allow_html=True)
+                
                 st.markdown(hof_html("🏔️", "#A78BFA", "THE CEILING", peak['Player'], int(peak['Best']), "PTS MAX", "Record absolu en un match"), unsafe_allow_html=True)
-                st.markdown(hof_html("💎", "#64B5F6", "NIGHT MVP", diamant['Player'], int(diamant['Score']), "PTS", "Meilleur score hier soir"), unsafe_allow_html=True)
+                
+                # MODIFICATION HOF 3: NOUVEAU BADGE HEAVY HITTER
+                st.markdown(hof_html("🥊", "#64B5F6", "HEAVY HITTER", heavy['Player'], int(heavy['Count40']), "PICKS >40", "Total scores au dessus de 40pts"), unsafe_allow_html=True)
+                
             with c2:
                 st.markdown(hof_html("⚡", "#FBBF24", "UNSTOPPABLE", intouch['Player'], int(intouch['Streak30']), "SERIE", "Matchs consécutifs > 30pts"), unsafe_allow_html=True)
                 st.markdown(hof_html("🛡️", "#34D399", "THE ROCK", rock['Player'], int(rock['Count30']), "MATCHS", "Total matchs > 30pts"), unsafe_allow_html=True)

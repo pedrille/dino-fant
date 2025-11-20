@@ -269,7 +269,7 @@ def send_discord_webhook(day_df, pick_num, url_app):
         "avatar_url": "https://cdn-icons-png.flaticon.com/512/296/296432.png", 
         "embeds": [{
             "title": f"🏀 RECAP DU PICK #{int(pick_num)}",
-            "description": f"Les matchs sont terminés, voici les scores du clan !\n\n📊 **MOYENNE TEAM :** `{avg_score} pts`",
+            "description": f"Les matchs sont terminés, voici les scores de l'équipe !\n\n📊 **MOYENNE TEAM :** `{avg_score} pts`",
             "color": 13504833,
             "fields": [{"name": "🏆 LE PODIUM", "value": podium_text, "inline": False}, {"name": "", "value": f"👉 [Voir tous les détails sur le Dashboard]({url_app})", "inline": False}],
             "footer": {"text": "Raptors TTFL • We The North"}
@@ -322,7 +322,7 @@ try:
             top = day_df.iloc[0]
             c1, c2, c3, c4 = st.columns(4)
             with c1: kpi_card("MVP DU JOUR", top['Player'], f"{int(top['Score'])} PTS", C_GOLD)
-            with c2: kpi_card("MOYENNE TEAM", int(day_df['Score'].mean()), "POINTS")
+            with c2: kpi_card("MOYENNE TEAM JOUR", int(day_df['Score'].mean()), "POINTS")
             
             # NOUVELLE STAT : PERFORMANCE JOUR VS MOY SAISON
             team_daily_avg = day_df['Score'].mean()

@@ -15,7 +15,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- 2. CSS PREMIUM (CORRECTIONS INCLUSES) ---
+# --- 2. CSS PREMIUM ---
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Rajdhani:wght@500;700&display=swap');
@@ -68,6 +68,7 @@ st.markdown("""
     .bg-fire { background: rgba(206, 17, 65, 0.15); color: #FF5252; border: 1px solid #FF5252; }
     .bg-ice { background: rgba(59, 130, 246, 0.15); color: #64B5F6; border: 1px solid #64B5F6; }
     .bg-green { background: rgba(34, 197, 94, 0.15); color: #4ADE80; border: 1px solid #4ADE80; }
+    .bg-orange { background: rgba(249, 115, 22, 0.15); color: #F97316; border: 1px solid #F97316; }
     
     /* CLEANUP */
     div[data-testid="stDataFrame"] { border: none !important; }
@@ -118,7 +119,7 @@ def compute_stats(df):
             if s >= 30: streak_30 += 1
             else: break
             
-        carottes = len(scores[scores < 20])
+        carottes = len(scores[scores < 20]) # Seuil Carotte < 20
         nukes = len(scores[scores >= 50])
         plus_30 = len(scores[scores >= 30])
         
@@ -131,7 +132,7 @@ def compute_stats(df):
             'Total': scores.sum(),
             'Moyenne': scores.mean(),
             'Best': scores.max(),
-            'Last': scores[-1], # Score de la nuit dernière
+            'Last': scores[-1],
             'Last5': last5_avg,
             'Last15': scores[-15:].mean() if len(scores) >= 15 else scores.mean(),
             'Streak30': streak_30,
@@ -150,7 +151,7 @@ def send_discord_webhook(top_player, avg_score, pick_num, url_app):
     
     data = {
         "username": "Raptors War Room",
-        "avatar_url": "https://upload.wikimedia.org/wikipedia/en/thumb/3/36/Toronto_Raptors_logo.svg/1200px-Toronto_Raptors_logo.svg.png",
+        "avatar_url": "https://raw.githubusercontent.com/votre-pseudo/raptors-ttfl/main/raptors-ttfl-min.png", # Si public, sinon garder lien wikipedia temporaire
         "embeds": [{
             "title": f"🦖 DEBRIEF • PICK #{int(pick_num)}",
             "description": "Mise à jour des scores effectuée.",
@@ -183,7 +184,8 @@ try:
         leader = full_stats.sort_values('Total', ascending=False).iloc[0]
         
         with st.sidebar:
-            st.image("raptors-ttfl-min.png", width=100) # Votre logo
+            # --- MODIF LOGO ICI ---
+            st.image("raptors-ttfl-min.png", width=100) 
             menu = option_menu(
                 menu_title=None,
                 options=["Dashboard", "Team HQ", "Player Lab", "Formes", "Hall of Fame", "Admin"],
@@ -319,7 +321,7 @@ try:
                 st.markdown(hof_card("⚡", "bg-gold", "L'INTOUCHABLE", intouch['Player'], int(intouch['Streak30']), "MATCHS", "Série actuelle > 30 pts"), unsafe_allow_html=True)
                 st.markdown(hof_card("🛡️", "bg-green", "LE BOUCLIER", bouclier['Player'], int(bouclier['Count30']), "MATCHS", "Total scores > 30 pts"), unsafe_allow_html=True)
                 st.markdown(hof_card("💣", "bg-fire", "ATOMIC BOMB", nuke['Player'], int(nuke['Nukes']), "NUKES", "Scores > 50 pts"), unsafe_allow_html=True)
-                st.markdown(hof_card("🥕", "bg-ice", "LE LAPIN", lapin['Player'], int(lapin['Carottes']), "CAROTTES", "Scores < 20 pts"), unsafe_allow_html=True)
+                st.markdown(hof_card("🥕", "bg-orange", "LE LAPIN", lapin['Player'], int(lapin['Carottes']), "CAROTTES", "Scores < 20 pts"), unsafe_allow_html=True)
 
         # --- ADMIN ---
         elif menu == "Admin":

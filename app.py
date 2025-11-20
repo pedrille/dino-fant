@@ -16,7 +16,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ✅ LIEN DE L'IMAGE DISCORD CORRIGÉ (RAW)
+# ✅ LIEN DE L'IMAGE DISCORD (RAW)
 DISCORD_AVATAR_URL = "https://raw.githubusercontent.com/pedrille/dino-fant/main/basketball_discord.png"
 
 # Palette de couleurs
@@ -269,7 +269,6 @@ def send_discord_webhook(day_df, pick_num, url_app):
         bonus_mark = " 🔥(x2)" if row['IsBonus'] else ""
         podium_text += f"{medals[i]} **{row['Player']}** • {int(row['Score'])} pts{bonus_mark}\n"
     avg_score = int(day_df['Score'].mean())
-    
     data = {
         "username": "RaptorsTTFL Dashboard",
         "avatar_url": DISCORD_AVATAR_URL, 
@@ -305,7 +304,7 @@ try:
             st.image("raptors-ttfl-min.png", use_container_width=True) 
             st.markdown("</div>", unsafe_allow_html=True)
             menu = option_menu(menu_title=None, options=["Dashboard", "Team HQ", "Player Lab", "Bonus x2", "Trends", "Hall of Fame", "Admin"], icons=["grid-fill", "people-fill", "person-bounding-box", "lightning-charge-fill", "fire", "trophy-fill", "shield-lock"], default_index=0, styles={"container": {"padding": "0!important", "background-color": "#000000"}, "icon": {"color": "#666", "font-size": "1.1rem"}, "nav-link": {"font-family": "Rajdhani, sans-serif", "font-weight": "700", "font-size": "15px", "text-transform": "uppercase", "color": "#AAA", "text-align": "left", "margin": "5px 0px", "--hover-color": "#111"}, "nav-link-selected": {"background-color": C_ACCENT, "color": "#FFF", "icon-color": "#FFF", "box-shadow": "0px 4px 20px rgba(206, 17, 65, 0.4)"}})
-            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v10.2 Final</div></div>""", unsafe_allow_html=True)
+            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v10.3</div></div>""", unsafe_allow_html=True)
             
             # SCRIPT JS POUR FERMER SIDEBAR
             components.html("""<script>const options = window.parent.document.querySelectorAll('.nav-link'); options.forEach((option) => { option.addEventListener('click', () => { const sidebar = window.parent.document.querySelector('section[data-testid="stSidebar"]'); if (sidebar) {} }); });</script>""", height=0, width=0)
@@ -424,15 +423,25 @@ try:
                 with r1c2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(p_data['Nukes'])}</div><div class='stat-mini-lbl'>NUKES</div><div class='stat-mini-sub'>Scores > 50pts</div></div>", unsafe_allow_html=True)
                 with r1c3: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:#F87171'>{int(p_data['Carottes'])}</div><div class='stat-mini-lbl'>CAROTTES</div><div class='stat-mini-sub'>Scores < 20pts</div></div>", unsafe_allow_html=True)
                 st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
+                
                 r2c1, r2c2, r2c3 = st.columns(3)
                 with r2c1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(sniper_pct)}%</div><div class='stat-mini-lbl'>SNIPER RATE</div><div class='stat-mini-sub'>% Best Pick</div></div>", unsafe_allow_html=True)
                 with r2c2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{p_data['Avg_Bonus']:.1f}</div><div class='stat-mini-lbl'>BONUS EFF.</div><div class='stat-mini-sub'>Moyenne sous x2</div></div>", unsafe_allow_html=True)
                 with r2c3: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(p_data['Count40'])}</div><div class='stat-mini-lbl'>HEAVY HITS</div><div class='stat-mini-sub'>Scores > 40pts</div></div>", unsafe_allow_html=True)
                 st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
+                
                 r3c1, r3c2, r3c3 = st.columns(3)
                 with r3c1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{p_data['Last10']:.1f}</div><div class='stat-mini-lbl'>FORME (10j)</div><div class='stat-mini-sub'>Moyenne récente</div></div>", unsafe_allow_html=True)
                 with r3c2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{color_diff}'>{sign}{diff_form:.1f}</div><div class='stat-mini-lbl'>DYNAMIQUE</div><div class='stat-mini-sub'>vs Moy. Saison</div></div>", unsafe_allow_html=True)
                 with r3c3: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(p_data['Worst'])}</div><div class='stat-mini-lbl'>FLOOR</div><div class='stat-mini-sub'>Pire Score</div></div>", unsafe_allow_html=True)
+                st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
+
+                # NEW: 4TH ROW
+                r4c1, r4c2, r4c3 = st.columns(3)
+                alpha_rate = (p_data['Alpha_Count'] / p_data['Games']) * 100 if p_data['Games'] > 0 else 0
+                with r4c1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_GOLD}'>{int(alpha_rate)}%</div><div class='stat-mini-lbl'>ALPHA %</div><div class='stat-mini-sub'>Leader Team</div></div>", unsafe_allow_html=True)
+                with r4c2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{p_data['Moyenne_Raw']:.1f}</div><div class='stat-mini-lbl'>MOY. PURE</div><div class='stat-mini-sub'>Sans Bonus</div></div>", unsafe_allow_html=True)
+                with r4c3: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(p_data['Count30'])}</div><div class='stat-mini-lbl'>SAFE ZONE</div><div class='stat-mini-sub'>Scores > 30pts</div></div>", unsafe_allow_html=True)
 
             # --- CHARTS ---
             c_dist, c_trend = st.columns(2)
@@ -498,7 +507,9 @@ try:
                             if metric in ["diff", "pct"]:
                                 if val > 0: vf = f"+{val:.1f}"
                                 else: vf = f"{val:.1f}"
-                            else: vf = f"{val:.1f}" if metric == "raw" else str(int(val))
+                            else:
+                                vf = f"{val:.1f}" if metric == "raw" else str(int(val))
+                            
                             if metric == "pct": vf += "%"
                             h += f"<div class='t-row'><span class='t-name'>{p}</span><span class='t-val' style='color:{C_GREEN}'>{vf} <span style='font-size:0.8rem; color:#888'>{unit}</span></span></div>"
                     st.markdown(h+"</div>", unsafe_allow_html=True)
@@ -510,7 +521,9 @@ try:
                             val = float(v)
                             if metric in ["diff", "pct"]:
                                 vf = f"{val:.1f}"
-                            else: vf = f"{val:.1f}" if metric == "raw" else str(int(val))
+                            else:
+                                vf = f"{val:.1f}" if metric == "raw" else str(int(val))
+
                             if metric == "pct": vf += "%"
                             h += f"<div class='t-row'><span class='t-name'>{p}</span><span class='t-val' style='color:#F87171'>{vf} <span style='font-size:0.8rem; color:#888'>{unit}</span></span></div>"
                     st.markdown(h+"</div>", unsafe_allow_html=True)

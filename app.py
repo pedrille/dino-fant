@@ -6,6 +6,7 @@ import plotly.graph_objects as go
 from streamlit_option_menu import option_menu
 import numpy as np
 import requests
+import streamlit.components.v1 as components
 
 # --- 1. CONFIGURATION & ASSETS ---
 st.set_page_config(
@@ -37,6 +38,10 @@ st.markdown(f"""
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Rajdhani:wght@500;600;700;800&display=swap');
     .stApp {{ background-color: {C_BG}; color: {C_TEXT}; font-family: 'Inter', sans-serif; }}
     section[data-testid="stSidebar"] {{ background-color: #000000 !important; border-right: 1px solid #222; }}
+    
+    /* LOGO NON CLIQUABLE */
+    section[data-testid="stSidebar"] img {{ pointer-events: none; }}
+    
     div[data-testid="stSidebarNav"] {{ display: none; }} 
     .nav-link {{ font-family: 'Rajdhani', sans-serif !important; font-weight: 700 !important; text-transform: uppercase !important; letter-spacing: 1px !important; }}
     h1, h2, h3 {{ font-family: 'Rajdhani', sans-serif; text-transform: uppercase; margin: 0; }}
@@ -294,7 +299,23 @@ try:
             st.image("raptors-ttfl-min.png", use_container_width=True) 
             st.markdown("</div>", unsafe_allow_html=True)
             menu = option_menu(menu_title=None, options=["Dashboard", "Team HQ", "Player Lab", "Bonus x2", "Trends", "Hall of Fame", "Admin"], icons=["grid-fill", "people-fill", "person-bounding-box", "lightning-charge-fill", "fire", "trophy-fill", "shield-lock"], default_index=0, styles={"container": {"padding": "0!important", "background-color": "#000000"}, "icon": {"color": "#666", "font-size": "1.1rem"}, "nav-link": {"font-family": "Rajdhani, sans-serif", "font-weight": "700", "font-size": "15px", "text-transform": "uppercase", "color": "#AAA", "text-align": "left", "margin": "5px 0px", "--hover-color": "#111"}, "nav-link-selected": {"background-color": C_ACCENT, "color": "#FFF", "icon-color": "#FFF", "box-shadow": "0px 4px 20px rgba(206, 17, 65, 0.4)"}})
-            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v9.8</div></div>""", unsafe_allow_html=True)
+            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v9.9</div></div>""", unsafe_allow_html=True)
+            
+            # SCRIPT JS POUR FERMER SIDEBAR AU CLIC (TENTATIVE UX)
+            components.html("""
+                <script>
+                    const options = window.parent.document.querySelectorAll('.nav-link');
+                    options.forEach((option) => {
+                        option.addEventListener('click', () => {
+                            const sidebar = window.parent.document.querySelector('section[data-testid="stSidebar"]');
+                            if (sidebar) {
+                                // Il est difficile de forcer la fermeture sans trigger un bouton, 
+                                // mais ceci est le hook si nous voulons ajouter un comportement plus tard.
+                            }
+                        });
+                    });
+                </script>
+            """, height=0, width=0)
 
         if menu == "Dashboard":
             section_title("RAPTORS <span class='highlight'>DASHBOARD</span>", f"Daily Briefing • Pick #{int(latest_pick)}")
@@ -302,10 +323,16 @@ try:
             c1, c2, c3, c4 = st.columns(4)
             with c1: kpi_card("MVP DU JOUR", top['Player'], f"{int(top['Score'])} PTS", C_GOLD)
             with c2: kpi_card("MOYENNE TEAM", int(day_df['Score'].mean()), "POINTS")
-            r_disp = f"#{int(team_rank)}" if team_rank > 0 else "N/A"
-            c_rank = C_GOLD if team_rank > 0 and team_rank <= 20 else (C_GREEN if team_rank <= 100 else "#FFF")
-            with c3: kpi_card("CLASSEMENT TEAM", r_disp, "GENERAL", c_rank)
+            
+            # NOUVELLE STAT : PERFORMANCE JOUR VS MOY SAISON
+            team_daily_avg = day_df['Score'].mean()
+            team_season_avg = df['Score'].mean()
+            diff_perf = ((team_daily_avg - team_season_avg) / team_season_avg) * 100
+            perf_col = C_GREEN if diff_perf > 0 else "#F87171"
+            with c3: kpi_card("PERFORMANCE JOUR", f"{diff_perf:+.1f}%", "VS MOY. SAISON", perf_col)
+            
             with c4: kpi_card("LEADER SAISON", leader['Player'], f"TOTAL: {int(leader['Total'])}", C_ACCENT)
+            
             col_chart, col_rank = st.columns([2, 1])
             with col_chart:
                 st.markdown("<div class='glass-card' style='height:100%'>", unsafe_allow_html=True)
@@ -430,6 +457,7 @@ try:
                     else:
                         for p, v in hot.head(3).items():
                             val = float(v)
+                            # LOGIQUE CORRIGÉE DU SIGNE +
                             if metric in ["diff", "pct"]:
                                 if val > 0: vf = f"+{val:.1f}"
                                 else: vf = f"{val:.1f}"
@@ -445,8 +473,12 @@ try:
                     else:
                         for p, v in cold.head(3).items():
                             val = float(v)
+                            # LOGIQUE CORRIGÉE DU SIGNE +
                             if metric in ["diff", "pct"]:
-                                vf = f"{val:.1f}"
+                                # Ici normalement ce sont des valeurs négatives ou faibles, 
+                                # on laisse Python gérer le signe négatif, on ne force pas le +
+                                if val > 0: vf = f"+{val:.1f}" 
+                                else: vf = f"{val:.1f}"
                             else:
                                 vf = f"{val:.1f}" if metric == "raw" else str(int(val))
 

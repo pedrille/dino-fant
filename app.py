@@ -74,7 +74,7 @@ st.markdown(f"""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 3. DATA ENGINE (CALCULS CORRIGÉS) ---
+# --- 3. DATA ENGINE ---
 @st.cache_data(ttl=300)
 def load_data():
     conn = st.connection("gsheets", type=GSheetsConnection)
@@ -100,12 +100,12 @@ def load_data():
         df_clean = df_players[cols].copy().rename(columns=valid_map)
         df_long = df_clean.melt(id_vars=['Player'], var_name='Pick', value_name='ScoreRaw')
         
-        # LOGIQUE BONUS (LE RETOUR)
+        # LOGIQUE BONUS
         df_long['IsBonus'] = df_long['ScoreRaw'].str.contains(r'\*', na=False)
         df_long['ScoreClean'] = df_long['ScoreRaw'].str.replace(r'\*', '', regex=True)
         df_long['ScoreVal'] = pd.to_numeric(df_long['ScoreClean'], errors='coerce')
         
-        # IMPORTANT : Score = Valeur lue * 2 si bonus (car le csv contient la base, ex: 54*)
+        # IMPORTANT : Score = Valeur lue * 2 si bonus
         df_long['Score'] = np.where(df_long['IsBonus'], df_long['ScoreVal'] * 2, df_long['ScoreVal'])
         
         df_long['Pick'] = pd.to_numeric(df_long['Pick'], errors='coerce')
@@ -155,9 +155,7 @@ def compute_stats(df, bp_map, daily_max_map):
     stats = []
     latest_pick = df['Pick'].max()
     
-    # Moyenne Saison (Sur Score final doublé)
     season_avgs = df.groupby('Player')['Score'].mean()
-    # Moyenne Raw (Sur ScoreVal, la base)
     season_avgs_raw = df.groupby('Player')['ScoreVal'].mean()
     
     df_15 = df[df['Pick'] > (latest_pick - 15)]
@@ -167,8 +165,8 @@ def compute_stats(df, bp_map, daily_max_map):
 
     for p in df['Player'].unique():
         d = df[df['Player'] == p].sort_values('Pick')
-        scores = d['Score'].values     # Scores finaux (avec x2)
-        scores_raw = d['ScoreVal'].values # Scores de base
+        scores = d['Score'].values
+        scores_raw = d['ScoreVal'].values
         picks = d['Pick'].values
         bonuses = d['IsBonus'].values
         
@@ -188,7 +186,6 @@ def compute_stats(df, bp_map, daily_max_map):
             if pick_num in bp_map and score >= bp_map[pick_num] and score > 0: bp_count += 1
             if pick_num in daily_max_map and score >= daily_max_map[pick_num] and score > 0: alpha_count += 1
             if bonuses[i]: 
-                # Score = 108. Raw = 54. Gain = 54.
                 gain = score - scores_raw[i]
                 bonus_points_gained += gain
                 bonus_scores_list.append(score)
@@ -251,7 +248,7 @@ def get_comparative_stats(df, current_pick, lookback=15):
     stats_delta['rank_diff'] = past_stats['rank'] - current_stats['rank'] 
     return stats_delta
 
-# --- 4. DISCORD (MODIFIÉ) ---
+# --- 4. DISCORD (UPDATED) ---
 def send_discord_webhook(day_df, pick_num, url_app):
     if "DISCORD_WEBHOOK" not in st.secrets: return "missing_secret"
     webhook_url = st.secrets["DISCORD_WEBHOOK"]
@@ -262,6 +259,8 @@ def send_discord_webhook(day_df, pick_num, url_app):
         bonus_mark = " 🔥(x2)" if row['IsBonus'] else ""
         podium_text += f"{medals[i]} **{row['Player']}** • {int(row['Score'])} pts{bonus_mark}\n"
     avg_score = int(day_df['Score'].mean())
+    
+    # MODIFICATION DEMANDEE : Nom et Avatar
     data = {
         "username": "RaptorsTTFL Dashboard",
         "avatar_url": "https://cdn-icons-png.flaticon.com/512/296/296432.png", 
@@ -297,7 +296,7 @@ try:
             st.image("raptors-ttfl-min.png", use_container_width=True) 
             st.markdown("</div>", unsafe_allow_html=True)
             menu = option_menu(menu_title=None, options=["Dashboard", "Team HQ", "Player Lab", "Bonus x2", "Trends", "Hall of Fame", "Admin"], icons=["grid-fill", "people-fill", "person-bounding-box", "lightning-charge-fill", "fire", "trophy-fill", "shield-lock"], default_index=0, styles={"container": {"padding": "0!important", "background-color": "#000000"}, "icon": {"color": "#666", "font-size": "1.1rem"}, "nav-link": {"font-family": "Rajdhani, sans-serif", "font-weight": "700", "font-size": "15px", "text-transform": "uppercase", "color": "#AAA", "text-align": "left", "margin": "5px 0px", "--hover-color": "#111"}, "nav-link-selected": {"background-color": C_ACCENT, "color": "#FFF", "icon-color": "#FFF", "box-shadow": "0px 4px 20px rgba(206, 17, 65, 0.4)"}})
-            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v9.4</div></div>""", unsafe_allow_html=True)
+            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v9.3</div></div>""", unsafe_allow_html=True)
 
         if menu == "Dashboard":
             section_title("RAPTORS <span class='highlight'>DASHBOARD</span>", f"Daily Briefing • Pick #{int(latest_pick)}")
@@ -373,7 +372,7 @@ try:
                 r_vals = [(p_data['Moyenne'] / max_avg) * 100, (p_data['Best'] / max_best) * 100, (p_data['Last5'] / max_last5) * 100, reg_score, (p_data['Nukes'] / (max_nukes if max_nukes > 0 else 1)) * 100]
                 r_cats = ['SCORING', 'EXPLOSIVITÉ', 'FORME', 'RÉGULARITÉ', 'CLUTCH']
                 fig_radar = go.Figure(data=go.Scatterpolar(r=r_vals + [r_vals[0]], theta=r_cats + [r_cats[0]], fill='toself', line_color=C_ACCENT, fillcolor="rgba(206, 17, 65, 0.3)"))
-                fig_radar.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 100], showticklabels=False, linecolor='#333'), bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font=dict(color='white', size=12, family="Rajdhani"), margin=dict(t=20, b=20))
+                fig_radar.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 100], showticklabels=False, linecolor='#333'), bgcolor='rgba(0,0,0,0)'), paper_bgcolor='rgba(0,0,0,0)', font=dict(color='white', size=12, family="Rajdhani"), margin=dict(t=20, b=20))
                 st.markdown("<div class='glass-card'>", unsafe_allow_html=True); st.plotly_chart(fig_radar, use_container_width=True); st.markdown("</div>", unsafe_allow_html=True)
             with col_stats:
                 kpi_card("MOYENNE SAISON", f"{p_data['Moyenne']:.1f}", "PTS")
@@ -468,9 +467,7 @@ try:
             sniper_bp = full_stats.sort_values('BP_Count', ascending=False).iloc[0]
             alpha_dog = full_stats.sort_values('Alpha_Count', ascending=False).iloc[0]
             alchemist = full_stats.sort_values('Bonus_Gained', ascending=False).iloc[0]
-            
-            # NEW: The Rocket (Momentum)
-            rocket = full_stats.sort_values('Momentum', ascending=False).iloc[0]
+            jackpot = full_stats.sort_values('Best_Bonus', ascending=False).iloc[0]
             
             # Crash Test : Pire Bonus (Eviter 0)
             has_bonus = full_stats[full_stats['Worst_Bonus'] > 0]
@@ -497,8 +494,7 @@ try:
                 st.markdown(hof_card("THE ALCHEMIST", "⚗️", C_BONUS, alchemist['Player'], int(alchemist['Bonus_Gained']), "PTS BONUS", "Plus grand nombre de points gagnés grâce aux bonus"), unsafe_allow_html=True)
 
             with c2:
-                # REPLACEMENT DU JACKPOT PAR THE ROCKET
-                st.markdown(hof_card("THE ROCKET", "🚀", C_ORANGE, rocket['Player'], f"+{rocket['Momentum']:.1f}", "MOMENTUM", "Plus fort gain de forme (Moy. 5j vs Saison)"), unsafe_allow_html=True)
+                st.markdown(hof_card("JACKPOT", "🎰", C_GREEN, jackpot['Player'], int(jackpot['Best_Bonus']), "PTS MAX (X2)", "Le plus gros score réalisé avec un bonus"), unsafe_allow_html=True)
                 st.markdown(hof_card("ZEN MASTER", "🧘", "#EAB308", zen_master['Player'], f"{int(zen_master['ReliabilityPct'])}%", "FIABILITÉ", "Plus haut % de matchs sans carotte"), unsafe_allow_html=True)
                 st.markdown(hof_card("HEAVY HITTER", "🥊", "#64B5F6", heavy['Player'], int(heavy['Count40']), "PICKS >40", "Nombre de scores supérieurs à 40 points"), unsafe_allow_html=True)
                 st.markdown(hof_card("NUCLEAR", "☢️", "#EF4444", nuke['Player'], int(nuke['Nukes']), "BOMBS", "Nombre de scores supérieurs à 50 points"), unsafe_allow_html=True)

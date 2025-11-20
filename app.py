@@ -318,10 +318,10 @@ try:
             
             top = day_df.iloc[0]
             c1, c2, c3, c4 = st.columns(4)
-            with c1: kpi_card("MVP DU JOUR", top['Player'], f"{int(top['Score'])} PTS", C_GOLD)
+            with c1: kpi_card("MVP DE LA NUIT", top['Player'], f"{int(top['Score'])} PTS", C_GOLD)
             with c2: kpi_card("MOYENNE TEAM", int(day_df['Score'].mean()), "POINTS")
             with c3: kpi_card("TOTAL NUIT", int(day_df['Score'].sum()), "CUMULÉ")
-            with c4: kpi_card("LEADER SAISON", leader['Player'], f"TOTAL: {int(leader['Total'])}", C_ACCENT)
+            with c4: kpi_card("MVP SAISON", leader['Player'], f"TOTAL: {int(leader['Total'])}", C_ACCENT)
             
             col_chart, col_rank = st.columns([2, 1])
             with col_chart:

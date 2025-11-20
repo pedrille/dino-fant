@@ -122,71 +122,55 @@ st.markdown(f"""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 3. DATA ENGINE (V4 - INTELLIGENT PARSING) ---
-@st.cache_data(ttl=60) 
+# --- 3. DATA ENGINE (CACHE 5 MIN) ---
+@st.cache_data(ttl=300) # UPDATE TOUTES LES 5 MIN
 def load_data():
     conn = st.connection("gsheets", type=GSheetsConnection)
     try:
         if "SPREADSHEET_URL" not in st.secrets: return pd.DataFrame(), 0, pd.Series()
         
         # 1. LECTURE ONGLET VALEURS (Joueurs)
-        # On lit tout pour attraper la ligne "Score BP" qui est souvent ligne 16 (index 15)
+        # On utilise usecols pour lire moins de données si possible, mais ici on lit tout le bloc nécessaire
         df_raw = conn.read(spreadsheet=st.secrets["SPREADSHEET_URL"], worksheet="Valeurs", header=None, ttl=0)
         
-        # Extraction Ligne Pick
         pick_row_idx = 2
         picks_series = pd.to_numeric(df_raw.iloc[pick_row_idx, 1:], errors='coerce')
         
-        # Extraction Ligne Score BP (Best Pick) - Ligne 16 dans le CSV fourni
-        # On cherche la ligne qui commence par "Score BP"
+        # Extraction Score BP
         bp_row_data = df_raw[df_raw[0].astype(str).str.contains("Score BP", na=False)]
         if not bp_row_data.empty:
             bp_series = pd.to_numeric(bp_row_data.iloc[0, 1:], errors='coerce')
         else:
             bp_series = pd.Series(index=picks_series.index, data=0)
 
-        # Nettoyage Joueurs
         data_start_idx = pick_row_idx + 1
         df_players = df_raw.iloc[data_start_idx:data_start_idx+50].copy()
         df_players = df_players.rename(columns={0: 'Player'})
         stop_words = ["Team Raptors", "Score BP", "Classic", "BP", "nan", "Moyenne", "Somme"]
         df_players = df_players[~df_players['Player'].astype(str).isin(stop_words)].dropna(subset=['Player'])
 
-        # Mapping des colonnes valides
         valid_cols_map = {idx: int(val) for idx, val in picks_series.items() if pd.notna(val) and val > 0}
-        
-        # Dataframe Clean
         cols_to_keep = ['Player'] + list(valid_cols_map.keys())
         cols_to_keep = [c for c in cols_to_keep if c in df_players.columns]
-        df_clean = df_players[cols_to_keep].copy().rename(columns=valid_cols_map)
         
-        # Dataframe Long (Pour les calculs)
+        df_clean = df_players[cols_to_keep].copy().rename(columns=valid_cols_map)
         df_long = df_clean.melt(id_vars=['Player'], var_name='Pick', value_name='Score')
         df_long['Score'] = pd.to_numeric(df_long['Score'], errors='coerce')
         df_long['Pick'] = pd.to_numeric(df_long['Pick'], errors='coerce')
         final_df = df_long.dropna(subset=['Score', 'Pick'])
 
-        # Mapping BP (Best Pick) pour comparaison
-        # On crée un dictionnaire {Pick_Num : Score_BP}
         bp_map = {int(picks_series[idx]): val for idx, val in bp_series.items() if idx in valid_cols_map}
 
         # 2. LECTURE ONGLET STATS (Pour le Team Rank)
-        # Le classement est dans le bloc de droite "Classement" (colonne AK environ)
         team_rank = 0
         try:
             df_stats = conn.read(spreadsheet=st.secrets["SPREADSHEET_URL"], worksheet="Stats_Raptors_FR", header=None, ttl=0)
-            # Recherche de "Team Raptors" dans la colonne AJ (35) ou AK (36)
-            # Selon le CSV, "Team Raptors" est en ligne 14, Col AK (36), et le rang est en fin de ligne
-            
-            # On scanne la zone pour trouver "Team Raptors" et prendre la dernière valeur non nulle de sa ligne
             for idx, row in df_stats.iterrows():
-                # On convertit la ligne en string pour chercher
                 row_str = row.astype(str).values
                 if "Team Raptors" in row_str:
-                    # On cherche des nombres dans cette ligne
                     numeric_values = [x for x in row if isinstance(x, (int, float, np.number)) and not pd.isna(x)]
                     if numeric_values:
-                        team_rank = numeric_values[-1] # Le dernier chiffre est le classement actuel
+                        team_rank = numeric_values[-1] 
                     break
         except:
             team_rank = 0
@@ -201,7 +185,6 @@ def compute_stats(df, bp_map):
         scores = d['Score'].values
         picks = d['Pick'].values
         
-        # Streak 30
         streak_30 = 0
         for s in reversed(scores):
             if s >= 30: streak_30 += 1
@@ -211,8 +194,6 @@ def compute_stats(df, bp_map):
         last5_avg = last_5.mean() if len(scores) >= 5 else scores.mean()
         momentum = last5_avg - scores.mean()
         
-        # Calcul des Best Picks (BP)
-        # On compare le score du joueur au score BP du pick correspondant
         bp_count = 0
         for pick_num, score in zip(picks, scores):
             if pick_num in bp_map and score >= bp_map[pick_num] and score > 0:
@@ -233,8 +214,8 @@ def compute_stats(df, bp_map):
             'Count40': len(scores[scores >= 40]),
             'Carottes': len(scores[scores < 20]),
             'Nukes': len(scores[scores >= 50]),
-            'Zeros': len(scores[scores == 0]), # Nouveau Stat Ghost
-            'BP_Count': bp_count, # Nouveau Stat Sniper
+            'Zeros': len(scores[scores == 0]), 
+            'BP_Count': bp_count,
             'Momentum': momentum,
             'Games': len(scores)
         })
@@ -350,7 +331,7 @@ try:
             <div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'>
                 <div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>
                     Data Pick #{int(latest_pick)}<br>
-                    War Room v4.0
+                    War Room v4.1
                 </div>
             </div>
             """, unsafe_allow_html=True)

@@ -85,6 +85,9 @@ st.markdown(f"""
     .hq-card-row:last-child {{ border-bottom:none; }}
     .hq-val {{ font-family:'Rajdhani'; font-weight:800; font-size:1.8rem; color:#FFF; }}
     .hq-lbl {{ font-size:0.8rem; color:#AAA; text-transform:uppercase; display:flex; align-items:center; gap:8px; }}
+    
+    /* CHART DESC */
+    .chart-desc {{ font-size:0.8rem; color:#888; margin-bottom:10px; font-style:italic; }}
 </style>
 """, unsafe_allow_html=True)
 
@@ -310,7 +313,7 @@ try:
             st.image("raptors-ttfl-min.png", use_container_width=True) 
             st.markdown("</div>", unsafe_allow_html=True)
             menu = option_menu(menu_title=None, options=["Dashboard", "Team HQ", "Player Lab", "Bonus x2", "Trends", "Hall of Fame", "Admin"], icons=["grid-fill", "people-fill", "person-bounding-box", "lightning-charge-fill", "fire", "trophy-fill", "shield-lock"], default_index=0, styles={"container": {"padding": "0!important", "background-color": "#000000"}, "icon": {"color": "#666", "font-size": "1.1rem"}, "nav-link": {"font-family": "Rajdhani, sans-serif", "font-weight": "700", "font-size": "15px", "text-transform": "uppercase", "color": "#AAA", "text-align": "left", "margin": "5px 0px", "--hover-color": "#111"}, "nav-link-selected": {"background-color": C_ACCENT, "color": "#FFF", "icon-color": "#FFF", "box-shadow": "0px 4px 20px rgba(206, 17, 65, 0.4)"}})
-            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v11.5 Final</div></div>""", unsafe_allow_html=True)
+            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v11.6 Final</div></div>""", unsafe_allow_html=True)
             
             # SCRIPT JS POUR FERMER SIDEBAR
             components.html("""<script>const options = window.parent.document.querySelectorAll('.nav-link'); options.forEach((option) => { option.addEventListener('click', () => { const sidebar = window.parent.document.querySelector('section[data-testid="stSidebar"]'); if (sidebar) {} }); });</script>""", height=0, width=0)
@@ -354,39 +357,42 @@ try:
                     rows += f"""<div class='rank-row' style='{style}'><div class='rank-pos'>{pos}</div><div class='rank-name' style='color:{'#FFF' if i < 3 else '#AAA'}'>{r['Player']}{bonus_icon}</div><div class='rank-score' style='color:{col}'>{int(r['Score'])}</div></div>"""
                 st.markdown(f"<div style='display:flex; flex-direction:column; gap:5px'>{rows}</div></div>", unsafe_allow_html=True)
 
-            # --- NEW: FOOTER SECTION (v11.5) ---
+            # --- UPDATED: DASHBOARD FOOTER ---
             st.markdown("<div style='margin-bottom:30px'></div>", unsafe_allow_html=True)
-            st.markdown("### 🏆 PODIUM SAISON & TRAJECTOIRE")
-            c_podium, c_traj = st.columns(2)
+            st.markdown("### 🏆 LEADERS & FORME DU MOMENT")
+            c_podium, c_forme = st.columns(2)
             
             with c_podium:
-                st.markdown("<div class='glass-card' style='height:100%'>", unsafe_allow_html=True)
+                st.markdown(f"<div class='glass-card' style='height:100%'><div style='color:{C_ACCENT}; font-family:Rajdhani; font-weight:700; margin-bottom:15px'>🏆 LEADERS SAISON (TOTAL PTS)</div>", unsafe_allow_html=True)
                 top_3_season = full_stats.sort_values('Total', ascending=False).head(3).reset_index()
                 for i, r in top_3_season.iterrows():
                     medal = medals.get(i, f"{i+1}")
                     st.markdown(f"""
-                    <div style='display:flex; align-items:center; justify-content:space-between; margin-bottom:15px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:10px'>
+                    <div style='display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:8px'>
                         <div style='display:flex; align-items:center; gap:15px'>
                             <div style='font-size:1.5rem'>{medal}</div>
-                            <div>
-                                <div style='font-family:Rajdhani; font-weight:700; font-size:1.2rem; color:#FFF'>{r['Player']}</div>
-                                <div style='font-size:0.8rem; color:#888'>Moyenne: {r['Moyenne']:.1f}</div>
-                            </div>
+                            <div style='font-family:Rajdhani; font-weight:700; font-size:1.2rem; color:#FFF'>{r['Player']}</div>
                         </div>
                         <div style='font-family:Rajdhani; font-weight:700; font-size:1.5rem; color:{C_ACCENT if i==0 else "#FFF"}'>{int(r['Total'])}</div>
                     </div>
                     """, unsafe_allow_html=True)
                 st.markdown("</div>", unsafe_allow_html=True)
 
-            with c_traj:
-                if len(team_history) > 1:
-                    st.markdown("<div class='glass-card' style='height:100%'>", unsafe_allow_html=True)
-                    hist_df = pd.DataFrame({'Deck': range(1, len(team_history)+1), 'Rank': team_history})
-                    fig_h = px.line(hist_df, x='Deck', y='Rank', markers=True)
-                    fig_h.update_traces(line_color=C_ACCENT, line_width=3, marker_size=6)
-                    fig_h.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, yaxis=dict(autorange="reversed", gridcolor='#222', title=None), xaxis=dict(showgrid=False, title=None), margin=dict(l=20, r=20, t=20, b=20), height=250)
-                    st.plotly_chart(fig_h, use_container_width=True)
-                    st.markdown("</div>", unsafe_allow_html=True)
+            with c_forme:
+                st.markdown(f"<div class='glass-card' style='height:100%'><div style='color:{C_GREEN}; font-family:Rajdhani; font-weight:700; margin-bottom:15px'>🔥 FORME DU MOMENT (MOY. 15J)</div>", unsafe_allow_html=True)
+                top_3_form = full_stats.sort_values('Last15', ascending=False).head(3).reset_index()
+                for i, r in top_3_form.iterrows():
+                    medal = medals.get(i, f"{i+1}")
+                    st.markdown(f"""
+                    <div style='display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:8px'>
+                        <div style='display:flex; align-items:center; gap:15px'>
+                            <div style='font-size:1.5rem'>{medal}</div>
+                            <div style='font-family:Rajdhani; font-weight:700; font-size:1.2rem; color:#FFF'>{r['Player']}</div>
+                        </div>
+                        <div style='font-family:Rajdhani; font-weight:700; font-size:1.5rem; color:{C_GREEN if i==0 else "#FFF"}'>{r['Last15']:.1f}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                st.markdown("</div>", unsafe_allow_html=True)
 
         elif menu == "Team HQ":
             section_title("TEAM <span class='highlight'>HQ</span>", "Vue d'ensemble de l'effectif")
@@ -457,10 +463,16 @@ try:
 
             st.markdown("<div style='margin-bottom:30px'></div>", unsafe_allow_html=True)
 
+            if len(team_history) > 1:
+                st.markdown("### 📈 ÉVOLUTION DU CLASSEMENT")
+                hist_df = pd.DataFrame({'Deck': range(1, len(team_history)+1), 'Rank': team_history})
+                fig_h = px.line(hist_df, x='Deck', y='Rank', markers=True)
+                fig_h.update_traces(line_color=C_ACCENT, line_width=3, marker_size=8)
+                fig_h.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, yaxis=dict(autorange="reversed", gridcolor='#222'), xaxis=dict(showgrid=False))
+                st.plotly_chart(fig_h, use_container_width=True)
+            
             st.markdown("### 📈 DYNAMIQUE TEAM (15 DERNIERS MATCHS)")
-            team_daily_totals = df.groupby('Pick')['Score'].sum().reset_index()
-            last_15_team = team_daily_totals[team_daily_totals['Pick'] > (latest_pick - 15)]
-            team_season_avg_total = team_daily_totals['Score'].mean()
+            st.markdown("<div class='chart-desc'>Cumul des points de toute l'équipe soir après soir vs la moyenne habituelle.</div>", unsafe_allow_html=True)
             
             fig_team_trend = px.line(last_15_team, x='Pick', y='Score', markers=True)
             fig_team_trend.update_traces(line_color=C_ACCENT, line_width=3, marker_size=8)
@@ -469,10 +481,13 @@ try:
             st.plotly_chart(fig_team_trend, use_container_width=True)
 
             st.markdown("### 🎯 RÉPARTITION DES SCORES")
+            st.markdown("<div class='chart-desc'>Dispersion des performances individuelles : permet de voir qui est régulier (boîte étroite) et qui est instable (boîte large).</div>", unsafe_allow_html=True)
             fig_dist = px.violin(df, x='Player', y='Score', box=True, points="all", color='Player', color_discrete_sequence=px.colors.qualitative.Prism)
             fig_dist.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, showlegend=False, height=400, yaxis=dict(gridcolor='#222'))
             st.plotly_chart(fig_dist, use_container_width=True)
+            
             st.markdown("### 📊 DATA ROOM")
+            st.markdown("<div class='chart-desc'>Tableau de bord détaillé de tous les joueurs.</div>", unsafe_allow_html=True)
             st.dataframe(full_stats[['Player', 'Total', 'Moyenne', 'BP_Count', 'Nukes', 'Carottes', 'Bonus_Gained']].sort_values('Total', ascending=False), hide_index=True, use_container_width=True, column_config={
                 "Total": st.column_config.ProgressColumn("Total Pts", format="%d", min_value=0, max_value=full_stats['Total'].max()), 
                 "Moyenne": st.column_config.NumberColumn("Moyenne", format="%.1f"),
@@ -534,7 +549,7 @@ try:
                 r1c1, r1c2, r1c3 = st.columns(3)
                 with r1c1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(p_data['ReliabilityPct'])}%</div><div class='stat-mini-lbl'>FIABILITÉ</div><div class='stat-mini-sub'>% Picks > 20pts</div></div>", unsafe_allow_html=True)
                 with r1c2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(p_data['Nukes'])}</div><div class='stat-mini-lbl'>NUKES</div><div class='stat-mini-sub'>Scores > 50pts</div></div>", unsafe_allow_html=True)
-                with r1c3: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:#F87171'>{int(p_data['Carottes'])}</div><div class='stat-mini-lbl'>CAROTTES</div><div class='stat-mini-sub'>Scores < 20pts</div></div>", unsafe_allow_html=True)
+                with r1c3: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{F87171}'>{int(p_data['Carottes'])}</div><div class='stat-mini-lbl'>CAROTTES</div><div class='stat-mini-sub'>Scores < 20pts</div></div>", unsafe_allow_html=True)
                 st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
                 
                 r2c1, r2c2, r2c3 = st.columns(3)
@@ -561,6 +576,7 @@ try:
             with c_dist:
                 st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
                 st.markdown("#### 📊 DISTRIBUTION DES SCORES", unsafe_allow_html=True)
+                st.markdown("<div class='chart-desc'>Fréquence des scores par tranches de points.</div>", unsafe_allow_html=True)
                 fig_hist = px.histogram(p_hist_all, x="Score", nbins=15, color_discrete_sequence=[C_ACCENT])
                 fig_hist.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, margin=dict(l=0, r=0, t=30, b=0), height=200, xaxis_title=None, yaxis_title=None)
                 st.plotly_chart(fig_hist, use_container_width=True)
@@ -568,6 +584,7 @@ try:
             with c_trend:
                 st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
                 st.markdown("#### 📈 TENDANCE (15 DERNIERS MATCHS)", unsafe_allow_html=True)
+                st.markdown("<div class='chart-desc'>Dynamique récente (Points) comparée à la moyenne saison (Ligne).</div>", unsafe_allow_html=True)
                 last_15_data = p_hist_all.sort_values('Pick').tail(15)
                 if not last_15_data.empty:
                     fig_trend = px.line(last_15_data, x="Pick", y="Score", markers=True)
@@ -578,6 +595,17 @@ try:
                     st.plotly_chart(fig_trend, use_container_width=True)
                 else: st.info("Pas assez de données")
                 st.markdown("</div>", unsafe_allow_html=True)
+
+            # --- NEW: FULL SEASON EVOLUTION ---
+            st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
+            st.markdown("#### 🏔️ PARCOURS SAISON COMPLÈTE", unsafe_allow_html=True)
+            st.markdown("<div class='chart-desc'>Vue d'ensemble de tous les picks de la saison.</div>", unsafe_allow_html=True)
+            fig_evol = px.line(p_hist_all, x="Pick", y="Score", markers=True)
+            fig_evol.update_traces(line_color=C_BLUE, line_width=2, marker_size=4)
+            fig_evol.add_hline(y=p_data['Moyenne'], line_dash="dot", line_color=C_TEXT, annotation_text="Moy. Saison", annotation_position="top left")
+            fig_evol.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, margin=dict(l=0, r=0, t=30, b=0), height=300, xaxis_title="Pick #", yaxis_title="Points TTFL")
+            st.plotly_chart(fig_evol, use_container_width=True)
+            st.markdown("</div>", unsafe_allow_html=True)
 
         elif menu == "Bonus x2":
             section_title("BONUS <span class='highlight'>ZONE</span>", "Analyse des Jokers x2")

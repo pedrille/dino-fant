@@ -329,7 +329,7 @@ try:
             team_season_avg = df['Score'].mean()
             diff_perf = ((team_daily_avg - team_season_avg) / team_season_avg) * 100
             perf_col = C_GREEN if diff_perf > 0 else "#F87171"
-            with c3: kpi_card("PERFORMANCE JOUR", f"{diff_perf:+.1f}%", "VS MOY. SAISON", perf_col)
+            with c3: kpi_card("PERFORMANCE TEAM JOUR", f"{diff_perf:+.1f}%", "VS MOY. SAISON", perf_col)
             
             with c4: kpi_card("LEADER SAISON", leader['Player'], f"TOTAL: {int(leader['Total'])}", C_ACCENT)
             

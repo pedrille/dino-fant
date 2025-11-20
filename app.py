@@ -23,6 +23,11 @@ st.markdown("""
     /* BASE */
     .stApp { background-color: #050505; font-family: 'Inter', sans-serif; color: #E5E7EB; }
     
+    /* SIDEBAR & BOUTONS */
+    [data-testid="stSidebar"] { background-color: #020202; border-right: 1px solid #222; }
+    [data-testid="stSidebarCollapseButton"] { color: #FFFFFF !important; } /* Force le bouton menu en blanc */
+    [data-testid="stSidebarNav"] i { color: #CE1141; }
+    
     /* TYPOGRAPHIE */
     h1, h2, h3, h4 { font-family: 'Rajdhani', sans-serif; text-transform: uppercase; letter-spacing: 1px; }
     h1 { 
@@ -45,7 +50,9 @@ st.markdown("""
         padding: 20px;
         backdrop-filter: blur(10px);
         box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        transition: transform 0.2s;
     }
+    .card:hover { transform: translateY(-2px); border-color: #CE1141; }
     
     /* KPI BOXES */
     .kpi-box {
@@ -69,13 +76,11 @@ st.markdown("""
     .badge-fire { background: rgba(206, 17, 65, 0.15); border-color: #CE1141; color: #FCA5A5; }
     .badge-ice { background: rgba(59, 130, 246, 0.15); border-color: #3B82F6; color: #93C5FD; }
     .badge-gold { background: rgba(234, 179, 8, 0.15); border-color: #EAB308; color: #FDE047; }
+    .badge-orange { background: rgba(249, 115, 22, 0.15); border-color: #F97316; color: #FDBA74; }
 
     /* TABLES & PLOTS CLEANUP */
     div[data-testid="stDataFrame"] { border: none !important; }
     .js-plotly-plot .plotly .main-svg { background: transparent !important; }
-    
-    /* SIDEBAR */
-    section[data-testid="stSidebar"] { background-color: #020202; border-right: 1px solid #222; }
     
 </style>
 """, unsafe_allow_html=True)
@@ -123,9 +128,12 @@ def compute_stats(df):
             if s >= 30: streak_30 += 1
             else: break
             
-        # Briques & Bombes
-        bricks = len(scores[scores < 20])
+        # Carottes (Ex Briques) < 20 (ou < 15 selon la demande, j'ai mis < 20 ici, modifiable)
+        carottes = len(scores[scores < 20]) 
         nukes = len(scores[scores >= 50])
+        
+        # Regularité (Ecart type)
+        std_dev = scores.std()
         
         stats.append({
             'Player': p,
@@ -134,10 +142,11 @@ def compute_stats(df):
             'Best': scores.max(),
             'Worst': scores.min(),
             'Last5': scores[-5:].mean() if len(scores) >= 5 else scores.mean(),
-            'Last10': scores[-10:].mean() if len(scores) >= 10 else scores.mean(),
+            'Last15': scores[-15:].mean() if len(scores) >= 15 else scores.mean(),
             'Streak30': streak_30,
-            'Bricks': bricks,
+            'Carottes': carottes,
             'Nukes': nukes,
+            'Regularity': std_dev, # Plus c'est bas, mieux c'est
             'Games': len(scores)
         })
     return pd.DataFrame(stats)
@@ -157,9 +166,9 @@ def send_discord_webhook(top_player, avg_score, pick_num, url_app):
             "fields": [
                 {"name": "🔥 MVP", "value": f"**{top_player['Player']}**\n`{int(top_player['Score'])}` pts", "inline": True},
                 {"name": "📊 Moyenne", "value": f"`{int(avg_score)}` pts", "inline": True},
-                {"name": "🔗 Dashboard", "value": f"[Accéder au Dashboard RaptorsTTFL]({url_app})", "inline": False}
+                {"name": "🔗 Dashboard", "value": f"[Accéder à la War Room]({url_app})", "inline": False}
             ],
-            "footer": {"text": "RaptorsTTFL • We The North"}
+            "footer": {"text": "Raptors Elite System • We The North"}
         }]
     }
     try:
@@ -247,31 +256,38 @@ try:
         elif menu == "Team HQ":
             st.markdown("<h1>TEAM <span style='color:#CE1141'>HEADQUARTERS</span></h1>", unsafe_allow_html=True)
             
-            st.markdown("### 📈 La Course au Titre")
+            st.markdown("### 📈 La Course au Titre (Zoom 30j)")
             df_sorted = df.sort_values('Pick')
             df_sorted['Cumul'] = df_sorted.groupby('Player')['Score'].cumsum()
+            
+            # Filtre par défaut sur les 30 derniers jours pour la lisibilité
+            min_zoom_pick = max(1, latest_pick - 30)
+            df_zoom = df_sorted[df_sorted['Pick'] >= min_zoom_pick]
+
             top5_total = full_stats.sort_values('Total', ascending=False).head(5)['Player'].tolist()
             
-            # Filtre
+            # Filtre Joueurs
             selected_players = st.multiselect("Comparer les joueurs", df['Player'].unique(), default=top5_total)
             if selected_players:
                 fig = px.line(
-                    df_sorted[df_sorted['Player'].isin(selected_players)], 
+                    df_zoom[df_zoom['Player'].isin(selected_players)], 
                     x='Pick', y='Cumul', color='Player', 
                     color_discrete_sequence=px.colors.qualitative.Bold
                 )
                 fig.update_layout(
                     plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
-                    font={'color': '#AAA'}, xaxis=dict(showgrid=False), yaxis=dict(showgrid=True, gridcolor='#222'),
+                    font={'color': '#AAA'}, xaxis=dict(showgrid=False, title="Picks"), yaxis=dict(showgrid=True, gridcolor='#222'),
                     height=450, hovermode="x unified"
                 )
                 st.plotly_chart(fig, use_container_width=True)
             
-            st.markdown("### 🎯 Distribution des Scores")
-            fig_dist = px.box(df, x='Player', y='Score', color='Player', color_discrete_sequence=px.colors.qualitative.Bold)
+            st.markdown("### 🎯 Répartition des Scores (Violin Plot)")
+            # Utilisation d'un Violin Plot pour mieux voir la densité qu'une boite
+            fig_dist = px.violin(df, x='Player', y='Score', color='Player', box=True, points="all", color_discrete_sequence=px.colors.qualitative.Bold)
             fig_dist.update_layout(
                 plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
-                font={'color': '#AAA'}, showlegend=False, yaxis=dict(gridcolor='#222')
+                font={'color': '#AAA'}, showlegend=False, yaxis=dict(gridcolor='#222'),
+                height=500
             )
             st.plotly_chart(fig_dist, use_container_width=True)
 
@@ -288,7 +304,7 @@ try:
             with k1: kpi("TOTAL SAISON", int(p_stats['Total']), f"Rank #{int(full_stats.sort_values('Total', ascending=False).reset_index()[full_stats.sort_values('Total', ascending=False).reset_index()['Player'] == sel_player].index[0] + 1)}")
             with k2: kpi("MOYENNE", f"{p_stats['Moyenne']:.1f}", f"vs Team: {df['Score'].mean():.1f}")
             with k3: kpi("MEILLEUR PICK", int(p_stats['Best']))
-            with k4: kpi("BRIQUES (<20)", int(p_stats['Bricks']), "⚠️ Attention")
+            with k4: kpi("CAROTTES (<20)", int(p_stats['Carottes']), "⚠️ Attention")
             
             st.markdown("---")
             
@@ -309,7 +325,7 @@ try:
             with c_pie:
                 st.markdown("### 🍰 Répartition")
                 bins = [0, 20, 30, 40, 150]
-                labels = ['Brique (<20)', 'Moyen (20-30)', 'Bon (30-40)', 'Top (>40)']
+                labels = ['Carotte (<20)', 'Moyen (20-30)', 'Bon (30-40)', 'Top (>40)']
                 p_history['Cat'] = pd.cut(p_history['Score'], bins=bins, labels=labels)
                 counts = p_history['Cat'].value_counts()
                 fig_pie = px.pie(values=counts.values, names=counts.index, hole=0.6, color_discrete_sequence=px.colors.sequential.RdBu)
@@ -353,7 +369,6 @@ try:
             st.markdown("### 🌡️ Heatmap des 15 derniers jours")
             min_pick = max(1, latest_pick - 14)
             df_heat = df[df['Pick'] >= min_pick].pivot(index='Player', columns='Pick', values='Score')
-            # Tri par score total récent
             df_heat['sum'] = df_heat.sum(axis=1)
             df_heat = df_heat.sort_values('sum', ascending=False).drop(columns='sum')
             
@@ -366,10 +381,15 @@ try:
         elif menu == "Hall of Fame":
             st.markdown("<h1>HALL OF <span style='color:#CE1141'>FAME</span></h1>", unsafe_allow_html=True)
             
+            # Calcul des Lauréats
             sniper = full_stats.sort_values('Moyenne', ascending=False).iloc[0]
-            bricklayer = full_stats.sort_values('Bricks', ascending=False).iloc[0]
+            lapin = full_stats.sort_values('Carottes', ascending=False).iloc[0]
             streaker = full_stats.sort_values('Streak30', ascending=False).iloc[0]
             nuker = full_stats.sort_values('Nukes', ascending=False).iloc[0]
+            
+            # Nouveaux Lauréats
+            torche = full_stats.sort_values('Last15', ascending=False).iloc[0]
+            metronome = full_stats.sort_values('Regularity', ascending=True).iloc[0] # Plus petit écart type
             
             c1, c2 = st.columns(2)
             
@@ -381,11 +401,17 @@ try:
                     <p style="color:#888">Meilleure moyenne de la saison.</p>
                     <div class="kpi-val">{sniper['Moyenne']:.1f} PTS</div>
                 </div>
+                <div class="card" style="margin-bottom:20px;">
+                    <div class="badge badge-fire">🔥 LA TORCHE</div>
+                    <h3>{torche['Player']}</h3>
+                    <p style="color:#888">Meilleure moyenne sur les 15 derniers jours.</p>
+                    <div class="kpi-val">{torche['Last15']:.1f} PTS</div>
+                </div>
                 <div class="card">
-                    <div class="badge badge-fire">🔥 L'INTOUCHABLE</div>
-                    <h3>{streaker['Player']}</h3>
-                    <p style="color:#888">Série actuelle de matchs > 30 pts.</p>
-                    <div class="kpi-val">{int(streaker['Streak30'])} MATCHS</div>
+                    <div class="badge badge-gold">📈 LE MÉTRONOME</div>
+                    <h3>{metronome['Player']}</h3>
+                    <p style="color:#888">Le joueur le plus régulier (écart-type le plus faible).</p>
+                    <div class="kpi-val">± {metronome['Regularity']:.1f}</div>
                 </div>
                 """, unsafe_allow_html=True)
                 
@@ -397,11 +423,17 @@ try:
                     <p style="color:#888">Le plus de scores > 50 pts.</p>
                     <div class="kpi-val">{int(nuker['Nukes'])} NUKES</div>
                 </div>
+                <div class="card" style="margin-bottom:20px;">
+                    <div class="badge badge-ice">🐰 LE LAPIN</div>
+                    <h3>{lapin['Player']}</h3>
+                    <p style="color:#888">Le roi des carottes (< 20 pts).</p>
+                    <div class="kpi-val">{int(lapin['Carottes'])} CAROTTES</div>
+                </div>
                 <div class="card">
-                    <div class="badge badge-ice">🧱 LE MAÇON</div>
-                    <h3>{bricklayer['Player']}</h3>
-                    <p style="color:#888">Plus grand nombre de scores < 20.</p>
-                    <div class="kpi-val">{int(bricklayer['Bricks'])} BRIQUES</div>
+                     <div class="badge badge-orange">⚡ L'INTOUCHABLE</div>
+                    <h3>{streaker['Player']}</h3>
+                    <p style="color:#888">Série actuelle de matchs > 30 pts.</p>
+                    <div class="kpi-val">{int(streaker['Streak30'])} MATCHS</div>
                 </div>
                 """, unsafe_allow_html=True)
 
@@ -415,11 +447,8 @@ try:
             
             with col_btn:
                 if st.button("🚀 LANCER LA NOTIF", type="primary"):
-                    # On récupère les infos fraîches
                     top_p = day_df.iloc[0]
                     avg_s = day_df['Score'].mean()
-                    
-                    # --- TON LIEN EXACT ICI ---
                     app_url = "https://dino-fant-tvewyye4t3dmqfeuvqsvmg.streamlit.app/" 
                     
                     with st.spinner("Transmission au QG..."):

@@ -20,10 +20,12 @@ C_BG = "#050505"
 C_ACCENT = "#CE1141" # Raptors Red
 C_TEXT = "#E5E7EB"
 C_GOLD = "#FFD700"
+C_SILVER = "#C0C0C0"
+C_BRONZE = "#CD7F32"
 C_GREEN = "#10B981"
 C_BLUE = "#3B82F6"
 C_PURPLE = "#8B5CF6"
-C_IRON = "#A1A1AA"
+C_ALPHA = "#F472B6" # Rose/Rouge pour l'Alpha Dog
 
 # --- 2. CSS PREMIUM ---
 st.markdown(f"""
@@ -96,7 +98,7 @@ def load_data():
     try:
         if "SPREADSHEET_URL" not in st.secrets: return None, None, None, None, []
 
-        # --- A. ONGLET VALEURS ---
+        # --- A. VALEURS ---
         df_valeurs = conn.read(spreadsheet=st.secrets["SPREADSHEET_URL"], worksheet="Valeurs", header=None, ttl=0)
         
         pick_row_idx = 2
@@ -120,8 +122,11 @@ def load_data():
         final_df = df_long.dropna(subset=['Score', 'Pick'])
         
         bp_map = {int(picks_series[idx]): val for idx, val in bp_series.items() if idx in valid_map}
+        
+        # Pre-calcul du max score par pick pour le badge Alpha Dog
+        daily_max_map = final_df.groupby('Pick')['Score'].max().to_dict()
 
-        # --- B. ONGLET STATS ---
+        # --- B. STATS ---
         df_stats = conn.read(spreadsheet=st.secrets["SPREADSHEET_URL"], worksheet="Stats_Raptors_FR", header=None, ttl=0)
         
         ranks_map = {}
@@ -154,11 +159,11 @@ def load_data():
                     else:
                         ranks_map[p_name] = last_rank
 
-        return final_df, team_current_rank, bp_map, ranks_map, team_rank_history
+        return final_df, team_current_rank, bp_map, ranks_map, team_rank_history, daily_max_map
 
-    except: return pd.DataFrame(), 0, {}, {}, []
+    except: return pd.DataFrame(), 0, {}, {}, [], {}
 
-def compute_stats(df, bp_map, ranks_map):
+def compute_stats(df, bp_map, ranks_map, daily_max_map):
     stats = []
     latest_pick = df['Pick'].max()
     season_avgs = df.groupby('Player')['Score'].mean()
@@ -181,31 +186,37 @@ def compute_stats(df, bp_map, ranks_map):
         momentum = last5_avg - scores.mean()
         
         bp_count = 0
+        alpha_count = 0 # Leader count
+        
         for pick_num, score in zip(picks, scores):
+            # Best Pick Global check
             if pick_num in bp_map and score >= bp_map[pick_num] and score > 0:
                 bp_count += 1
+            # Team Leader check
+            if pick_num in daily_max_map and score >= daily_max_map[pick_num] and score > 0:
+                alpha_count += 1
         
         s_avg = season_avgs.get(p, 0)
         l15_avg = avg_15.get(p, s_avg)
         progression_15 = l15_avg - s_avg
 
-        # --- FIX: Ajout des clés manquantes (Count30, Last5, StdDev, Last) ---
         stats.append({
             'Player': p,
             'Total': scores.sum(),
             'Moyenne': scores.mean(),
-            'StdDev': scores.std(), # RE-ADDED
+            'StdDev': scores.std(), 
             'Best': scores.max(),
             'Worst': scores.min(),
-            'Last': scores[-1], # RE-ADDED
-            'Last5': last5_avg, # RE-ADDED
+            'Last': scores[-1], 
+            'Last5': last5_avg, 
             'Last15': scores[-15:].mean() if len(scores) >= 15 else scores.mean(),
             'Streak30': streak_30,
-            'Count30': len(scores[scores >= 30]), # RE-ADDED
+            'Count30': len(scores[scores >= 30]), 
             'Count40': len(scores[scores >= 40]),
             'Carottes': len(scores[scores < 20]),
             'Nukes': len(scores[scores >= 50]),
             'BP_Count': bp_count,
+            'Alpha_Count': alpha_count, # NEW
             'Momentum': momentum,
             'Games': len(scores),
             'Progression15': progression_15,
@@ -259,12 +270,12 @@ def section_title(title, subtitle):
 
 # --- 6. MAIN APP ---
 try:
-    df, team_rank, bp_map, ranks_map, team_history = load_data()
+    df, team_rank, bp_map, ranks_map, team_history, daily_max_map = load_data()
     
     if df is not None and not df.empty:
         latest_pick = df['Pick'].max()
         day_df = df[df['Pick'] == latest_pick].sort_values('Score', ascending=False)
-        full_stats = compute_stats(df, bp_map, ranks_map)
+        full_stats = compute_stats(df, bp_map, ranks_map, daily_max_map)
         leader = full_stats.sort_values('Total', ascending=False).iloc[0]
         
         with st.sidebar:
@@ -272,7 +283,7 @@ try:
             st.image("raptors-ttfl-min.png", use_container_width=True) 
             st.markdown("</div>", unsafe_allow_html=True)
             menu = option_menu(menu_title=None, options=["Dashboard", "Team HQ", "Player Lab", "Trends", "Hall of Fame", "Admin"], icons=["grid-fill", "people-fill", "person-bounding-box", "fire", "trophy-fill", "shield-lock"], default_index=0, styles={"container": {"padding": "0!important", "background-color": "#000000"}, "icon": {"color": "#666", "font-size": "1.1rem"}, "nav-link": {"font-family": "Rajdhani, sans-serif", "font-weight": "700", "font-size": "15px", "text-transform": "uppercase", "color": "#AAA", "text-align": "left", "margin": "5px 0px", "--hover-color": "#111"}, "nav-link-selected": {"background-color": C_ACCENT, "color": "#FFF", "icon-color": "#FFF", "box-shadow": "0px 4px 20px rgba(206, 17, 65, 0.4)"}})
-            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v5.1</div></div>""", unsafe_allow_html=True)
+            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v5.2</div></div>""", unsafe_allow_html=True)
 
         if menu == "Dashboard":
             section_title("RAPTORS <span class='highlight'>DASHBOARD</span>", f"Daily Briefing • Pick #{int(latest_pick)}")
@@ -322,13 +333,14 @@ try:
             st.plotly_chart(fig_dist, use_container_width=True)
             
             st.markdown("### 📊 DATA ROOM")
-            st.dataframe(full_stats[['Player', 'Total', 'Moyenne', 'GeneralRank', 'BP_Count', 'Nukes', 'Carottes']].sort_values('Total', ascending=False), hide_index=True, use_container_width=True, column_config={
+            st.dataframe(full_stats[['Player', 'Total', 'Moyenne', 'GeneralRank', 'BP_Count', 'Alpha_Count', 'Nukes', 'Carottes']].sort_values('Total', ascending=False), hide_index=True, use_container_width=True, column_config={
                 "Total": st.column_config.ProgressColumn("Total Pts", format="%d", min_value=0, max_value=full_stats['Total'].max()), 
                 "Moyenne": st.column_config.NumberColumn("Moyenne", format="%.1f"),
                 "GeneralRank": st.column_config.NumberColumn("Class. Gén.", format="#%d"),
                 "Carottes": st.column_config.NumberColumn("🥕", help="Scores < 20"),
                 "Nukes": st.column_config.NumberColumn("☢️", help="Scores > 50"),
-                "BP_Count": st.column_config.NumberColumn("🎯", help="Best Picks")
+                "BP_Count": st.column_config.NumberColumn("🎯", help="Best Picks Global"),
+                "Alpha_Count": st.column_config.NumberColumn("🐺", help="Best Team Score")
             })
 
         elif menu == "Player Lab":
@@ -413,7 +425,7 @@ try:
             floor = full_stats.sort_values('Worst', ascending=True).iloc[0]
             lapin = full_stats.sort_values('Carottes', ascending=False).iloc[0]
             sniper_bp = full_stats.sort_values('BP_Count', ascending=False).iloc[0]
-            iron_man = full_stats.sort_values('Games', ascending=False).iloc[0]
+            alpha_dog = full_stats.sort_values('Alpha_Count', ascending=False).iloc[0]
 
             def hof_card(title, icon, color, p_name, val, unit, desc):
                 return f"""<div class="glass-card" style="position:relative; overflow:hidden"><div style="position:absolute; right:-10px; top:-10px; font-size:5rem; opacity:0.05; pointer-events:none">{icon}</div><div class="hof-badge" style="color:{color}; border:1px solid {color}">{icon} {title}</div><div style="display:flex; justify-content:space-between; align-items:flex-end;"><div><div class="hof-player">{p_name}</div><div style="font-size:0.8rem; color:#888; margin-top:4px">{desc}</div></div><div><div class="hof-stat" style="color:{color}">{val}</div><div class="hof-unit">{unit}</div></div></div></div>"""
@@ -421,13 +433,13 @@ try:
             c1, c2 = st.columns(2)
             with c1:
                 st.markdown(hof_card("THE GOAT", "🏆", C_GOLD, sniper['Player'], f"{sniper['Moyenne']:.1f}", "PTS MOY", "Meilleure moyenne générale"), unsafe_allow_html=True)
-                st.markdown(hof_card("THE SNIPER", "🎯", C_PURPLE, sniper_bp['Player'], int(sniper_bp['BP_Count']), "BEST PICKS", "A trouvé le meilleur score le plus souvent"), unsafe_allow_html=True)
+                st.markdown(hof_card("THE SNIPER", "🎯", C_PURPLE, sniper_bp['Player'], int(sniper_bp['BP_Count']), "BEST PICKS", "A trouvé le meilleur score TTFL le plus souvent"), unsafe_allow_html=True)
                 st.markdown(hof_card("HUMAN TORCH", "🔥", "#FF5252", torche['Player'], f"{torche['Last15']:.1f}", "PTS / 15J", "Le plus chaud du mois"), unsafe_allow_html=True)
                 st.markdown(hof_card("RISING STAR", "🚀", C_GREEN, progression['Player'], f"+{progression['Progression15']:.1f}", "PTS GAIN", "Progression Moyenne 15j vs Saison"), unsafe_allow_html=True)
                 st.markdown(hof_card("THE CEILING", "🏔️", "#A78BFA", peak['Player'], int(peak['Best']), "PTS MAX", "Record absolu en un match"), unsafe_allow_html=True)
                 st.markdown(hof_card("HEAVY HITTER", "🥊", "#64B5F6", heavy['Player'], int(heavy['Count40']), "PICKS >40", "Volume de gros scores"), unsafe_allow_html=True)
             with c2:
-                st.markdown(hof_card("IRON MAN", "🦾", C_IRON, iron_man['Player'], int(iron_man['Games']), "MATCHS", "Joueur le plus assidu"), unsafe_allow_html=True)
+                st.markdown(hof_card("ALPHA DOG", "🐺", C_ALPHA, alpha_dog['Player'], int(alpha_dog['Alpha_Count']), "TOPS TEAM", "Le plus souvent meilleur scoreur de l'équipe"), unsafe_allow_html=True)
                 st.markdown(hof_card("UNSTOPPABLE", "⚡", "#FBBF24", intouch['Player'], int(intouch['Streak30']), "SERIE", "Matchs consécutifs > 30pts"), unsafe_allow_html=True)
                 st.markdown(hof_card("THE ROCK", "🛡️", C_GREEN, rock['Player'], int(rock['Count30']), "MATCHS", "Total matchs > 30pts"), unsafe_allow_html=True)
                 st.markdown(hof_card("NUCLEAR", "☢️", "#EF4444", nuke['Player'], int(nuke['Nukes']), "BOMBS", "Scores > 50pts"), unsafe_allow_html=True)

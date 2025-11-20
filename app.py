@@ -157,9 +157,9 @@ def send_discord_webhook(top_player, avg_score, pick_num, url_app):
             "fields": [
                 {"name": "🔥 MVP", "value": f"**{top_player['Player']}**\n`{int(top_player['Score'])}` pts", "inline": True},
                 {"name": "📊 Moyenne", "value": f"`{int(avg_score)}` pts", "inline": True},
-                {"name": "🔗 Dashboard", "value": f"[Accéder à la War Room]({url_app})", "inline": False}
+                {"name": "🔗 Dashboard", "value": f"[Accéder au Dashboard RaptorsTTFL]({url_app})", "inline": False}
             ],
-            "footer": {"text": "Raptors Elite System • We The North"}
+            "footer": {"text": "Raptors Dashboard App • We The North"}
         }]
     }
     try:

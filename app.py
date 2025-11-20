@@ -34,6 +34,7 @@ C_IRON = "#A1A1AA"
 C_BONUS = "#06B6D4"
 C_PURE = "#14B8A6"
 C_ORANGE = "#F97316"
+C_RED = "#EF4444" # AJOUT MANQUANT CORRIGÉ ICI
 
 # --- 2. CSS PREMIUM ---
 st.markdown(f"""
@@ -408,9 +409,7 @@ try:
             total_bonus_played = len(df[df['IsBonus'] == True])
             total_picks_played = len(df)
             
-            # UPDATED: Score moyen par pick (Team Average)
-            team_avg_per_pick = df['Score'].mean()
-
+            current_rank_disp = f"#{int(team_rank)}" if team_rank > 0 else "-"
             best_rank_ever = f"#{min(team_history)}" if len(team_history) > 0 else "-"
             bonus_df = df[df['IsBonus'] == True]
             avg_bonus_team = bonus_df['Score'].mean() if not bonus_df.empty else 0
@@ -450,7 +449,7 @@ try:
                 r3c1, r3c2, r3c3 = st.columns(3)
                 with r3c1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{best_rank_ever}</div><div class='stat-mini-lbl'>MEILLEUR RANG</div><div class='stat-mini-sub'>Historique (Maj Hebdo)</div></div>", unsafe_allow_html=True)
                 # REPLACEMENT : RANG ACTUEL -> SCORE MOYEN
-                with r3c2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{team_avg_per_pick:.1f}</div><div class='stat-mini-lbl'>SCORE MOYEN</div><div class='stat-mini-sub'>Par pick (Saison)</div></div>", unsafe_allow_html=True)
+                with r3c2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{avg_night:.0f}</div><div class='stat-mini-lbl'>SCORE MOYEN</div><div class='stat-mini-sub'>Par Soir (Saison)</div></div>", unsafe_allow_html=True)
                 with r3c3: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{col_dyn}'>{int(avg_team_15)}</div><div class='stat-mini-lbl'>DYNAMIQUE (15J)</div><div class='stat-mini-sub'>vs {int(avg_team_season)} (Saison)</div></div>", unsafe_allow_html=True)
 
             with c_info:

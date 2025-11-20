@@ -23,7 +23,7 @@ C_GOLD = "#FFD700"
 C_GREEN = "#10B981"
 C_BLUE = "#3B82F6"
 
-# --- 2. CSS PREMIUM (GLASSMORPHISM & TYPO & NOUVEAU DESIGN) ---
+# --- 2. CSS PREMIUM ---
 st.markdown(f"""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=Rajdhani:wght@500;700;800&display=swap');
@@ -33,9 +33,9 @@ st.markdown(f"""
     
     /* Force Sidebar Black */
     section[data-testid="stSidebar"] {{ background-color: #000000 !important; border-right: 1px solid #222; }}
-    div[data-testid="stSidebarNav"] {{ display: none; }} /* Cache le menu natif */
+    div[data-testid="stSidebarNav"] {{ display: none; }} 
     
-    /* OPTION MENU STYLING */
+    /* OPTION MENU STYLING - FIX FOND BLANC */
     .nav-link {{
         font-family: 'Rajdhani', sans-serif !important;
         font-weight: 700 !important;
@@ -65,15 +65,10 @@ st.markdown(f"""
     }}
     .glass-card:hover {{ border-color: {C_ACCENT}; transform: translateY(-2px); box-shadow: 0 4px 20px rgba(206, 17, 65, 0.15); }}
 
-    /* --- NOUVEAU : TRENDS HOT/COLD STYLES --- */
-    
-    /* HOT ZONE (RED) */
+    /* --- TRENDS HOT/COLD STYLES --- */
     .hot-card {{
         background: linear-gradient(180deg, rgba(206, 17, 65, 0.08) 0%, rgba(0,0,0,0) 100%);
-        border-top: 1px solid rgba(206, 17, 65, 0.5);
-        border-left: 1px solid rgba(206, 17, 65, 0.1);
-        border-right: 1px solid rgba(206, 17, 65, 0.1);
-        border-bottom: 1px solid rgba(206, 17, 65, 0.1);
+        border: 1px solid rgba(206, 17, 65, 0.3);
         border-radius: 12px; padding: 15px; margin-bottom: 15px;
     }}
     .hot-title {{ 
@@ -81,13 +76,9 @@ st.markdown(f"""
         display: flex; align-items: center; gap: 10px; margin-bottom: 15px; border-bottom: 1px solid rgba(206,17,65,0.2); padding-bottom: 8px;
     }}
 
-    /* COLD ZONE (BLUE) */
     .cold-card {{
         background: linear-gradient(180deg, rgba(59, 130, 246, 0.08) 0%, rgba(0,0,0,0) 100%);
-        border-top: 1px solid rgba(59, 130, 246, 0.5);
-        border-left: 1px solid rgba(59, 130, 246, 0.1);
-        border-right: 1px solid rgba(59, 130, 246, 0.1);
-        border-bottom: 1px solid rgba(59, 130, 246, 0.1);
+        border: 1px solid rgba(59, 130, 246, 0.3);
         border-radius: 12px; padding: 15px; margin-bottom: 15px;
     }}
     .cold-title {{ 
@@ -95,11 +86,11 @@ st.markdown(f"""
         display: flex; align-items: center; gap: 10px; margin-bottom: 15px; border-bottom: 1px solid rgba(59,130,246,0.2); padding-bottom: 8px;
     }}
 
-    /* ROWS FOR TRENDS */
     .trend-row {{ display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }}
     .trend-row:last-child {{ border-bottom: none; }}
     .trend-name {{ font-weight:600; color:#DDD; font-size: 0.95rem; }}
-    .trend-val {{ font-family: 'Rajdhani'; font-weight: 700; font-size: 1.2rem; }}
+    .trend-val {{ font-family: 'Rajdhani'; font-weight: 700; font-size: 1.1rem; text-align:right; }}
+    .trend-sub {{ font-size: 0.75rem; color: #888; display:block; font-weight:400; font-family: 'Inter'; }}
 
     /* KPI BLOCKS */
     .kpi-container {{ text-align: center; }}
@@ -107,21 +98,6 @@ st.markdown(f"""
     .kpi-value {{ font-family: 'Rajdhani'; font-size: 2.5rem; font-weight: 700; color: #FFF; line-height: 1; }}
     .kpi-sub {{ font-size: 0.8rem; color: {C_ACCENT}; font-weight: 600; margin-top: 4px; }}
 
-    /* TABLEAUX & LISTES */
-    .ranking-row {{
-        display: flex; justify-content: space-between; align-items: center;
-        padding: 12px 15px; border-bottom: 1px solid rgba(255,255,255,0.05);
-        font-family: 'Rajdhani'; font-size: 1.1rem;
-    }}
-    .ranking-row:last-child {{ border-bottom: none; }}
-
-    /* BADGES HOF */
-    .hof-badge {{
-        display: inline-flex; align-items: center; padding: 4px 12px;
-        border-radius: 20px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase;
-        margin-bottom: 8px; letter-spacing: 0.5px;
-    }}
-    
     /* CLEANUP STREAMLIT */
     .stPlotlyChart {{ width: 100% !important; }}
     div[data-testid="stDataFrame"] {{ border: none !important; }}
@@ -221,7 +197,6 @@ def send_discord_webhook(day_df, pick_num, url_app):
     for i, row in top_3.iterrows():
         podium_text += f"{medals[i]} **{row['Player']}** • {int(row['Score'])} pts\n"
     
-    # Calcul de la moyenne
     avg_score = int(day_df['Score'].mean())
 
     data = {
@@ -266,21 +241,21 @@ try:
         full_stats = compute_stats(df)
         leader = full_stats.sort_values('Total', ascending=False).iloc[0]
         
-        # --- NEW SIDEBAR ---
+        # --- SIDEBAR FIX (LOGO ON, TEXT OFF) ---
         with st.sidebar:
             st.markdown("<div style='text-align:center; margin-bottom: 20px;'>", unsafe_allow_html=True)
-            # Tu peux remettre l'image si tu as le fichier local ou une URL
-            # st.image("raptors-ttfl-min.png", use_container_width=True) 
-            st.markdown(f"<h2 style='color:{C_ACCENT}'>RAPTORS</h2><p style='color:#666; font-size:12px'>INTELLIGENCE UNIT</p>", unsafe_allow_html=True)
+            # Assure-toi que le fichier existe dans ton repo git
+            st.image("raptors-ttfl-min.png", use_container_width=True) 
             st.markdown("</div>", unsafe_allow_html=True)
             
+            # Menu avec fond NOIR forcé pour éviter le bloc blanc
             menu = option_menu(
                 menu_title=None,
                 options=["Dashboard", "Team HQ", "Player Lab", "Trends", "Hall of Fame", "Admin"],
                 icons=["grid-fill", "people-fill", "person-bounding-box", "fire", "trophy-fill", "shield-lock"],
                 default_index=0,
                 styles={
-                    "container": {"padding": "0!important", "background-color": "transparent"},
+                    "container": {"padding": "0!important", "background-color": "#050505"}, # FIX: Fond noir
                     "icon": {"color": "#888", "font-size": "1.1rem"}, 
                     "nav-link": {
                         "font-family": "Rajdhani, sans-serif",
@@ -306,7 +281,7 @@ try:
             <div style='position: fixed; bottom: 20px; width: 100%; padding-left: 20px;'>
                 <div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:1px;'>
                     DATA PICK #{int(latest_pick)}<br>
-                    WAR ROOM v2.0
+                    WAR ROOM v2.1
                 </div>
             </div>
             """, unsafe_allow_html=True)
@@ -317,10 +292,10 @@ try:
             
             top = day_df.iloc[0]
             c1, c2, c3, c4 = st.columns(4)
-            with c1: kpi_card("MVP DE LA NUIT", top['Player'], f"{int(top['Score'])} PTS", C_GOLD)
+            with c1: kpi_card("MVP DU JOUR", top['Player'], f"{int(top['Score'])} PTS", C_GOLD)
             with c2: kpi_card("MOYENNE TEAM", int(day_df['Score'].mean()), "POINTS")
             with c3: kpi_card("TOTAL NUIT", int(day_df['Score'].sum()), "CUMULÉ")
-            with c4: kpi_card("GOAT", leader['Player'], f"TOTAL: {int(leader['Total'])}", C_ACCENT)
+            with c4: kpi_card("LEADER SAISON", leader['Player'], f"TOTAL: {int(leader['Total'])}", C_ACCENT)
             
             col_chart, col_rank = st.columns([2, 1])
             with col_chart:
@@ -361,18 +336,12 @@ try:
                 r_vals = [(p_data['Moyenne'] / max_avg) * 100, (p_data['Best'] / max_best) * 100, (p_data['Last5'] / max_last5) * 100, reg_score, (p_data['Nukes'] / (max_nukes if max_nukes > 0 else 1)) * 100]
                 r_cats = ['SCORING', 'EXPLOSIVITÉ', 'FORME', 'RÉGULARITÉ', 'CLUTCH']
                 fig_radar = go.Figure(data=go.Scatterpolar(r=r_vals + [r_vals[0]], theta=r_cats + [r_cats[0]], fill='toself', line_color=C_ACCENT, fillcolor="rgba(206, 17, 65, 0.3)"))
-                
-                # CORRECTION DE LA LIGNE ICI
                 fig_radar.update_layout(
-                    polar=dict(
-                        radialaxis=dict(visible=True, range=[0, 100], showticklabels=False, linecolor='#333'), 
-                        bgcolor='rgba(0,0,0,0)'
-                    ), 
+                    polar=dict(radialaxis=dict(visible=True, range=[0, 100], showticklabels=False, linecolor='#333'), bgcolor='rgba(0,0,0,0)'), 
                     paper_bgcolor='rgba(0,0,0,0)', 
                     font=dict(color='white', size=12, family="Rajdhani"), 
                     margin=dict(t=20, b=20)
                 )
-                
                 st.markdown("<div class='glass-card'>", unsafe_allow_html=True); st.plotly_chart(fig_radar, use_container_width=True); st.markdown("</div>", unsafe_allow_html=True)
             with col_stats:
                 kpi_card("MOYENNE SAISON", f"{p_data['Moyenne']:.1f}", "PTS")
@@ -385,7 +354,7 @@ try:
                     color = "#4ADE80" if s >= 30 else ("#F87171" if s < 20 else "#FFF")
                     cols[i].markdown(f"<div style='text-align:center; font-family:Rajdhani; font-weight:bold; color:{color}; border:1px solid #333; border-radius:8px; padding:5px'>{int(s)}</div>", unsafe_allow_html=True)
 
-        # --- TRENDS (NEW DESIGN) ---
+        # --- TRENDS (AMÉLIORÉ : %) ---
         elif menu == "Trends":
             section_title("MARKET <span class='highlight'>WATCH</span>", "Tendances Hot & Cold sur 15 jours")
             
@@ -393,23 +362,70 @@ try:
             lookback_days = 15
             df_recent = df[df['Pick'] > (latest_pick - lookback_days)]
             
+            # Stats 15 derniers jours
             recent_stats = df_recent.groupby('Player').agg({
                 'Score': ['mean', 'count', lambda x: (x >= 40).sum(), lambda x: (x < 20).sum()]
             })
             recent_stats.columns = ['Mean15', 'Count', 'Highs', 'Lows']
             
+            # Stats Saison complète pour comparaison %
+            season_avg = df.groupby('Player')['Score'].mean().rename('SeasonAvg')
+            
+            # Merge tout
             delta_df = get_comparative_stats(df, latest_pick, lookback=lookback_days)
-            merged = recent_stats.join(delta_df)
+            merged = recent_stats.join(delta_df).join(season_avg)
 
-            def render_trend_list(title, icon, color_class, data_rows, value_col, unit="", is_rank=False):
+            # Calcul des pourcentages d'évolution
+            merged['PctDiff'] = ((merged['Mean15'] - merged['SeasonAvg']) / merged['SeasonAvg']) * 100
+            
+            def render_trend_list(title, icon, color_class, data_rows, type_metric):
                 html = f"""<div class="{color_class}"><div class="{color_class.split('-')[0]}-title">{icon} {title}</div>"""
                 if data_rows.empty: html += "<div style='color:#666; font-style:italic'>Pas de données</div>"
                 else:
                     for p_name, row in data_rows.iterrows():
-                        val = row[value_col]
-                        if is_rank: display_val = f"{int(val):+d}"
-                        else: display_val = f"{val:.1f}" if isinstance(val, float) else str(int(val))
-                        html += f"""<div class="trend-row"><span class="trend-name">{p_name}</span><span class="trend-val" style="color:#FFF">{display_val}<small style="font-size:0.7rem; color:#888; margin-left:3px">{unit}</small></span></div>"""
+                        val_str = ""
+                        sub_str = ""
+                        
+                        # FORMATAGE INTELLIGENT
+                        if type_metric == 'avg': # Forme Olympique / Ice Cold
+                            diff = row['Mean15'] - row['SeasonAvg']
+                            sign = "+" if diff > 0 else ""
+                            color_pct = "#4ADE80" if diff > 0 else "#F87171"
+                            val_str = f"{row['Mean15']:.1f} <span style='font-size:0.9rem'>pts</span>"
+                            sub_str = f"{sign}{diff:.1f} vs saison ({sign}{row['PctDiff']:.0f}%)"
+                            
+                        elif type_metric == 'momentum': # Momentum / Crash
+                            val = row['mean_diff']
+                            sign = "+" if val > 0 else ""
+                            val_str = f"{sign}{val:.1f} <span style='font-size:0.9rem'>pts</span>"
+                            sub_str = f"{sign}{row['PctDiff']:.1f}% d'évolution moyenne"
+                            
+                        elif type_metric == 'rank': # Climbing / Falling
+                            val = int(row['rank_diff'])
+                            sign = "+" if val > 0 else ""
+                            val_str = f"{sign}{val} <span style='font-size:0.9rem'>places</span>"
+                            sub_str = "au classement général"
+
+                        elif type_metric == 'count_high': # Heavy Hitters
+                            val = int(row['Highs'])
+                            pct_pick = (val / row['Count']) * 100
+                            val_str = f"{val} <span style='font-size:0.9rem'>picks</span>"
+                            sub_str = f"soit {pct_pick:.0f}% des picks récents"
+
+                        elif type_metric == 'count_low': # Carrot Farmers
+                            val = int(row['Lows'])
+                            pct_pick = (val / row['Count']) * 100
+                            val_str = f"{val} <span style='font-size:0.9rem'>carottes</span>"
+                            sub_str = f"soit {pct_pick:.0f}% des picks récents"
+
+                        html += f"""
+                        <div class="trend-row">
+                            <span class="trend-name">{p_name}</span>
+                            <div style="display:flex; flex-direction:column; align-items:flex-end;">
+                                <span class="trend-val" style="color:#FFF">{val_str}</span>
+                                <span class="trend-sub">{sub_str}</span>
+                            </div>
+                        </div>"""
                 html += "</div>"
                 return html
 
@@ -419,33 +435,41 @@ try:
             with col_hot:
                 st.markdown(f"<div style='border-bottom: 2px solid {C_ACCENT}; margin-bottom:20px; padding-bottom:5px; color:{C_ACCENT}; font-family:Rajdhani; font-size:1.2rem; font-weight:bold; letter-spacing:2px'>🔥 THE HEAT CHECK</div>", unsafe_allow_html=True)
                 
+                # 1. Forme (Moyenne 15j vs Saison)
                 top_avg = merged.sort_values('Mean15', ascending=False).head(3)
-                st.markdown(render_trend_list("FORME OLYMPIQUE", "📈", "hot-card", top_avg, 'Mean15', "pts/m"), unsafe_allow_html=True)
+                st.markdown(render_trend_list("FORME OLYMPIQUE (Moy. 15j)", "📈", "hot-card", top_avg, 'avg'), unsafe_allow_html=True)
                 
+                # 2. Momentum (Gain pts moyen)
                 top_mom = merged[merged['mean_diff'] > 0].sort_values('mean_diff', ascending=False).head(3)
-                st.markdown(render_trend_list("MOMENTUM HAUSSIER", "🚀", "hot-card", top_mom, 'mean_diff', "pts gain"), unsafe_allow_html=True)
+                st.markdown(render_trend_list("MOMENTUM HAUSSIER", "🚀", "hot-card", top_mom, 'momentum'), unsafe_allow_html=True)
 
+                # 3. Rank Gain
                 top_rank = merged[merged['rank_diff'] > 0].sort_values('rank_diff', ascending=False).head(3)
-                st.markdown(render_trend_list("CLIMBING THE LADDER", "🧗", "hot-card", top_rank, 'rank_diff', "places", is_rank=True), unsafe_allow_html=True)
+                st.markdown(render_trend_list("CLIMBING THE LADDER", "🧗", "hot-card", top_rank, 'rank'), unsafe_allow_html=True)
                 
+                # 4. High Scores
                 top_highs = merged[merged['Highs'] > 0].sort_values('Highs', ascending=False).head(3)
-                st.markdown(render_trend_list("HEAVY HITTERS (>40pts)", "💣", "hot-card", top_highs, 'Highs', "picks"), unsafe_allow_html=True)
+                st.markdown(render_trend_list("HEAVY HITTERS (>40pts)", "💣", "hot-card", top_highs, 'count_high'), unsafe_allow_html=True)
 
             # --- ❄️ COLD SIDE ---
             with col_cold:
                 st.markdown(f"<div style='border-bottom: 2px solid {C_BLUE}; margin-bottom:20px; padding-bottom:5px; color:{C_BLUE}; font-family:Rajdhani; font-size:1.2rem; font-weight:bold; letter-spacing:2px'>❄️ THE FREEZER</div>", unsafe_allow_html=True)
                 
+                # 1. Ice Cold (Moyenne basse)
                 bot_avg = merged.sort_values('Mean15', ascending=True).head(3)
-                st.markdown(render_trend_list("ICE COLD", "🥶", "cold-card", bot_avg, 'Mean15', "pts/m"), unsafe_allow_html=True)
+                st.markdown(render_trend_list("ICE COLD (Moy. 15j)", "🥶", "cold-card", bot_avg, 'avg'), unsafe_allow_html=True)
                 
+                # 2. Crash (Perte pts moyen)
                 bot_mom = merged[merged['mean_diff'] < 0].sort_values('mean_diff', ascending=True).head(3)
-                st.markdown(render_trend_list("CRASH BOURSIER", "📉", "cold-card", bot_mom, 'mean_diff', "pts perte"), unsafe_allow_html=True)
+                st.markdown(render_trend_list("CRASH BOURSIER", "📉", "cold-card", bot_mom, 'momentum'), unsafe_allow_html=True)
 
+                # 3. Rank Loss
                 bot_rank = merged[merged['rank_diff'] < 0].sort_values('rank_diff', ascending=True).head(3)
-                st.markdown(render_trend_list("FREE FALLING", "🪂", "cold-card", bot_rank, 'rank_diff', "places", is_rank=True), unsafe_allow_html=True)
+                st.markdown(render_trend_list("FREE FALLING", "🪂", "cold-card", bot_rank, 'rank'), unsafe_allow_html=True)
 
+                # 4. Low Scores
                 top_lows = merged[merged['Lows'] > 0].sort_values('Lows', ascending=False).head(3)
-                st.markdown(render_trend_list("CARROT FARMERS (<20pts)", "🥕", "cold-card", top_lows, 'Lows', "carottes"), unsafe_allow_html=True)
+                st.markdown(render_trend_list("CARROT FARMERS (<20pts)", "🥕", "cold-card", top_lows, 'count_low'), unsafe_allow_html=True)
 
         # --- HALL OF FAME ---
         elif menu == "Hall of Fame":

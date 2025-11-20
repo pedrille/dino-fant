@@ -310,7 +310,7 @@ try:
             st.image("raptors-ttfl-min.png", use_container_width=True) 
             st.markdown("</div>", unsafe_allow_html=True)
             menu = option_menu(menu_title=None, options=["Dashboard", "Team HQ", "Player Lab", "Bonus x2", "Trends", "Hall of Fame", "Admin"], icons=["grid-fill", "people-fill", "person-bounding-box", "lightning-charge-fill", "fire", "trophy-fill", "shield-lock"], default_index=0, styles={"container": {"padding": "0!important", "background-color": "#000000"}, "icon": {"color": "#666", "font-size": "1.1rem"}, "nav-link": {"font-family": "Rajdhani, sans-serif", "font-weight": "700", "font-size": "15px", "text-transform": "uppercase", "color": "#AAA", "text-align": "left", "margin": "5px 0px", "--hover-color": "#111"}, "nav-link-selected": {"background-color": C_ACCENT, "color": "#FFF", "icon-color": "#FFF", "box-shadow": "0px 4px 20px rgba(206, 17, 65, 0.4)"}})
-            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v11.4 Final</div></div>""", unsafe_allow_html=True)
+            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v11.5 Final</div></div>""", unsafe_allow_html=True)
             
             # SCRIPT JS POUR FERMER SIDEBAR
             components.html("""<script>const options = window.parent.document.querySelectorAll('.nav-link'); options.forEach((option) => { option.addEventListener('click', () => { const sidebar = window.parent.document.querySelector('section[data-testid="stSidebar"]'); if (sidebar) {} }); });</script>""", height=0, width=0)
@@ -354,6 +354,40 @@ try:
                     rows += f"""<div class='rank-row' style='{style}'><div class='rank-pos'>{pos}</div><div class='rank-name' style='color:{'#FFF' if i < 3 else '#AAA'}'>{r['Player']}{bonus_icon}</div><div class='rank-score' style='color:{col}'>{int(r['Score'])}</div></div>"""
                 st.markdown(f"<div style='display:flex; flex-direction:column; gap:5px'>{rows}</div></div>", unsafe_allow_html=True)
 
+            # --- NEW: FOOTER SECTION (v11.5) ---
+            st.markdown("<div style='margin-bottom:30px'></div>", unsafe_allow_html=True)
+            st.markdown("### 🏆 PODIUM SAISON & TRAJECTOIRE")
+            c_podium, c_traj = st.columns(2)
+            
+            with c_podium:
+                st.markdown("<div class='glass-card' style='height:100%'>", unsafe_allow_html=True)
+                top_3_season = full_stats.sort_values('Total', ascending=False).head(3).reset_index()
+                for i, r in top_3_season.iterrows():
+                    medal = medals.get(i, f"{i+1}")
+                    st.markdown(f"""
+                    <div style='display:flex; align-items:center; justify-content:space-between; margin-bottom:15px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:10px'>
+                        <div style='display:flex; align-items:center; gap:15px'>
+                            <div style='font-size:1.5rem'>{medal}</div>
+                            <div>
+                                <div style='font-family:Rajdhani; font-weight:700; font-size:1.2rem; color:#FFF'>{r['Player']}</div>
+                                <div style='font-size:0.8rem; color:#888'>Moyenne: {r['Moyenne']:.1f}</div>
+                            </div>
+                        </div>
+                        <div style='font-family:Rajdhani; font-weight:700; font-size:1.5rem; color:{C_ACCENT if i==0 else "#FFF"}'>{int(r['Total'])}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                st.markdown("</div>", unsafe_allow_html=True)
+
+            with c_traj:
+                if len(team_history) > 1:
+                    st.markdown("<div class='glass-card' style='height:100%'>", unsafe_allow_html=True)
+                    hist_df = pd.DataFrame({'Deck': range(1, len(team_history)+1), 'Rank': team_history})
+                    fig_h = px.line(hist_df, x='Deck', y='Rank', markers=True)
+                    fig_h.update_traces(line_color=C_ACCENT, line_width=3, marker_size=6)
+                    fig_h.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, yaxis=dict(autorange="reversed", gridcolor='#222', title=None), xaxis=dict(showgrid=False, title=None), margin=dict(l=20, r=20, t=20, b=20), height=250)
+                    st.plotly_chart(fig_h, use_container_width=True)
+                    st.markdown("</div>", unsafe_allow_html=True)
+
         elif menu == "Team HQ":
             section_title("TEAM <span class='highlight'>HQ</span>", "Vue d'ensemble de l'effectif")
             
@@ -373,10 +407,7 @@ try:
             bonus_df = df[df['IsBonus'] == True]
             avg_bonus_team = bonus_df['Score'].mean() if not bonus_df.empty else 0
 
-            # --- LOGIQUE CORRIGÉE MATCHS JOUES & ROSTER ---
-            nb_matchs_joues = latest_pick # C'est simplement le numéro du dernier pick
-            
-            # Calcul dynamique équipe (15j vs saison)
+            nb_matchs_joues = latest_pick 
             daily_totals = df.groupby('Pick')['Score'].sum()
             avg_team_15 = daily_totals[daily_totals.index > (latest_pick - 15)].mean()
             avg_team_season = daily_totals.mean()
@@ -396,14 +427,12 @@ try:
                 r2c1, r2c2, r2c3 = st.columns(3)
                 with r2c1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_ACCENT}'>{total_nukes_team}</div><div class='stat-mini-lbl'>TOTAL NUKES</div><div class='stat-mini-sub'>Sur {total_picks_played} picks</div></div>", unsafe_allow_html=True)
                 with r2c2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_ORANGE}'>{total_carrots_team}</div><div class='stat-mini-lbl'>TOTAL CAROTTES</div><div class='stat-mini-sub'>Sur {total_picks_played} picks</div></div>", unsafe_allow_html=True)
-                # CORRECTION "MATCHS JOUÉS"
                 with r2c3: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(nb_matchs_joues)}</div><div class='stat-mini-lbl'>MATCHS JOUÉS</div><div class='stat-mini-sub'>Jours de compétition</div></div>", unsafe_allow_html=True)
                 st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
                 
                 r3c1, r3c2, r3c3 = st.columns(3)
                 with r3c1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{best_rank_ever}</div><div class='stat-mini-lbl'>MEILLEUR RANG</div><div class='stat-mini-sub'>Historique</div></div>", unsafe_allow_html=True)
                 with r3c2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{current_rank_disp}</div><div class='stat-mini-lbl'>RANG ACTUEL</div><div class='stat-mini-sub'>Classement Général</div></div>", unsafe_allow_html=True)
-                # REMPLACEMENT "ROSTER" par "DYNAMIQUE"
                 with r3c3: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{col_dyn}'>{int(avg_team_15)}</div><div class='stat-mini-lbl'>DYNAMIQUE (15J)</div><div class='stat-mini-sub'>vs {int(avg_team_season)} (Saison)</div></div>", unsafe_allow_html=True)
 
             with c_info:
@@ -428,14 +457,6 @@ try:
 
             st.markdown("<div style='margin-bottom:30px'></div>", unsafe_allow_html=True)
 
-            if len(team_history) > 1:
-                st.markdown("### 📈 ÉVOLUTION DU CLASSEMENT")
-                hist_df = pd.DataFrame({'Deck': range(1, len(team_history)+1), 'Rank': team_history})
-                fig_h = px.line(hist_df, x='Deck', y='Rank', markers=True)
-                fig_h.update_traces(line_color=C_ACCENT, line_width=3, marker_size=8)
-                fig_h.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, yaxis=dict(autorange="reversed", gridcolor='#222'), xaxis=dict(showgrid=False))
-                st.plotly_chart(fig_h, use_container_width=True)
-            
             st.markdown("### 📈 DYNAMIQUE TEAM (15 DERNIERS MATCHS)")
             team_daily_totals = df.groupby('Pick')['Score'].sum().reset_index()
             last_15_team = team_daily_totals[team_daily_totals['Pick'] > (latest_pick - 15)]
@@ -513,7 +534,7 @@ try:
                 r1c1, r1c2, r1c3 = st.columns(3)
                 with r1c1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(p_data['ReliabilityPct'])}%</div><div class='stat-mini-lbl'>FIABILITÉ</div><div class='stat-mini-sub'>% Picks > 20pts</div></div>", unsafe_allow_html=True)
                 with r1c2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(p_data['Nukes'])}</div><div class='stat-mini-lbl'>NUKES</div><div class='stat-mini-sub'>Scores > 50pts</div></div>", unsafe_allow_html=True)
-                with r1c3: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{F87171}'>{int(p_data['Carottes'])}</div><div class='stat-mini-lbl'>CAROTTES</div><div class='stat-mini-sub'>Scores < 20pts</div></div>", unsafe_allow_html=True)
+                with r1c3: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:#F87171'>{int(p_data['Carottes'])}</div><div class='stat-mini-lbl'>CAROTTES</div><div class='stat-mini-sub'>Scores < 20pts</div></div>", unsafe_allow_html=True)
                 st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
                 
                 r2c1, r2c2, r2c3 = st.columns(3)

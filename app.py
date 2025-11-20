@@ -41,7 +41,10 @@ st.markdown(f"""
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Rajdhani:wght@500;600;700;800&display=swap');
     .stApp {{ background-color: {C_BG}; color: {C_TEXT}; font-family: 'Inter', sans-serif; }}
     section[data-testid="stSidebar"] {{ background-color: #000000 !important; border-right: 1px solid #222; }}
+    
+    /* LOGO NON CLIQUABLE */
     section[data-testid="stSidebar"] img {{ pointer-events: none; }}
+    
     div[data-testid="stSidebarNav"] {{ display: none; }} 
     .nav-link {{ font-family: 'Rajdhani', sans-serif !important; font-weight: 700 !important; text-transform: uppercase !important; letter-spacing: 1px !important; }}
     h1, h2, h3 {{ font-family: 'Rajdhani', sans-serif; text-transform: uppercase; margin: 0; }}
@@ -301,7 +304,7 @@ try:
             st.image("raptors-ttfl-min.png", use_container_width=True) 
             st.markdown("</div>", unsafe_allow_html=True)
             menu = option_menu(menu_title=None, options=["Dashboard", "Team HQ", "Player Lab", "Bonus x2", "Trends", "Hall of Fame", "Admin"], icons=["grid-fill", "people-fill", "person-bounding-box", "lightning-charge-fill", "fire", "trophy-fill", "shield-lock"], default_index=0, styles={"container": {"padding": "0!important", "background-color": "#000000"}, "icon": {"color": "#666", "font-size": "1.1rem"}, "nav-link": {"font-family": "Rajdhani, sans-serif", "font-weight": "700", "font-size": "15px", "text-transform": "uppercase", "color": "#AAA", "text-align": "left", "margin": "5px 0px", "--hover-color": "#111"}, "nav-link-selected": {"background-color": C_ACCENT, "color": "#FFF", "icon-color": "#FFF", "box-shadow": "0px 4px 20px rgba(206, 17, 65, 0.4)"}})
-            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v11.0</div></div>""", unsafe_allow_html=True)
+            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v11.0 Final</div></div>""", unsafe_allow_html=True)
             
             # SCRIPT JS POUR FERMER SIDEBAR
             components.html("""<script>const options = window.parent.document.querySelectorAll('.nav-link'); options.forEach((option) => { option.addEventListener('click', () => { const sidebar = window.parent.document.querySelector('section[data-testid="stSidebar"]'); if (sidebar) {} }); });</script>""", height=0, width=0)
@@ -311,13 +314,17 @@ try:
             top = day_df.iloc[0]
             c1, c2, c3, c4 = st.columns(4)
             with c1: kpi_card("MVP DU JOUR", top['Player'], f"{int(top['Score'])} PTS", C_GOLD)
-            with c2: kpi_card("MOYENNE TEAM", int(day_df['Score'].mean()), "POINTS")
             
+            # UPDATED: TOTAL TEAM JOUR
+            total_day = day_df['Score'].sum()
+            with c2: kpi_card("TOTAL TEAM JOUR", int(total_day), "POINTS")
+            
+            # UPDATED: PERF TEAM JOUR
             team_daily_avg = day_df['Score'].mean()
             team_season_avg = df['Score'].mean()
             diff_perf = ((team_daily_avg - team_season_avg) / team_season_avg) * 100
             perf_col = C_GREEN if diff_perf > 0 else "#F87171"
-            with c3: kpi_card("PERFORMANCE JOUR", f"{diff_perf:+.1f}%", "VS MOY. SAISON", perf_col)
+            with c3: kpi_card("PERF. TEAM JOUR", f"{diff_perf:+.1f}%", "VS MOY. SAISON", perf_col)
             
             with c4: kpi_card("LEADER SAISON", leader['Player'], f"TOTAL: {int(leader['Total'])}", C_ACCENT)
             
@@ -353,16 +360,18 @@ try:
                 fig_h.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, yaxis=dict(autorange="reversed", gridcolor='#222'), xaxis=dict(showgrid=False))
                 st.plotly_chart(fig_h, use_container_width=True)
             
-            # --- NEW: TEAM TREND CHART ---
+            # --- UPDATED: TEAM DYNAMIC (TOTAL SCORES) ---
             st.markdown("### 📈 DYNAMIQUE TEAM (15 DERNIERS MATCHS)")
-            team_daily_scores = df.groupby('Pick')['Score'].mean().reset_index()
-            last_15_team = team_daily_scores[team_daily_scores['Pick'] > (latest_pick - 15)]
-            team_season_mean = df['Score'].mean()
+            # Sum scores by Pick to get Daily Total
+            team_daily_totals = df.groupby('Pick')['Score'].sum().reset_index()
+            last_15_team = team_daily_totals[team_daily_totals['Pick'] > (latest_pick - 15)]
+            # Average of the daily totals over the season
+            team_season_avg_total = team_daily_totals['Score'].mean()
             
             fig_team_trend = px.line(last_15_team, x='Pick', y='Score', markers=True)
             fig_team_trend.update_traces(line_color=C_ACCENT, line_width=3, marker_size=8)
-            # Add Average Line
-            fig_team_trend.add_hline(y=team_season_mean, line_dash="dot", line_color=C_TEXT, annotation_text="Moy. Saison", annotation_position="bottom right")
+            # Add Average Line for Totals
+            fig_team_trend.add_hline(y=team_season_avg_total, line_dash="dot", line_color=C_TEXT, annotation_text="Moy. Totaux Saison", annotation_position="bottom right")
             fig_team_trend.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, yaxis=dict(gridcolor='#222'), xaxis=dict(showgrid=False))
             st.plotly_chart(fig_team_trend, use_container_width=True)
 

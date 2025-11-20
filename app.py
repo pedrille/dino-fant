@@ -59,20 +59,26 @@ st.markdown(f"""
     .rank-score {{ font-family: 'Rajdhani'; font-weight: 700; font-size: 1.3rem; color: #FFF; }}
     .kpi-label {{ color: #888; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px; }}
     .kpi-num {{ font-family: 'Rajdhani'; font-weight: 800; font-size: 2.8rem; line-height: 1; color: #FFF; }}
+    
+    /* PLAYER LAB MINI STATS */
+    .stat-box-mini {{ background: rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.05); border-radius:8px; padding:10px; text-align:center; }}
+    .stat-mini-val {{ font-family:'Rajdhani'; font-weight:700; font-size:1.4rem; color:#FFF; }}
+    .stat-mini-lbl {{ font-size:0.7rem; color:#888; text-transform:uppercase; margin-top:2px; }}
+
     .stPlotlyChart {{ width: 100% !important; }}
     div[data-testid="stDataFrame"] {{ border: none !important; }}
     [data-testid="stSidebarUserContent"] {{ padding-top: 2rem; }}
 </style>
 """, unsafe_allow_html=True)
 
-# --- 3. DATA ENGINE (V6.0 - CLASSEMENT FIX) ---
+# --- 3. DATA ENGINE ---
 @st.cache_data(ttl=300)
 def load_data():
     conn = st.connection("gsheets", type=GSheetsConnection)
     try:
         if "SPREADSHEET_URL" not in st.secrets: return None, None, None, None, [], {}
 
-        # --- A. ONGLET VALEURS ---
+        # --- A. VALEURS ---
         df_valeurs = conn.read(spreadsheet=st.secrets["SPREADSHEET_URL"], worksheet="Valeurs", header=None, ttl=0)
         
         pick_row_idx = 2
@@ -97,17 +103,14 @@ def load_data():
         bp_map = {int(picks_series[idx]): val for idx, val in bp_series.items() if idx in valid_map}
         daily_max_map = final_df.groupby('Pick')['Score'].max().to_dict()
 
-        # --- B. ONGLET STATS ---
+        # --- B. STATS (TEAM ONLY) ---
         df_stats = conn.read(spreadsheet=st.secrets["SPREADSHEET_URL"], worksheet="Stats_Raptors_FR", header=None, ttl=0)
         
-        ranks_map = {}
         team_rank_history = []
         team_current_rank = 0
-        
         start_row_rank = -1
         col_start_rank = -1
         
-        # 1. Recherche Header "Classement"
         for r_idx, row in df_stats.iterrows():
             for c_idx, val in enumerate(row):
                 if str(val).strip() == "Classement":
@@ -116,47 +119,32 @@ def load_data():
                     break
             if start_row_rank != -1: break
             
-        # 2. Scan des données sous le header
         if start_row_rank != -1:
-            for i in range(start_row_rank+1, start_row_rank+30): # Scan large
+            for i in range(start_row_rank+1, start_row_rank+30):
                 if i >= len(df_stats): break
-                
                 p_name = str(df_stats.iloc[i, col_start_rank]).strip()
-                if p_name == "nan" or p_name == "": continue
-                
-                # Lecture des colonnes à droite (Historique)
-                hist_vals = df_stats.iloc[i, col_start_rank+1:col_start_rank+25].values
-                valid_history = []
-                for x in hist_vals:
-                    try:
-                        clean_x = str(x).replace(',', '').replace(' ', '')
-                        val = float(clean_x)
-                        if val > 0: valid_history.append(int(val))
-                    except: pass
-                
-                if valid_history:
-                    last_rank = valid_history[-1]
-                    
-                    if "Team Raptors" in p_name:
-                        # FIX: On ne prend que la PREMIÈRE occurrence (Tableau Classement)
-                        # et on ignore la suivante (Tableau Stats <20) qui écrasait la valeur
-                        if team_current_rank == 0:
-                            team_current_rank = last_rank
-                            team_rank_history = valid_history
-                    else:
-                        # Idem pour les joueurs, premier arrivé premier servi
-                        if p_name not in ranks_map:
-                            ranks_map[p_name] = last_rank
+                if "Team Raptors" in p_name:
+                    hist_vals = df_stats.iloc[i, col_start_rank+1:col_start_rank+25].values
+                    valid_history = []
+                    for x in hist_vals:
+                        try:
+                            clean_x = str(x).replace(',', '').replace(' ', '')
+                            val = float(clean_x)
+                            if val > 0: valid_history.append(int(val))
+                        except: pass
+                    if valid_history:
+                        team_current_rank = valid_history[-1]
+                        team_rank_history = valid_history
+                    break
 
-        return final_df, team_current_rank, bp_map, ranks_map, team_rank_history, daily_max_map
+        return final_df, team_current_rank, bp_map, team_rank_history, daily_max_map
 
-    except: return pd.DataFrame(), 0, {}, {}, [], {}
+    except: return pd.DataFrame(), 0, {}, [], {}
 
-def compute_stats(df, bp_map, ranks_map, daily_max_map):
+def compute_stats(df, bp_map, daily_max_map):
     stats = []
     latest_pick = df['Pick'].max()
     season_avgs = df.groupby('Player')['Score'].mean()
-    
     df_15 = df[df['Pick'] > (latest_pick - 15)]
     avg_15 = df_15.groupby('Player')['Score'].mean()
 
@@ -187,9 +175,6 @@ def compute_stats(df, bp_map, ranks_map, daily_max_map):
         l15_avg = avg_15.get(p, s_avg)
         progression_15 = l15_avg - s_avg
 
-        g_rank = ranks_map.get(p, 0) 
-        if g_rank == 0: g_rank = 99999
-
         stats.append({
             'Player': p,
             'Total': scores.sum(),
@@ -209,8 +194,7 @@ def compute_stats(df, bp_map, ranks_map, daily_max_map):
             'Alpha_Count': alpha_count,
             'Momentum': momentum,
             'Games': len(scores),
-            'Progression15': progression_15,
-            'GeneralRank': g_rank
+            'Progression15': progression_15
         })
     return pd.DataFrame(stats)
 
@@ -260,12 +244,12 @@ def section_title(title, subtitle):
 
 # --- 6. MAIN APP ---
 try:
-    df, team_rank, bp_map, ranks_map, team_history, daily_max_map = load_data()
+    df, team_rank, bp_map, team_history, daily_max_map = load_data()
     
     if df is not None and not df.empty:
         latest_pick = df['Pick'].max()
         day_df = df[df['Pick'] == latest_pick].sort_values('Score', ascending=False)
-        full_stats = compute_stats(df, bp_map, ranks_map, daily_max_map)
+        full_stats = compute_stats(df, bp_map, daily_max_map)
         leader = full_stats.sort_values('Total', ascending=False).iloc[0]
         
         with st.sidebar:
@@ -273,7 +257,7 @@ try:
             st.image("raptors-ttfl-min.png", use_container_width=True) 
             st.markdown("</div>", unsafe_allow_html=True)
             menu = option_menu(menu_title=None, options=["Dashboard", "Team HQ", "Player Lab", "Trends", "Hall of Fame", "Admin"], icons=["grid-fill", "people-fill", "person-bounding-box", "fire", "trophy-fill", "shield-lock"], default_index=0, styles={"container": {"padding": "0!important", "background-color": "#000000"}, "icon": {"color": "#666", "font-size": "1.1rem"}, "nav-link": {"font-family": "Rajdhani, sans-serif", "font-weight": "700", "font-size": "15px", "text-transform": "uppercase", "color": "#AAA", "text-align": "left", "margin": "5px 0px", "--hover-color": "#111"}, "nav-link-selected": {"background-color": C_ACCENT, "color": "#FFF", "icon-color": "#FFF", "box-shadow": "0px 4px 20px rgba(206, 17, 65, 0.4)"}})
-            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v6.0</div></div>""", unsafe_allow_html=True)
+            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v6.1</div></div>""", unsafe_allow_html=True)
 
         if menu == "Dashboard":
             section_title("RAPTORS <span class='highlight'>DASHBOARD</span>", f"Daily Briefing • Pick #{int(latest_pick)}")
@@ -285,7 +269,6 @@ try:
             c_rank = C_GOLD if team_rank > 0 and team_rank <= 20 else (C_GREEN if team_rank <= 100 else "#FFF")
             with c3: kpi_card("CLASSEMENT TEAM", r_disp, "GENERAL", c_rank)
             with c4: kpi_card("LEADER SAISON", leader['Player'], f"TOTAL: {int(leader['Total'])}", C_ACCENT)
-            
             col_chart, col_rank = st.columns([2, 1])
             with col_chart:
                 st.markdown("<div class='glass-card' style='height:100%'>", unsafe_allow_html=True)
@@ -316,21 +299,18 @@ try:
                 fig_h.update_traces(line_color=C_ACCENT, line_width=3, marker_size=8)
                 fig_h.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, yaxis=dict(autorange="reversed", gridcolor='#222'), xaxis=dict(showgrid=False))
                 st.plotly_chart(fig_h, use_container_width=True)
-
             st.markdown("### 🎯 RÉPARTITION DES SCORES")
             fig_dist = px.violin(df, x='Player', y='Score', box=True, points="all", color='Player', color_discrete_sequence=px.colors.qualitative.Prism)
             fig_dist.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, showlegend=False, height=400, yaxis=dict(gridcolor='#222'))
             st.plotly_chart(fig_dist, use_container_width=True)
-            
             st.markdown("### 📊 DATA ROOM")
-            st.dataframe(full_stats[['Player', 'Total', 'Moyenne', 'GeneralRank', 'BP_Count', 'Alpha_Count', 'Nukes', 'Carottes']].sort_values('Total', ascending=False), hide_index=True, use_container_width=True, column_config={
+            st.dataframe(full_stats[['Player', 'Total', 'Moyenne', 'BP_Count', 'Alpha_Count', 'Nukes', 'Carottes']].sort_values('Total', ascending=False), hide_index=True, use_container_width=True, column_config={
                 "Total": st.column_config.ProgressColumn("Total Pts", format="%d", min_value=0, max_value=full_stats['Total'].max()), 
                 "Moyenne": st.column_config.NumberColumn("Moyenne", format="%.1f"),
-                "GeneralRank": st.column_config.NumberColumn("Class. Gén.", format="#%d"),
                 "Carottes": st.column_config.NumberColumn("🥕", help="Scores < 20"),
                 "Nukes": st.column_config.NumberColumn("☢️", help="Scores > 50"),
                 "BP_Count": st.column_config.NumberColumn("🎯", help="Best Picks"),
-                "Alpha_Count": st.column_config.NumberColumn("🐺", help="Alpha (Top Team)")
+                "Alpha_Count": st.column_config.NumberColumn("🐺", help="Top Score Team")
             })
 
         elif menu == "Player Lab":
@@ -338,6 +318,15 @@ try:
             sel_player = st.selectbox("Sélectionner un joueur", sorted(df['Player'].unique()))
             col_radar, col_stats = st.columns([1, 1])
             p_data = full_stats[full_stats['Player'] == sel_player].iloc[0]
+            
+            # Calcul Rank Interne (Live)
+            sorted_team = full_stats.sort_values('Total', ascending=False).reset_index(drop=True)
+            internal_rank = sorted_team[sorted_team['Player'] == sel_player].index[0] + 1
+            
+            # Calcul KPIs avancés
+            sniper_pct = (p_data['BP_Count'] / p_data['Games']) * 100
+            reliability_pct = ((p_data['Games'] - p_data['Carottes']) / p_data['Games']) * 100
+            alpha_pct = (p_data['Alpha_Count'] / p_data['Games']) * 100
             
             with col_radar:
                 max_avg = full_stats['Moyenne'].max(); max_best = full_stats['Best'].max(); max_last5 = full_stats['Last5'].max(); max_nukes = full_stats['Nukes'].max()
@@ -351,16 +340,22 @@ try:
             with col_stats:
                 kpi_card("MOYENNE SAISON", f"{p_data['Moyenne']:.1f}", "PTS")
                 c1, c2 = st.columns(2)
-                rank_val = p_data['GeneralRank']
-                rank_str = f"#{rank_val}" if rank_val < 90000 else "N/A"
-                with c1: kpi_card("CLASSEMENT GÉNÉRAL", rank_str, "TTFL INDIV", C_GOLD)
+                rank_col = C_GOLD if internal_rank == 1 else (C_SILVER if internal_rank == 2 else (C_BRONZE if internal_rank == 3 else "#FFF"))
+                with c1: kpi_card("CLASSEMENT TEAM", f"#{internal_rank}", f"SUR {len(full_stats)}", rank_col)
                 with c2: kpi_card("BEST PICK", int(p_data['Best']), "RECORD")
-                st.markdown("#### 🔥 DERNIERS MATCHS")
-                last_5 = df[df['Player'] == sel_player].sort_values('Pick').tail(5)['Score'].values
-                cols = st.columns(5)
-                for i, s in enumerate(last_5):
+                
+                # NOUVELLE LIGNE KPI
+                k1, k2, k3 = st.columns(3)
+                with k1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(sniper_pct)}%</div><div class='stat-mini-lbl'>SNIPER (BP)</div></div>", unsafe_allow_html=True)
+                with k2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(reliability_pct)}%</div><div class='stat-mini-lbl'>FIABILITÉ</div></div>", unsafe_allow_html=True)
+                with k3: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(alpha_pct)}%</div><div class='stat-mini-lbl'>ALPHA DOG</div></div>", unsafe_allow_html=True)
+
+                st.markdown("#### 🔥 10 DERNIERS MATCHS")
+                last_10 = df[df['Player'] == sel_player].sort_values('Pick').tail(10)['Score'].values
+                cols = st.columns(10)
+                for i, s in enumerate(last_10):
                     c = "#4ADE80" if s >= 40 else ("#F87171" if s < 20 else "#FFF")
-                    cols[i].markdown(f"<div style='text-align:center; font-family:Rajdhani; font-size:1.2rem; font-weight:800; color:{c}; background:rgba(255,255,255,0.05); border-radius:8px; padding:10px'>{int(s)}</div>", unsafe_allow_html=True)
+                    cols[i].markdown(f"<div style='text-align:center; font-family:Rajdhani; font-size:1rem; font-weight:800; color:{c}; background:rgba(255,255,255,0.05); border-radius:6px; padding:6px 2px'>{int(s)}</div>", unsafe_allow_html=True)
 
         elif menu == "Trends":
             section_title("MARKET <span class='highlight'>WATCH</span>", "Analyse des tendances sur 15 jours")

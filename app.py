@@ -6,7 +6,6 @@ import plotly.graph_objects as go
 from streamlit_option_menu import option_menu
 import numpy as np
 import requests
-import re # Pour la détection du motif '*'
 
 # --- 1. CONFIGURATION & ASSETS ---
 st.set_page_config(
@@ -21,14 +20,12 @@ C_BG = "#050505"
 C_ACCENT = "#CE1141" # Raptors Red
 C_TEXT = "#E5E7EB"
 C_GOLD = "#FFD700"
-C_SILVER = "#C0C0C0"
-C_BRONZE = "#CD7F32"
 C_GREEN = "#10B981"
 C_BLUE = "#3B82F6"
 C_PURPLE = "#8B5CF6"
 C_ALPHA = "#F472B6"
 C_IRON = "#A1A1AA"
-C_BONUS = "#06B6D4" # Cyan pour le Bonus
+C_BONUS = "#06B6D4" # Cyan électrique pour le Bonus
 
 # --- 2. CSS PREMIUM ---
 st.markdown(f"""
@@ -73,22 +70,17 @@ st.markdown(f"""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 3. DATA ENGINE (V7 - BONUS PARSER) ---
+# --- 3. DATA ENGINE ---
 @st.cache_data(ttl=300)
 def load_data():
     conn = st.connection("gsheets", type=GSheetsConnection)
     try:
         if "SPREADSHEET_URL" not in st.secrets: return None, None, None, None, []
 
-        # --- A. VALEURS ---
-        # On lit tout en string pour préserver le caractère "*"
+        # A. VALEURS
         df_valeurs = conn.read(spreadsheet=st.secrets["SPREADSHEET_URL"], worksheet="Valeurs", header=None, ttl=0).astype(str)
-        
         pick_row_idx = 2
-        # On nettoie la ligne des picks pour la convertir en numérique
-        picks_series_raw = df_valeurs.iloc[pick_row_idx, 1:]
-        picks_series = pd.to_numeric(picks_series_raw, errors='coerce')
-        
+        picks_series = pd.to_numeric(df_valeurs.iloc[pick_row_idx, 1:], errors='coerce')
         bp_row = df_valeurs[df_valeurs[0].str.contains("Score BP", na=False)]
         bp_series = pd.to_numeric(bp_row.iloc[0, 1:], errors='coerce') if not bp_row.empty else pd.Series()
         
@@ -102,16 +94,12 @@ def load_data():
         cols = [c for c in cols if c in df_players.columns]
         
         df_clean = df_players[cols].copy().rename(columns=valid_map)
-        df_long = df_clean.melt(id_vars=['Player'], var_name='Pick', value_name='ScoreRaw') # ScoreRaw contient les "55*"
+        df_long = df_clean.melt(id_vars=['Player'], var_name='Pick', value_name='ScoreRaw')
         
-        # --- LOGIQUE BONUS ---
-        # 1. Détecter le "*"
+        # LOGIQUE BONUS
         df_long['IsBonus'] = df_long['ScoreRaw'].str.contains(r'\*', na=False)
-        # 2. Nettoyer le "*" pour avoir le chiffre
         df_long['ScoreClean'] = df_long['ScoreRaw'].str.replace(r'\*', '', regex=True)
-        # 3. Convertir en nombre
         df_long['ScoreVal'] = pd.to_numeric(df_long['ScoreClean'], errors='coerce')
-        # 4. Appliquer le x2 si Bonus
         df_long['Score'] = np.where(df_long['IsBonus'], df_long['ScoreVal'] * 2, df_long['ScoreVal'])
         
         df_long['Pick'] = pd.to_numeric(df_long['Pick'], errors='coerce')
@@ -121,9 +109,8 @@ def load_data():
         bp_map = {int(picks_series[idx]): val for idx, val in bp_series.items() if idx in valid_map}
         daily_max_map = final_df.groupby('Pick')['Score'].max().to_dict()
 
-        # --- B. STATS ---
+        # B. STATS
         df_stats = conn.read(spreadsheet=st.secrets["SPREADSHEET_URL"], worksheet="Stats_Raptors_FR", header=None, ttl=0)
-        
         team_rank_history = []
         team_current_rank = 0
         start_row_rank = -1
@@ -173,7 +160,7 @@ def compute_stats(df, bp_map, daily_max_map):
         d = df[df['Player'] == p].sort_values('Pick')
         scores = d['Score'].values
         picks = d['Pick'].values
-        bonuses = d['IsBonus'].values # On récupère l'info bonus
+        bonuses = d['IsBonus'].values
         
         streak_30 = 0
         for s in reversed(scores):
@@ -182,28 +169,19 @@ def compute_stats(df, bp_map, daily_max_map):
         last_5 = scores[-5:]
         last5_avg = last_5.mean() if len(scores) >= 5 else scores.mean()
         momentum = last5_avg - scores.mean()
-        
         bp_count = 0
         alpha_count = 0
-        bonus_points_gained = 0 # Points gagnés GRACE au bonus
+        bonus_points_gained = 0
         
         for i, (pick_num, score) in enumerate(zip(picks, scores)):
-            # BP Check
             if pick_num in bp_map and score >= bp_map[pick_num] and score > 0: bp_count += 1
-            # Alpha Check
             if pick_num in daily_max_map and score >= daily_max_map[pick_num] and score > 0: alpha_count += 1
-            # Bonus Calc
-            if bonuses[i]:
-                # Le score est déjà doublé dans le DF. Donc le gain est Score / 2.
-                bonus_points_gained += (score / 2)
+            if bonuses[i]: bonus_points_gained += (score / 2)
         
         s_avg = season_avgs.get(p, 0)
         l15_avg = avg_15.get(p, s_avg)
         l10_avg = avg_10.get(p, s_avg)
         progression_15 = l15_avg - s_avg
-        
-        # Rank interne
-        # Sera calculé après
 
         stats.append({
             'Player': p,
@@ -213,7 +191,7 @@ def compute_stats(df, bp_map, daily_max_map):
             'Best': scores.max(),
             'Worst': scores.min(),
             'Last': scores[-1], 
-            'LastIsBonus': bonuses[-1] if len(bonuses) > 0 else False, # Pour l'affichage
+            'LastIsBonus': bonuses[-1] if len(bonuses) > 0 else False,
             'Last5': last5_avg, 
             'Last10': l10_avg,
             'Last15': scores[-15:].mean() if len(scores) >= 15 else scores.mean(),
@@ -224,7 +202,7 @@ def compute_stats(df, bp_map, daily_max_map):
             'Nukes': len(scores[scores >= 50]),
             'BP_Count': bp_count,
             'Alpha_Count': alpha_count,
-            'Bonus_Gained': bonus_points_gained, # NEW STAT
+            'Bonus_Gained': bonus_points_gained,
             'Momentum': momentum,
             'Games': len(scores),
             'Progression15': progression_15
@@ -254,7 +232,6 @@ def send_discord_webhook(day_df, pick_num, url_app):
     for i, row in top_3.iterrows():
         bonus_mark = " 🔥(x2)" if row['IsBonus'] else ""
         podium_text += f"{medals[i]} **{row['Player']}** • {int(row['Score'])} pts{bonus_mark}\n"
-    
     avg_score = int(day_df['Score'].mean())
     data = {
         "username": "Raptors Bot 🦖",
@@ -290,8 +267,9 @@ try:
             st.markdown("<div style='text-align:center; margin-bottom: 30px;'>", unsafe_allow_html=True)
             st.image("raptors-ttfl-min.png", use_container_width=True) 
             st.markdown("</div>", unsafe_allow_html=True)
-            menu = option_menu(menu_title=None, options=["Dashboard", "Team HQ", "Player Lab", "Trends", "Hall of Fame", "Admin"], icons=["grid-fill", "people-fill", "person-bounding-box", "fire", "trophy-fill", "shield-lock"], default_index=0, styles={"container": {"padding": "0!important", "background-color": "#000000"}, "icon": {"color": "#666", "font-size": "1.1rem"}, "nav-link": {"font-family": "Rajdhani, sans-serif", "font-weight": "700", "font-size": "15px", "text-transform": "uppercase", "color": "#AAA", "text-align": "left", "margin": "5px 0px", "--hover-color": "#111"}, "nav-link-selected": {"background-color": C_ACCENT, "color": "#FFF", "icon-color": "#FFF", "box-shadow": "0px 4px 20px rgba(206, 17, 65, 0.4)"}})
-            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v7.0</div></div>""", unsafe_allow_html=True)
+            # MENU MIS A JOUR AVEC "Bonus x2"
+            menu = option_menu(menu_title=None, options=["Dashboard", "Team HQ", "Player Lab", "Bonus x2", "Trends", "Hall of Fame", "Admin"], icons=["grid-fill", "people-fill", "person-bounding-box", "lightning-charge-fill", "fire", "trophy-fill", "shield-lock"], default_index=0, styles={"container": {"padding": "0!important", "background-color": "#000000"}, "icon": {"color": "#666", "font-size": "1.1rem"}, "nav-link": {"font-family": "Rajdhani, sans-serif", "font-weight": "700", "font-size": "15px", "text-transform": "uppercase", "color": "#AAA", "text-align": "left", "margin": "5px 0px", "--hover-color": "#111"}, "nav-link-selected": {"background-color": C_ACCENT, "color": "#FFF", "icon-color": "#FFF", "box-shadow": "0px 4px 20px rgba(206, 17, 65, 0.4)"}})
+            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v8.0</div></div>""", unsafe_allow_html=True)
 
         if menu == "Dashboard":
             section_title("RAPTORS <span class='highlight'>DASHBOARD</span>", f"Daily Briefing • Pick #{int(latest_pick)}")
@@ -339,12 +317,13 @@ try:
             fig_dist.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, showlegend=False, height=400, yaxis=dict(gridcolor='#222'))
             st.plotly_chart(fig_dist, use_container_width=True)
             st.markdown("### 📊 DATA ROOM")
-            st.dataframe(full_stats[['Player', 'Total', 'Moyenne', 'BP_Count', 'Nukes', 'Carottes']].sort_values('Total', ascending=False), hide_index=True, use_container_width=True, column_config={
+            st.dataframe(full_stats[['Player', 'Total', 'Moyenne', 'BP_Count', 'Nukes', 'Carottes', 'Bonus_Gained']].sort_values('Total', ascending=False), hide_index=True, use_container_width=True, column_config={
                 "Total": st.column_config.ProgressColumn("Total Pts", format="%d", min_value=0, max_value=full_stats['Total'].max()), 
                 "Moyenne": st.column_config.NumberColumn("Moyenne", format="%.1f"),
                 "Carottes": st.column_config.NumberColumn("🥕", help="Scores < 20"),
                 "Nukes": st.column_config.NumberColumn("☢️", help="Scores > 50"),
-                "BP_Count": st.column_config.NumberColumn("🎯", help="Best Picks")
+                "BP_Count": st.column_config.NumberColumn("🎯", help="Best Picks"),
+                "Bonus_Gained": st.column_config.NumberColumn("⚗️", help="Pts Bonus Gagnés")
             })
 
         elif menu == "Player Lab":
@@ -391,6 +370,46 @@ try:
                     c = "#4ADE80" if s >= 40 else ("#F87171" if s < 20 else "#FFF")
                     border = f"2px solid {C_BONUS}" if is_b else "1px solid rgba(255,255,255,0.1)"
                     cols[i].markdown(f"<div style='text-align:center; font-family:Rajdhani; font-size:0.9rem; font-weight:800; color:{c}; background:rgba(255,255,255,0.05); border:{border}; border-radius:6px; padding:6px 2px'>{int(s)}</div>", unsafe_allow_html=True)
+
+        # --- NOUVEL ONGLET : BONUS X2 ---
+        elif menu == "Bonus x2":
+            section_title("BONUS <span class='highlight'>ZONE</span>", "Analyse des Jokers x2")
+            
+            df_bonus = df[df['IsBonus'] == True].copy()
+            
+            if df_bonus.empty:
+                st.info("Aucun bonus utilisé pour le moment.")
+            else:
+                # KPIs
+                nb_bonus = len(df_bonus)
+                avg_bonus = df_bonus['Score'].mean()
+                best_bonus = df_bonus['Score'].max()
+                
+                k1, k2, k3 = st.columns(3)
+                with k1: kpi_card("BONUS JOUÉS", nb_bonus, "TOTAL SAISON", C_BONUS)
+                with k2: kpi_card("MOYENNE BONUS", f"{avg_bonus:.1f}", "POINTS DOUBLÉS", "#FFF")
+                with k3: kpi_card("MEILLEUR BONUS", int(best_bonus), "RECORD", C_GOLD)
+                
+                # CLASSEMENT RENTABILITÉ
+                st.markdown("### 💰 RENTABILITÉ DES BONUS (Points Gagnés)")
+                # Gain = Score / 2 (car Score est déjà doublé)
+                df_bonus['Gain'] = df_bonus['Score'] / 2
+                
+                profit_df = df_bonus.groupby('Player')['Gain'].sum().sort_values(ascending=False).reset_index()
+                
+                # Bar Chart Horizontal
+                fig = px.bar(profit_df, x='Gain', y='Player', orientation='h', text='Gain', color='Gain', color_continuous_scale='Cyan')
+                fig.update_traces(texttemplate='%{text:.0f} pts', textposition='outside')
+                fig.update_layout(yaxis={'categoryorder':'total ascending'}, plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, xaxis=dict(showgrid=False, visible=False))
+                st.plotly_chart(fig, use_container_width=True)
+                
+                # HISTORIQUE
+                st.markdown("### 📜 HISTORIQUE DÉTAILLÉ")
+                st.dataframe(df_bonus[['Player', 'Pick', 'Score', 'Gain']].sort_values('Pick', ascending=False), hide_index=True, use_container_width=True, column_config={
+                    "Score": st.column_config.NumberColumn("Score Final (x2)", format="%d pts"),
+                    "Gain": st.column_config.NumberColumn("Gain Réel", format="+%d pts")
+                })
+
 
         elif menu == "Trends":
             section_title("MARKET <span class='highlight'>WATCH</span>", "Analyse des tendances sur 15 jours")
@@ -448,7 +467,6 @@ try:
             lapin = full_stats.sort_values('Carottes', ascending=False).iloc[0]
             sniper_bp = full_stats.sort_values('BP_Count', ascending=False).iloc[0]
             alpha_dog = full_stats.sort_values('Alpha_Count', ascending=False).iloc[0]
-            # NEW BADGE ALCHEMIST
             alchemist = full_stats.sort_values('Bonus_Gained', ascending=False).iloc[0]
 
             def hof_card(title, icon, color, p_name, val, unit, desc):

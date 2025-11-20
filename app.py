@@ -34,7 +34,6 @@ C_IRON = "#A1A1AA"
 C_BONUS = "#06B6D4"
 C_PURE = "#14B8A6"
 C_ORANGE = "#F97316"
-C_RED = "#F87171" # Correction pour les carottes
 
 # --- 2. CSS PREMIUM ---
 st.markdown(f"""
@@ -398,7 +397,6 @@ try:
         elif menu == "Team HQ":
             section_title("TEAM <span class='highlight'>HQ</span>", "Vue d'ensemble de l'effectif")
             
-            # CALCULATION BEFORE USE
             total_pts_season = df['Score'].sum()
             daily_agg = df.groupby('Pick')['Score'].sum()
             best_night = daily_agg.max()
@@ -410,7 +408,9 @@ try:
             total_bonus_played = len(df[df['IsBonus'] == True])
             total_picks_played = len(df)
             
-            current_rank_disp = f"#{int(team_rank)}" if team_rank > 0 else "-"
+            # UPDATED: Score moyen par pick (Team Average)
+            team_avg_per_pick = df['Score'].mean()
+
             best_rank_ever = f"#{min(team_history)}" if len(team_history) > 0 else "-"
             bonus_df = df[df['IsBonus'] == True]
             avg_bonus_team = bonus_df['Score'].mean() if not bonus_df.empty else 0
@@ -428,7 +428,6 @@ try:
             col_dyn = C_GREEN if diff_team > 0 else C_ORANGE
             sign_dyn = "+" if diff_team > 0 else ""
             
-            # Pre-calc chart data
             team_daily_totals = df.groupby('Pick')['Score'].sum().reset_index()
             last_15_team = team_daily_totals[team_daily_totals['Pick'] > (latest_pick - 15)]
             team_season_avg_total = team_daily_totals['Score'].mean()
@@ -449,8 +448,9 @@ try:
                 st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
                 
                 r3c1, r3c2, r3c3 = st.columns(3)
-                with r3c1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{best_rank_ever}</div><div class='stat-mini-lbl'>MEILLEUR RANG</div><div class='stat-mini-sub'>Historique</div></div>", unsafe_allow_html=True)
-                with r3c2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{current_rank_disp}</div><div class='stat-mini-lbl'>RANG ACTUEL</div><div class='stat-mini-sub'>Classement Général</div></div>", unsafe_allow_html=True)
+                with r3c1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{best_rank_ever}</div><div class='stat-mini-lbl'>MEILLEUR RANG</div><div class='stat-mini-sub'>Historique (Maj Hebdo)</div></div>", unsafe_allow_html=True)
+                # REPLACEMENT : RANG ACTUEL -> SCORE MOYEN
+                with r3c2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{team_avg_per_pick:.1f}</div><div class='stat-mini-lbl'>SCORE MOYEN</div><div class='stat-mini-sub'>Par pick (Saison)</div></div>", unsafe_allow_html=True)
                 with r3c3: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{col_dyn}'>{int(avg_team_15)}</div><div class='stat-mini-lbl'>DYNAMIQUE (15J)</div><div class='stat-mini-sub'>vs {int(avg_team_season)} (Saison)</div></div>", unsafe_allow_html=True)
 
             with c_info:
@@ -612,9 +612,19 @@ try:
             st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
             st.markdown("#### 🏔️ PARCOURS SAISON COMPLÈTE", unsafe_allow_html=True)
             st.markdown("<div class='chart-desc'>Vue d'ensemble de tous les picks de la saison.</div>", unsafe_allow_html=True)
+            
+            # PREPARE DATA FOR TEAM AVG LINE
+            team_season_avg = df['Score'].mean()
+
             fig_evol = px.line(p_hist_all, x="Pick", y="Score", markers=True)
             fig_evol.update_traces(line_color=C_BLUE, line_width=2, marker_size=4)
-            fig_evol.add_hline(y=p_data['Moyenne'], line_dash="dot", line_color=C_TEXT, annotation_text="Moy. Saison", annotation_position="top left")
+            
+            # PLAYER AVG LINE
+            fig_evol.add_hline(y=p_data['Moyenne'], line_dash="dot", line_color=C_TEXT, annotation_text="Moy. Joueur", annotation_position="top left")
+            
+            # NEW: TEAM AVG LINE (RED)
+            fig_evol.add_hline(y=team_season_avg, line_dash="dash", line_color=C_ACCENT, annotation_text="Moy. Team", annotation_position="bottom left")
+
             fig_evol.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, margin=dict(l=0, r=0, t=30, b=0), height=300, xaxis_title="Pick #", yaxis_title="Points TTFL")
             st.plotly_chart(fig_evol, use_container_width=True)
             st.markdown("</div>", unsafe_allow_html=True)

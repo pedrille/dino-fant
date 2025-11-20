@@ -31,18 +31,14 @@ st.markdown(f"""
     /* GLOBAL */
     .stApp {{ background-color: {C_BG}; color: {C_TEXT}; font-family: 'Inter', sans-serif; }}
     
-    /* SIDEBAR FIX (FORCE BLACK) */
-    section[data-testid="stSidebar"] {{ 
-        background-color: #000000 !important; 
-        border-right: 1px solid #222;
-    }}
-    div[data-testid="stSidebarNav"] {{ display: none; }}
+    /* SIDEBAR FIX */
+    section[data-testid="stSidebar"] {{ background-color: #000000; border-right: 1px solid #222; }}
     
-    /* OPTION MENU HACK */
+    /* OPTION MENU HACK - NO WHITE BORDERS */
     .nav-link {{
         font-family: 'Rajdhani', sans-serif !important;
         font-weight: 700 !important;
-        font-size: 1.1rem !important;
+        font-size: 1.2rem !important;
         text-transform: uppercase !important;
         letter-spacing: 1px !important;
         margin: 5px 0 !important;
@@ -77,11 +73,11 @@ st.markdown(f"""
     /* VERSUS CARDS FOR TRENDS */
     .vs-card {{
         display: flex; justify-content: space-between; align-items: center;
-        padding: 8px 0;
+        padding: 10px 0;
         border-bottom: 1px solid rgba(255,255,255,0.05);
     }}
     .vs-card:last-child {{ border-bottom: none; }}
-    .vs-val {{ font-family: 'Rajdhani'; font-size: 1.4rem; font-weight: 700; }}
+    .vs-val {{ font-family: 'Rajdhani'; font-size: 1.5rem; font-weight: 700; }}
     
     /* KPI BLOCKS */
     .kpi-container {{ text-align: center; }}
@@ -107,7 +103,7 @@ st.markdown(f"""
     /* CLEANUP STREAMLIT */
     .stPlotlyChart {{ width: 100% !important; }}
     div[data-testid="stDataFrame"] {{ border: none !important; }}
-    [data-testid="stSidebarUserContent"] {{ padding-top: 1rem; }}
+    [data-testid="stSidebarUserContent"] {{ padding-top: 0rem; }}
 </style>
 """, unsafe_allow_html=True)
 
@@ -167,7 +163,7 @@ def compute_stats(df):
             'Last15': scores[-15:].mean() if len(scores) >= 15 else scores.mean(),
             'Streak30': streak_30,
             'Count30': len(scores[scores >= 30]),
-            'Count40': len(scores[scores >= 40]), 
+            'Count40': len(scores[scores >= 40]), # NEW STAT pour HOF
             'Carottes': len(scores[scores < 20]),
             'Nukes': len(scores[scores >= 50]),
             'Momentum': momentum,
@@ -243,32 +239,23 @@ def comparison_html(title, icon, data_series, is_positive_good=True, unit="", is
     color = C_GREEN if is_positive_good else C_BLUE
     if not is_positive_good: color = C_ACCENT
     
-    # Construction propre de la string HTML pour éviter les problèmes d'indentation
-    html_content = ""
-    if data_series.empty:
-        html_content = "<div style='color:#666'>Données insuffisantes</div>"
+    html = f"""
+    <div class="glass-card" style="height:100%">
+        <div style="display:flex; align-items:center; margin-bottom:15px; border-bottom:1px solid #333; padding-bottom:10px">
+            <span style="font-size:1.5rem; margin-right:10px">{icon}</span>
+            <span style="font-family:Rajdhani; font-weight:700; font-size:1.2rem; color:#FFF">{title}</span>
+        </div>
+    """
+    if data_series.empty: html += "<div style='color:#666'>Données insuffisantes</div>"
     else:
         for player, val in data_series.items():
             val_fmt = f"{val:.1f}" if isinstance(val, float) else f"{int(val)}"
             if is_rank: val_fmt = f"+{int(val)}" if val > 0 else f"{int(val)}"
             elif val > 0 and not is_rank: val_fmt = f"+{val_fmt}"
             
-            html_content += f"""
-            <div class="vs-card">
-                <span style="font-weight:600; color:#EEE">{player}</span>
-                <span class="vs-val" style="color:{color}">{val_fmt}<span style="font-size:0.8rem; margin-left:2px">{unit}</span></span>
-            </div>"""
-
-    # Assemblage final sans indentation excessive
-    return f"""
-    <div class="glass-card" style="height:100%">
-        <div style="display:flex; align-items:center; margin-bottom:15px; border-bottom:1px solid #333; padding-bottom:10px">
-            <span style="font-size:1.5rem; margin-right:10px">{icon}</span>
-            <span style="font-family:Rajdhani; font-weight:700; font-size:1.2rem; color:#FFF">{title}</span>
-        </div>
-        {html_content}
-    </div>
-    """
+            html += f"""<div class="vs-card"><span style="font-weight:600; color:#EEE">{player}</span><span class="vs-val" style="color:{color}">{val_fmt}<span style="font-size:0.8rem; margin-left:2px">{unit}</span></span></div>"""
+    html += "</div>"
+    return html
 
 # --- 6. MAIN APP ---
 try:
@@ -309,6 +296,7 @@ try:
             with c1: kpi_card("MVP DU JOUR", top['Player'], f"{int(top['Score'])} PTS", C_GOLD)
             with c2: kpi_card("MOYENNE TEAM", int(day_df['Score'].mean()), "POINTS")
             with c3: kpi_card("TOTAL NUIT", int(day_df['Score'].sum()), "CUMULÉ")
+            # MODIFICATION ICI : MAILLOT JAUNE -> LEADER SAISON
             with c4: kpi_card("LEADER SAISON", leader['Player'], f"TOTAL: {int(leader['Total'])}", C_ACCENT)
             
             col_chart, col_rank = st.columns([2, 1])
@@ -395,7 +383,10 @@ try:
             sniper = full_stats.sort_values('Moyenne', ascending=False).iloc[0]
             torche = full_stats.sort_values('Last15', ascending=False).iloc[0]
             fusee = full_stats.sort_values('Momentum', ascending=False).iloc[0]
+            
+            # MODIFICATION HOF 1: REMPLACEMENT DU NIGHT MVP par HEAVY HITTER
             heavy = full_stats.sort_values('Count40', ascending=False).iloc[0]
+            
             peak = full_stats.sort_values('Best', ascending=False).iloc[0]
             intouch = full_stats.sort_values('Streak30', ascending=False).iloc[0]
             rock = full_stats.sort_values('Count30', ascending=False).iloc[0]
@@ -411,9 +402,15 @@ try:
             with c1:
                 st.markdown(hof_html("🏆", "#FFD700", "THE GOAT", sniper['Player'], f"{sniper['Moyenne']:.1f}", "PTS MOYENNE", "Meilleure moyenne générale"), unsafe_allow_html=True)
                 st.markdown(hof_html("🔥", "#FF5252", "HUMAN TORCH", torche['Player'], f"{torche['Last15']:.1f}", "PTS / 15J", "Le plus chaud du mois"), unsafe_allow_html=True)
+                
+                # MODIFICATION HOF 2: RISING STAR EXPLICATIF
                 st.markdown(hof_html("🚀", "#4ADE80", "RISING STAR", fusee['Player'], f"+{fusee['Momentum']:.1f}", "PTS DE GAIN", "Moyenne 5 derniers vs Saison"), unsafe_allow_html=True)
+                
                 st.markdown(hof_html("🏔️", "#A78BFA", "THE CEILING", peak['Player'], int(peak['Best']), "PTS MAX", "Record absolu en un match"), unsafe_allow_html=True)
+                
+                # MODIFICATION HOF 3: NOUVEAU BADGE HEAVY HITTER
                 st.markdown(hof_html("🥊", "#64B5F6", "HEAVY HITTER", heavy['Player'], int(heavy['Count40']), "PICKS >40", "Total scores au dessus de 40pts"), unsafe_allow_html=True)
+                
             with c2:
                 st.markdown(hof_html("⚡", "#FBBF24", "UNSTOPPABLE", intouch['Player'], int(intouch['Streak30']), "SERIE", "Matchs consécutifs > 30pts"), unsafe_allow_html=True)
                 st.markdown(hof_html("🛡️", "#34D399", "THE ROCK", rock['Player'], int(rock['Count30']), "MATCHS", "Total matchs > 30pts"), unsafe_allow_html=True)

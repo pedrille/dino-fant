@@ -66,36 +66,35 @@ st.markdown(f"""
         box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
     }}
 
-    /* --- TRENDS HOT/COLD --- */
-    .trend-container {{
-        border-radius: 16px; padding: 20px; margin-bottom: 20px;
-        background: rgba(255,255,255,0.02);
-        border: 1px solid rgba(255,255,255,0.05);
+    /* --- TRENDS NEW LAYOUT --- */
+    .trend-section-title {{
+        font-family: 'Rajdhani'; font-size: 1.2rem; font-weight: 700; color: #FFF; margin-bottom: 5px; border-left: 4px solid #555; padding-left: 10px;
+    }}
+    .trend-section-desc {{
+        font-size: 0.8rem; color: #888; margin-bottom: 15px; padding-left: 14px; font-style: italic;
     }}
     
-    .hot-header {{ border-bottom: 1px solid rgba(206, 17, 65, 0.3); padding-bottom: 10px; margin-bottom: 15px; }}
-    .cold-header {{ border-bottom: 1px solid rgba(59, 130, 246, 0.3); padding-bottom: 10px; margin-bottom: 15px; }}
-
-    .trend-title {{ font-family: 'Rajdhani'; font-weight: 800; font-size: 1.4rem; display: flex; align-items: center; gap: 8px; }}
-    .trend-desc {{ font-family: 'Inter'; font-size: 0.75rem; color: #888; margin-top: 2px; font-weight: 400; }}
+    .trend-box {{
+        background: rgba(255,255,255,0.03);
+        border-radius: 12px;
+        padding: 15px;
+        border: 1px solid rgba(255,255,255,0.05);
+        height: 100%;
+    }}
     
-    .trend-row {{ display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.03); }}
-    .trend-row:last-child {{ border-bottom: none; }}
-    .trend-val-block {{ text-align: right; }}
-    .trend-val-main {{ font-family: 'Rajdhani'; font-weight: 700; font-size: 1.3rem; line-height: 1; }}
-    .trend-val-sub {{ font-size: 0.7rem; color: #666; display: block; margin-top: 2px; }}
+    .hot-header {{ color: {C_ACCENT}; border-bottom: 1px solid rgba(206, 17, 65, 0.3); padding-bottom: 8px; margin-bottom: 10px; font-weight: 700; font-family: 'Rajdhani'; font-size: 1.1rem; display:flex; align-items:center; gap:8px; }}
+    .cold-header {{ color: {C_BLUE}; border-bottom: 1px solid rgba(59, 130, 246, 0.3); padding-bottom: 8px; margin-bottom: 10px; font-weight: 700; font-family: 'Rajdhani'; font-size: 1.1rem; display:flex; align-items:center; gap:8px; }}
+
+    .t-row {{ display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.03); }}
+    .t-row:last-child {{ border-bottom: none; }}
+    .t-val {{ font-family: 'Rajdhani'; font-weight: 700; font-size: 1.2rem; text-align: right; }}
+    .t-sub {{ font-size: 0.7rem; color: #666; display: block; margin-top: 2px; text-align: right; }}
+    .t-name {{ font-weight: 500; color: #DDD; font-size: 0.95rem; }}
 
     /* --- HALL OF FAME --- */
     .hof-badge {{
-        display: inline-block;
-        padding: 4px 12px;
-        border-radius: 6px;
-        font-size: 0.7rem;
-        font-weight: 800;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-        margin-bottom: 12px;
-        background: rgba(255,255,255,0.05);
+        display: inline-block; padding: 4px 12px; border-radius: 6px; font-size: 0.7rem; font-weight: 800;
+        text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; background: rgba(255,255,255,0.05);
     }}
     .hof-player {{ font-family: 'Rajdhani'; font-size: 1.6rem; font-weight: 700; color: #FFF; }}
     .hof-stat {{ font-family: 'Rajdhani'; font-size: 2.2rem; font-weight: 800; text-align: right; line-height: 1; }}
@@ -104,10 +103,7 @@ st.markdown(f"""
     /* --- DASHBOARD RANKING --- */
     .rank-row {{
         display: flex; align-items: center; justify-content: space-between;
-        padding: 12px 15px;
-        border-radius: 8px;
-        margin-bottom: 4px;
-        transition: background 0.2s;
+        padding: 12px 15px; border-radius: 8px; margin-bottom: 4px; transition: background 0.2s;
     }}
     .rank-row:hover {{ background: rgba(255,255,255,0.03); }}
     .rank-pos {{ font-family: 'Rajdhani'; font-weight: 700; width: 30px; font-size: 1.1rem; }}
@@ -130,9 +126,9 @@ st.markdown(f"""
 def load_data():
     conn = st.connection("gsheets", type=GSheetsConnection)
     try:
-        if "SPREADSHEET_URL" not in st.secrets: return pd.DataFrame()
+        if "SPREADSHEET_URL" not in st.secrets: return pd.DataFrame(), 0
         
-        # Lecture avec petit cache
+        # 1. LECTURE ONGLET VALEURS (Joueurs)
         df_raw = conn.read(spreadsheet=st.secrets["SPREADSHEET_URL"], worksheet="Valeurs", header=None, ttl=0)
         
         pick_row_idx = 2
@@ -153,8 +149,33 @@ def load_data():
         df_long['Score'] = pd.to_numeric(df_long['Score'], errors='coerce')
         df_long['Pick'] = pd.to_numeric(df_long['Pick'], errors='coerce')
         
-        return df_long.dropna(subset=['Score', 'Pick'])
-    except: return pd.DataFrame()
+        final_df = df_long.dropna(subset=['Score', 'Pick'])
+
+        # 2. LECTURE ONGLET STATS (Pour le Team Rank)
+        # On tente de lire le classement "Team Raptors" dans la colonne AK (index 36 env.)
+        try:
+            df_stats = conn.read(spreadsheet=st.secrets["SPREADSHEET_URL"], worksheet="Stats_Raptors_FR", header=None, ttl=0)
+            # On cherche la ligne où il y a "Team Raptors" dans la colonne AJ (index 35) ou autour
+            # Selon le screen, c'est vers la ligne 14, colonne AK pour le score.
+            # Une méthode plus robuste : chercher "Team Raptors" dans la zone de droite et prendre la valeur à côté
+            team_rank = 0
+            # On scanne la colonne AJ (35) pour trouver "Team Raptors"
+            for idx, row in df_stats.iterrows():
+                if str(row[35]) == "Team Raptors": # AJ
+                    team_rank = row[36] # AK
+                    break
+            
+            # Fallback si pas trouvé (au cas où structure bouge)
+            if team_rank == 0:
+                 # On essaye hardcodé ligne 14 (index 13) col AK (index 36)
+                 val = df_stats.iloc[13, 36]
+                 if pd.to_numeric(val, errors='coerce') > 0:
+                     team_rank = val
+        except:
+            team_rank = 999 # Valeur par défaut si erreur lecture
+
+        return final_df, team_rank
+    except: return pd.DataFrame(), 0
 
 def compute_stats(df):
     stats = []
@@ -255,7 +276,7 @@ def section_title(title, subtitle):
 
 # --- 6. MAIN APP ---
 try:
-    df = load_data()
+    df, team_rank = load_data()
     
     if not df.empty:
         latest_pick = df['Pick'].max()
@@ -300,7 +321,7 @@ try:
             <div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'>
                 <div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>
                     Data Pick #{int(latest_pick)}<br>
-                    War Room v3.1
+                    War Room v3.5
                 </div>
             </div>
             """, unsafe_allow_html=True)
@@ -313,7 +334,9 @@ try:
             c1, c2, c3, c4 = st.columns(4)
             with c1: kpi_card("MVP DU JOUR", top['Player'], f"{int(top['Score'])} PTS", C_GOLD)
             with c2: kpi_card("MOYENNE TEAM", int(day_df['Score'].mean()), "POINTS")
-            with c3: kpi_card("TOTAL NUIT", int(day_df['Score'].sum()), "CUMULÉ")
+            # Affichage du rang d'équipe récupéré dans l'onglet 2
+            rank_display = f"#{int(team_rank)}" if team_rank > 0 else "N/A"
+            with c3: kpi_card("CLASSEMENT TEAM", rank_display, "GENERAL")
             with c4: kpi_card("LEADER SAISON", leader['Player'], f"TOTAL: {int(leader['Total'])}", C_ACCENT)
             
             col_chart, col_rank = st.columns([2, 1])
@@ -336,7 +359,6 @@ try:
                     pos_disp = medals.get(i, f"<span style='color:#666; font-size:0.9rem'>{i+1}</span>")
                     hl_style = f"border-left: 3px solid {C_ACCENT}; background: rgba(255,255,255,0.03);" if i == 0 else "border-left: 3px solid transparent;"
                     score_col = C_ACCENT if i == 0 else "#FFF"
-                    
                     rows_html += f"""<div class='rank-row' style='{hl_style}'><div class='rank-pos'>{pos_disp}</div><div class='rank-name' style='color:{'#FFF' if i < 3 else '#AAA'}'>{r['Player']}</div><div class='rank-score' style='color:{score_col}'>{int(r['Score'])}</div></div>"""
                 
                 st.markdown(f"<div style='display:flex; flex-direction:column; gap:5px'>{rows_html}</div></div>", unsafe_allow_html=True)
@@ -392,98 +414,101 @@ try:
                     color = "#4ADE80" if s >= 40 else ("#F87171" if s < 20 else "#FFF")
                     cols[i].markdown(f"<div style='text-align:center; font-family:Rajdhani; font-size:1.2rem; font-weight:800; color:{color}; background:rgba(255,255,255,0.05); border-radius:8px; padding:10px'>{int(s)}</div>", unsafe_allow_html=True)
 
-        # --- TRENDS ---
+        # --- TRENDS (VERSION 3.5 - ROW BY ROW) ---
         elif menu == "Trends":
             section_title("MARKET <span class='highlight'>WATCH</span>", "Analyse des tendances sur 15 jours")
             
-            lookback_days = 15
-            df_recent = df[df['Pick'] > (latest_pick - lookback_days)]
+            # PREP DATA
+            df_15 = df[df['Pick'] > (latest_pick - 15)] # 15 jours
+            df_7 = df[df['Pick'] > (latest_pick - 7)]   # 7 jours
             
-            recent_stats = df_recent.groupby('Player').agg({
-                'Score': ['mean', 'count', lambda x: (x >= 40).sum(), lambda x: (x < 20).sum()]
-            })
-            recent_stats.columns = ['Mean15', 'Count', 'Highs', 'Lows']
-            season_avg = df.groupby('Player')['Score'].mean().rename('SeasonAvg')
-            delta_df = get_comparative_stats(df, latest_pick, lookback=lookback_days)
-            merged = recent_stats.join(delta_df).join(season_avg)
-            merged['PctDiff'] = ((merged['Mean15'] - merged['SeasonAvg']) / merged['SeasonAvg']) * 100
+            # 1. GENERAL AVG 15D
+            avg_15 = df_15.groupby('Player')['Score'].mean().sort_values(ascending=False)
+            top_hot_avg = avg_15.head(3)
+            top_cold_avg = avg_15.tail(3).sort_values(ascending=True)
             
-            def render_trend_block(title, desc, icon, color, data_rows, type_metric):
-                html = f"""
-                <div class="trend-container">
-                    <div class="{'hot' if color==C_ACCENT else 'cold'}-header">
-                        <div class="trend-title" style="color:{color}">{icon} {title}</div>
-                        <div class="trend-desc">{desc}</div>
-                    </div>
-                """
-                if data_rows.empty: 
-                    html += "<div style='color:#666; font-style:italic'>Aucune donnée significative.</div>"
-                else:
-                    for p_name, row in data_rows.iterrows():
-                        val_html = ""
-                        sub_html = ""
-                        
-                        if type_metric == 'avg':
-                            diff = row['Mean15'] - row['SeasonAvg']
-                            sign = "+" if diff > 0 else ""
-                            c_val = C_GREEN if diff > 0 else "#F87171"
-                            val_html = f"{row['Mean15']:.1f} <span style='font-size:0.8rem'>pts</span>"
-                            sub_html = f"{sign}{diff:.1f} pts ({sign}{row['PctDiff']:.0f}%) vs saison"
-                        elif type_metric == 'mom':
-                            val = row['mean_diff']
-                            sign = "+" if val > 0 else ""
-                            c_val = C_GREEN if val > 0 else "#F87171"
-                            val_html = f"{sign}{val:.1f} <span style='font-size:0.8rem'>pts</span>"
-                            sub_html = f"Évolution moyenne sur 15j"
-                        elif type_metric == 'rank':
-                            val = int(row['rank_diff'])
-                            sign = "+" if val > 0 else ""
-                            c_val = "#FFF"
-                            val_html = f"{sign}{val} <span style='font-size:0.8rem'>places</span>"
-                            sub_html = "au classement général"
-                        elif type_metric == 'count':
-                            val = int(row['Highs'] if 'Highs' in row else row['Lows'])
-                            pct = (val/row['Count'])*100
-                            c_val = "#FFF"
-                            val_html = f"{val} <span style='font-size:0.8rem'>{'picks' if 'Highs' in row else 'carottes'}</span>"
-                            sub_html = f"soit {pct:.0f}% des matchs"
+            # 2. BURST 7D vs SEASON
+            season_avg = df.groupby('Player')['Score'].mean()
+            avg_7 = df_7.groupby('Player')['Score'].mean()
+            diff_7 = (avg_7 - season_avg).dropna().sort_values(ascending=False)
+            top_hot_7 = diff_7.head(3)
+            top_cold_7 = diff_7.tail(3).sort_values(ascending=True)
+            
+            # 3. % EVOLUTION 15D
+            pct_15 = ((avg_15 - season_avg) / season_avg * 100).dropna().sort_values(ascending=False)
+            top_hot_pct = pct_15.head(3)
+            top_cold_pct = pct_15.tail(3).sort_values(ascending=True)
+            
+            # 4. EXTREMES
+            nukes_15 = df_15[df_15['Score'] >= 50].groupby('Player').size().sort_values(ascending=False).head(3)
+            carrots_15 = df_15[df_15['Score'] < 20].groupby('Player').size().sort_values(ascending=False).head(3)
 
-                        html += f"""<div class="trend-row"><div class="trend-name">{p_name}</div><div class="trend-val-block"><div class="trend-val-main" style="color:{c_val}">{val_html}</div><div class="trend-val-sub">{sub_html}</div></div></div>"""
+            # 5. RANK EVOLUTION
+            delta_rank = get_comparative_stats(df, latest_pick, lookback=15)['rank_diff']
+            top_hot_rank = delta_rank.sort_values(ascending=False).head(3)
+            top_cold_rank = delta_rank.sort_values(ascending=True).head(3) # Negative
+
+            # --- RENDER FUNCTION (ROW SPLIT) ---
+            def render_comparison_row(title, subtitle, hot_data, cold_data, type_metric, unit=""):
+                st.markdown(f"<div class='trend-section-title'>{title}</div><div class='trend-section-desc'>{subtitle}</div>", unsafe_allow_html=True)
+                c1, c2 = st.columns(2)
                 
-                html += "</div>"
-                return html
-
-            c_hot, c_cold = st.columns(2, gap="large")
-
-            with c_hot:
-                st.markdown(f"<h3 style='color:{C_ACCENT}; margin-bottom:20px'>🔥 HOT LIST</h3>", unsafe_allow_html=True)
+                # HOT SIDE
+                with c1:
+                    html = f"<div class='trend-box'><div class='hot-header'>🔥 TOP PERFORMERS</div>"
+                    if hot_data.empty: html += "<div style='color:#666'>Aucune donnée</div>"
+                    else:
+                        for p, val in hot_data.items():
+                            val_fmt = f"{val:.1f}" if isinstance(val, float) else str(int(val))
+                            if type_metric == "diff": val_fmt = f"+{val_fmt}"
+                            if type_metric == "pct": val_fmt = f"+{val_fmt}%"
+                            
+                            html += f"<div class='t-row'><span class='t-name'>{p}</span><span class='t-val' style='color:{C_GREEN}'>{val_fmt} <span style='font-size:0.8rem; color:#888'>{unit}</span></span></div>"
+                    html += "</div>"
+                    st.markdown(html, unsafe_allow_html=True)
                 
-                top_avg = merged.sort_values('Mean15', ascending=False).head(3)
-                st.markdown(render_trend_block("FORME OLYMPIQUE", "Meilleure moyenne sur la quinzaine.", "📈", C_ACCENT, top_avg, 'avg'), unsafe_allow_html=True)
+                # COLD SIDE
+                with c2:
+                    html = f"<div class='trend-box'><div class='cold-header'>❄️ COLD STREAK</div>"
+                    if cold_data.empty: html += "<div style='color:#666'>Aucune donnée</div>"
+                    else:
+                        for p, val in cold_data.items():
+                            val_fmt = f"{val:.1f}" if isinstance(val, float) else str(int(val))
+                            if type_metric == "pct": val_fmt = f"{val_fmt}%" # Deja negatif
+                            
+                            html += f"<div class='t-row'><span class='t-name'>{p}</span><span class='t-val' style='color:#F87171'>{val_fmt} <span style='font-size:0.8rem; color:#888'>{unit}</span></span></div>"
+                    html += "</div>"
+                    st.markdown(html, unsafe_allow_html=True)
                 
-                top_mom = merged[merged['mean_diff'] > 0].sort_values('mean_diff', ascending=False).head(3)
-                st.markdown(render_trend_block("GROSSE PROGRESSION", "Hausse significative des scores récents.", "🚀", C_ACCENT, top_mom, 'mom'), unsafe_allow_html=True)
+                st.markdown("<div style='margin-bottom:30px'></div>", unsafe_allow_html=True) # Spacer
 
-                top_rank = merged[merged['rank_diff'] > 0].sort_values('rank_diff', ascending=False).head(3)
-                st.markdown(render_trend_block("CLIMBING THE LADDER", "Gains de places au classement général.", "🧗", C_ACCENT, top_rank, 'rank'), unsafe_allow_html=True)
-                
-                top_highs = merged[merged['Highs'] > 0].sort_values('Highs', ascending=False).head(3)
-                st.markdown(render_trend_block("HEAVY HITTERS", "Joueurs enchaînant les scores > 40pts.", "💣", C_ACCENT, top_highs, 'count'), unsafe_allow_html=True)
+            # --- DISPLAY BLOCKS ---
+            
+            # 1. GENERAL AVERAGE
+            render_comparison_row("MOYENNE GÉNÉRALE (15 JOURS)", 
+                                  "Les joueurs les plus réguliers vs ceux en difficulté sur la quinzaine.", 
+                                  top_hot_avg, top_cold_avg, "raw", "pts")
+            
+            # 2. SHORT TERM BURST (7 Jours)
+            render_comparison_row("EXPLOSIVITÉ (7 JOURS VS SAISON)", 
+                                  "Écart de points entre la semaine passée et la moyenne habituelle.", 
+                                  top_hot_7, top_cold_7, "diff", "pts diff")
+            
+            # 3. % EVOLUTION
+            render_comparison_row("DYNAMIQUE DE FORME (15J VS SAISON)", 
+                                  "Pourcentage de progression ou régression sur la quinzaine.", 
+                                  top_hot_pct, top_cold_pct, "pct", "")
 
-            with c_cold:
-                st.markdown(f"<h3 style='color:{C_BLUE}; margin-bottom:20px'>❄️ COLD LIST</h3>", unsafe_allow_html=True)
-                
-                bot_avg = merged.sort_values('Mean15', ascending=True).head(3)
-                st.markdown(render_trend_block("ICE COLD", "Moyenne en berne sur la quinzaine.", "🥶", C_BLUE, bot_avg, 'avg'), unsafe_allow_html=True)
-                
-                bot_mom = merged[merged['mean_diff'] < 0].sort_values('mean_diff', ascending=True).head(3)
-                st.markdown(render_trend_block("DOWNSWING", "Baisse de régime vs moyenne saison.", "📉", C_BLUE, bot_mom, 'mom'), unsafe_allow_html=True)
+            # 4. EXTREMES
+            render_comparison_row("PICKS MARQUANTS (15 JOURS)", 
+                                  "Accumulation de scores > 50pts (Nukes) vs scores < 20pts (Carottes).", 
+                                  nukes_15, carrots_15, "int", "picks")
 
-                bot_rank = merged[merged['rank_diff'] < 0].sort_values('rank_diff', ascending=True).head(3)
-                st.markdown(render_trend_block("FREE FALLING", "Chute au classement général.", "🪂", C_BLUE, bot_rank, 'rank'), unsafe_allow_html=True)
+            # 5. RANKING
+            render_comparison_row("MOUVEMENTS AU CLASSEMENT", 
+                                  "Gains et pertes de places au général sur 15 jours.", 
+                                  top_hot_rank[top_hot_rank>0], top_cold_rank[top_cold_rank<0], "diff", "places")
 
-                top_lows = merged[merged['Lows'] > 0].sort_values('Lows', ascending=False).head(3)
-                st.markdown(render_trend_block("CARROT FARMERS", "Accumulation de scores < 20pts.", "🥕", C_BLUE, top_lows, 'count'), unsafe_allow_html=True)
 
         # --- HALL OF FAME ---
         elif menu == "Hall of Fame":
@@ -537,30 +562,22 @@ try:
         elif menu == "Admin":
             section_title("ADMIN <span class='highlight'>PANEL</span>", "Accès Restreint")
             
-            # 1. Init Session
-            if "admin_access" not in st.session_state:
-                st.session_state["admin_access"] = False
+            if "admin_access" not in st.session_state: st.session_state["admin_access"] = False
 
-            # 2. Login
             if not st.session_state["admin_access"]:
                 c1, c2, c3 = st.columns([1, 2, 1])
                 with c2:
                     st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
                     st.markdown("#### 🔒 ZONE SÉCURISÉE")
                     pwd = st.text_input("Mot de passe", type="password", key="admin_pwd")
-                    
                     if st.button("DÉVERROUILLER"):
                         if "ADMIN_PASSWORD" in st.secrets and pwd == st.secrets["ADMIN_PASSWORD"]:
                             st.session_state["admin_access"] = True
                             st.rerun()
-                        else:
-                            st.error("⛔ Accès refusé")
+                        else: st.error("⛔ Accès refusé")
                     st.markdown("</div>", unsafe_allow_html=True)
-
-            # 3. Admin Content
             else:
                 col_refresh, col_discord = st.columns(2)
-                
                 with col_refresh:
                     st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
                     st.markdown("#### 🔄 DONNÉES")
@@ -569,7 +586,6 @@ try:
                         st.cache_data.clear()
                         st.rerun()
                     st.markdown("</div>", unsafe_allow_html=True)
-                
                 with col_discord:
                     st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
                     st.markdown("#### 📡 DISCORD")
@@ -579,7 +595,6 @@ try:
                         if res == "success": st.success("✅ Envoyé !")
                         else: st.error(f"Erreur : {res}")
                     st.markdown("</div>", unsafe_allow_html=True)
-                
                 if st.button("🔒 VERROUILLER L'ACCÈS"):
                     st.session_state["admin_access"] = False
                     st.rerun()

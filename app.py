@@ -70,14 +70,14 @@ st.markdown(f"""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 3. DATA ENGINE (V6.2 - ROBUST MATCHING) ---
+# --- 3. DATA ENGINE (SIMPLIFIÉ ET ROBUSTE) ---
 @st.cache_data(ttl=300)
 def load_data():
     conn = st.connection("gsheets", type=GSheetsConnection)
     try:
-        if "SPREADSHEET_URL" not in st.secrets: return None, None, None, None, [], {}
+        if "SPREADSHEET_URL" not in st.secrets: return None, None, None, None, []
 
-        # --- A. VALEURS ---
+        # --- A. ONGLET VALEURS ---
         df_valeurs = conn.read(spreadsheet=st.secrets["SPREADSHEET_URL"], worksheet="Valeurs", header=None, ttl=0)
         
         pick_row_idx = 2
@@ -89,9 +89,9 @@ def load_data():
         stop = ["Team Raptors", "Score BP", "Classic", "BP", "nan", "Moyenne", "Somme"]
         df_players = df_players[~df_players['Player'].astype(str).isin(stop)].dropna(subset=['Player'])
         
-        # Liste propre des joueurs (sans espaces) pour comparaison
-        clean_player_list = [p.strip() for p in df_players['Player'].unique()]
-        
+        # --- CLEAN NAMES : On enlève les espaces invisibles pour Pedrille/Tomus ---
+        df_players['Player'] = df_players['Player'].astype(str).str.strip()
+
         valid_map = {idx: int(val) for idx, val in picks_series.items() if pd.notna(val) and val > 0}
         cols = ['Player'] + list(valid_map.keys())
         cols = [c for c in cols if c in df_players.columns]
@@ -102,19 +102,17 @@ def load_data():
         df_long['Pick'] = pd.to_numeric(df_long['Pick'], errors='coerce')
         final_df = df_long.dropna(subset=['Score', 'Pick'])
         
-        # Important : On clean aussi les noms dans le DF final pour éviter les mismatches
-        final_df['Player'] = final_df['Player'].str.strip()
+        # Double check strip sur le final_df
+        final_df['Player'] = final_df['Player'].astype(str).str.strip()
         
         bp_map = {int(picks_series[idx]): val for idx, val in bp_series.items() if idx in valid_map}
         daily_max_map = final_df.groupby('Pick')['Score'].max().to_dict()
 
-        # --- B. STATS (ROBUST MATCHING) ---
+        # --- B. STATS (TEAM ONLY) ---
         df_stats = conn.read(spreadsheet=st.secrets["SPREADSHEET_URL"], worksheet="Stats_Raptors_FR", header=None, ttl=0)
         
-        ranks_map = {}
         team_rank_history = []
         team_current_rank = 0
-        
         start_row_rank = -1
         col_start_rank = -1
         
@@ -127,40 +125,28 @@ def load_data():
             if start_row_rank != -1: break
             
         if start_row_rank != -1:
-            # Scan large pour trouver tout le monde
-            for i in range(start_row_rank+1, start_row_rank+50): 
+            for i in range(start_row_rank+1, start_row_rank+30):
                 if i >= len(df_stats): break
-                
-                raw_name = str(df_stats.iloc[i, col_start_rank]).strip()
-                if raw_name == "nan" or raw_name == "": continue
-                
-                # On cherche la dernière valeur numérique de la ligne
-                hist_vals = df_stats.iloc[i, col_start_rank+1:col_start_rank+30].values
-                valid_history = []
-                for x in hist_vals:
-                    try:
-                        clean_x = str(x).replace(',', '').replace(' ', '')
-                        val = float(clean_x)
-                        if val > 0: valid_history.append(int(val))
-                    except: pass
-                
-                if valid_history:
-                    last_rank = valid_history[-1]
-                    
-                    if "Team Raptors" in raw_name:
-                        if team_current_rank == 0: # Prend le premier trouvé (le bon)
-                            team_current_rank = last_rank
-                            team_rank_history = valid_history
-                    else:
-                        # On associe si le nom est dans notre liste de joueurs (match exact après strip)
-                        if raw_name in clean_player_list:
-                            ranks_map[raw_name] = last_rank
+                p_name = str(df_stats.iloc[i, col_start_rank]).strip()
+                if "Team Raptors" in p_name:
+                    hist_vals = df_stats.iloc[i, col_start_rank+1:col_start_rank+25].values
+                    valid_history = []
+                    for x in hist_vals:
+                        try:
+                            clean_x = str(x).replace(',', '').replace(' ', '')
+                            val = float(clean_x)
+                            if val > 0: valid_history.append(int(val))
+                        except: pass
+                    if valid_history:
+                        team_current_rank = valid_history[-1]
+                        team_rank_history = valid_history
+                    break
 
-        return final_df, team_current_rank, bp_map, ranks_map, team_rank_history, daily_max_map
+        return final_df, team_current_rank, bp_map, team_rank_history, daily_max_map
 
-    except: return pd.DataFrame(), 0, {}, {}, [], {}
+    except: return pd.DataFrame(), 0, {}, [], {}
 
-def compute_stats(df, bp_map, ranks_map, daily_max_map):
+def compute_stats(df, bp_map, daily_max_map):
     stats = []
     latest_pick = df['Pick'].max()
     season_avgs = df.groupby('Player')['Score'].mean()
@@ -196,11 +182,8 @@ def compute_stats(df, bp_map, ranks_map, daily_max_map):
         
         s_avg = season_avgs.get(p, 0)
         l15_avg = avg_15.get(p, s_avg)
-        l10_avg = avg_10.get(p, s_avg) # Moyenne 10 derniers
+        l10_avg = avg_10.get(p, s_avg)
         progression_15 = l15_avg - s_avg
-
-        g_rank = ranks_map.get(p, 0) 
-        if g_rank == 0: g_rank = 99999
 
         stats.append({
             'Player': p,
@@ -211,7 +194,7 @@ def compute_stats(df, bp_map, ranks_map, daily_max_map):
             'Worst': scores.min(),
             'Last': scores[-1], 
             'Last5': last5_avg, 
-            'Last10': l10_avg, # NEW
+            'Last10': l10_avg,
             'Last15': scores[-15:].mean() if len(scores) >= 15 else scores.mean(),
             'Streak30': streak_30,
             'Count30': len(scores[scores >= 30]), 
@@ -222,8 +205,7 @@ def compute_stats(df, bp_map, ranks_map, daily_max_map):
             'Alpha_Count': alpha_count,
             'Momentum': momentum,
             'Games': len(scores),
-            'Progression15': progression_15,
-            'GeneralRank': g_rank
+            'Progression15': progression_15
         })
     return pd.DataFrame(stats)
 
@@ -273,12 +255,12 @@ def section_title(title, subtitle):
 
 # --- 6. MAIN APP ---
 try:
-    df, team_rank, bp_map, ranks_map, team_history, daily_max_map = load_data()
+    df, team_rank, bp_map, team_history, daily_max_map = load_data()
     
     if df is not None and not df.empty:
         latest_pick = df['Pick'].max()
         day_df = df[df['Pick'] == latest_pick].sort_values('Score', ascending=False)
-        full_stats = compute_stats(df, bp_map, ranks_map, daily_max_map)
+        full_stats = compute_stats(df, bp_map, daily_max_map)
         leader = full_stats.sort_values('Total', ascending=False).iloc[0]
         
         with st.sidebar:
@@ -286,7 +268,7 @@ try:
             st.image("raptors-ttfl-min.png", use_container_width=True) 
             st.markdown("</div>", unsafe_allow_html=True)
             menu = option_menu(menu_title=None, options=["Dashboard", "Team HQ", "Player Lab", "Trends", "Hall of Fame", "Admin"], icons=["grid-fill", "people-fill", "person-bounding-box", "fire", "trophy-fill", "shield-lock"], default_index=0, styles={"container": {"padding": "0!important", "background-color": "#000000"}, "icon": {"color": "#666", "font-size": "1.1rem"}, "nav-link": {"font-family": "Rajdhani, sans-serif", "font-weight": "700", "font-size": "15px", "text-transform": "uppercase", "color": "#AAA", "text-align": "left", "margin": "5px 0px", "--hover-color": "#111"}, "nav-link-selected": {"background-color": C_ACCENT, "color": "#FFF", "icon-color": "#FFF", "box-shadow": "0px 4px 20px rgba(206, 17, 65, 0.4)"}})
-            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v6.2</div></div>""", unsafe_allow_html=True)
+            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v6.3</div></div>""", unsafe_allow_html=True)
 
         if menu == "Dashboard":
             section_title("RAPTORS <span class='highlight'>DASHBOARD</span>", f"Daily Briefing • Pick #{int(latest_pick)}")
@@ -333,10 +315,9 @@ try:
             fig_dist.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, showlegend=False, height=400, yaxis=dict(gridcolor='#222'))
             st.plotly_chart(fig_dist, use_container_width=True)
             st.markdown("### 📊 DATA ROOM")
-            st.dataframe(full_stats[['Player', 'Total', 'Moyenne', 'GeneralRank', 'BP_Count', 'Nukes', 'Carottes']].sort_values('Total', ascending=False), hide_index=True, use_container_width=True, column_config={
+            st.dataframe(full_stats[['Player', 'Total', 'Moyenne', 'BP_Count', 'Nukes', 'Carottes']].sort_values('Total', ascending=False), hide_index=True, use_container_width=True, column_config={
                 "Total": st.column_config.ProgressColumn("Total Pts", format="%d", min_value=0, max_value=full_stats['Total'].max()), 
                 "Moyenne": st.column_config.NumberColumn("Moyenne", format="%.1f"),
-                "GeneralRank": st.column_config.NumberColumn("Class. Gén.", format="#%d"),
                 "Carottes": st.column_config.NumberColumn("🥕", help="Scores < 20"),
                 "Nukes": st.column_config.NumberColumn("☢️", help="Scores > 50"),
                 "BP_Count": st.column_config.NumberColumn("🎯", help="Best Picks")
@@ -348,10 +329,12 @@ try:
             col_radar, col_stats = st.columns([1, 1])
             p_data = full_stats[full_stats['Player'] == sel_player].iloc[0]
             
-            # Calcul KPIs explicites
+            # Calcul Rank Interne (Dynamique)
+            sorted_team = full_stats.sort_values('Total', ascending=False).reset_index(drop=True)
+            internal_rank = sorted_team[sorted_team['Player'] == sel_player].index[0] + 1
+            nb_players = len(sorted_team)
+
             sniper_pct = (p_data['BP_Count'] / p_data['Games']) * 100
-            
-            # Dynamique = Moyenne 10 derniers vs Saison (plus réactif que 15j)
             form_10 = p_data['Last10']
             diff_form = form_10 - p_data['Moyenne']
             sign = "+" if diff_form > 0 else ""
@@ -370,14 +353,10 @@ try:
                 kpi_card("MOYENNE SAISON", f"{p_data['Moyenne']:.1f}", "PTS")
                 c1, c2 = st.columns(2)
                 
-                # Rank général si dispo, sinon N/A
-                rank_val = p_data['GeneralRank']
-                rank_str = f"#{rank_val}" if rank_val < 90000 else "N/A"
-                
-                with c1: kpi_card("CLASSEMENT GÉNÉRAL", rank_str, "TTFL INDIV", C_GOLD)
+                rank_col = C_GOLD if internal_rank == 1 else (C_SILVER if internal_rank == 2 else (C_BRONZE if internal_rank == 3 else "#FFF"))
+                with c1: kpi_card("CLASSEMENT TEAM", f"#{internal_rank}", f"SUR {nb_players}", rank_col)
                 with c2: kpi_card("BEST PICK", int(p_data['Best']), "RECORD")
                 
-                # NOUVEAUX BLOCS KPI CLAIRS
                 k1, k2, k3 = st.columns(3)
                 with k1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(sniper_pct)}%</div><div class='stat-mini-lbl'>SNIPER RATE</div><div class='stat-mini-sub'>% Best Pick</div></div>", unsafe_allow_html=True)
                 with k2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{form_10:.1f}</div><div class='stat-mini-lbl'>FORME (10j)</div><div class='stat-mini-sub'>Moyenne récente</div></div>", unsafe_allow_html=True)

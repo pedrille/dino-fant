@@ -23,8 +23,8 @@ C_GOLD = "#FFD700"
 C_GREEN = "#10B981"
 C_BLUE = "#3B82F6"
 C_PURPLE = "#8B5CF6"
-C_ALPHA = "#F472B6" # Rose Alpha Dog
-C_IRON = "#A1A1AA" # Gris Iron Man
+C_ALPHA = "#F472B6"
+C_IRON = "#A1A1AA"
 
 # --- 2. CSS PREMIUM ---
 st.markdown(f"""
@@ -65,14 +65,14 @@ st.markdown(f"""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 3. DATA ENGINE (V5.3 - PARSING CLASSEMENT CORRECT) ---
+# --- 3. DATA ENGINE (V5.4 - CIBLAGE LASER) ---
 @st.cache_data(ttl=300)
 def load_data():
     conn = st.connection("gsheets", type=GSheetsConnection)
     try:
         if "SPREADSHEET_URL" not in st.secrets: return None, None, None, None, [], {}
 
-        # --- A. ONGLET VALEURS ---
+        # --- A. VALEURS ---
         df_valeurs = conn.read(spreadsheet=st.secrets["SPREADSHEET_URL"], worksheet="Valeurs", header=None, ttl=0)
         
         pick_row_idx = 2
@@ -97,54 +97,58 @@ def load_data():
         bp_map = {int(picks_series[idx]): val for idx, val in bp_series.items() if idx in valid_map}
         daily_max_map = final_df.groupby('Pick')['Score'].max().to_dict()
 
-        # --- B. ONGLET STATS (CLASSEMENTS) ---
+        # --- B. STATS (NOUVELLE LOGIQUE DE CIBLAGE) ---
         df_stats = conn.read(spreadsheet=st.secrets["SPREADSHEET_URL"], worksheet="Stats_Raptors_FR", header=None, ttl=0)
         
         ranks_map = {}
         team_rank_history = []
         team_current_rank = 0
         
-        start_row_rank = -1
-        col_start_rank = -1
+        # 1. On cherche la cellule EXACTE contenant "Classement"
+        target_row_idx = -1
+        target_col_idx = -1
         
-        # 1. Trouver le bloc "Classement"
-        for r_idx, row in df_stats.iterrows():
-            for c_idx, val in enumerate(row):
-                if str(val).strip() == "Classement":
-                    start_row_rank = r_idx
-                    col_start_rank = c_idx
+        # Scan des 5 premières lignes (headers)
+        for r in range(min(5, len(df_stats))):
+            for c in range(len(df_stats.columns)):
+                if str(df_stats.iloc[r, c]).strip() == "Classement":
+                    target_row_idx = r
+                    target_col_idx = c
                     break
-            if start_row_rank != -1: break
+            if target_row_idx != -1: break
             
-        # 2. Scanner les joueurs sous le bloc "Classement"
-        if start_row_rank != -1:
-            # On scanne 20 lignes max en dessous
-            for i in range(start_row_rank+1, start_row_rank+25):
-                if i >= len(df_stats): break
+        # 2. Si trouvé, on descend dans cette colonne pour trouver les noms
+        if target_row_idx != -1:
+            # On scanne les lignes sous le header "Classement"
+            for i in range(target_row_idx + 1, len(df_stats)):
+                cell_val = str(df_stats.iloc[i, target_col_idx]).strip()
                 
-                p_name = str(df_stats.iloc[i, col_start_rank]).strip()
-                if p_name == "nan" or p_name == "": continue
+                # Si fin de tableau ou vide, on arrête
+                if cell_val == "nan" or cell_val == "": continue
                 
-                # On regarde toutes les colonnes à droite du nom pour trouver le dernier chiffre
-                # On prend large (ex: 20 colonnes à droite) pour capturer D1, D2, D3, D4...
-                hist_vals = df_stats.iloc[i, col_start_rank+1:col_start_rank+25].values
+                # Récupération des valeurs historiques à droite (D1, D2, etc.)
+                # On prend une tranche large à droite
+                row_values = df_stats.iloc[i, target_col_idx+1:].values
                 
-                # On filtre pour ne garder que les entiers valides > 0
-                valid_ranks = []
-                for x in hist_vals:
+                # On filtre pour garder les entiers > 0
+                valid_history = []
+                for x in row_values:
                     try:
-                        v = float(str(x).replace(',', '').replace(' ', '')) # Clean string if needed
-                        if v > 0: valid_ranks.append(int(v))
-                    except: continue
+                        # Nettoyage (virgules, espaces)
+                        clean_x = str(x).replace(',', '').replace(' ', '')
+                        val = float(clean_x)
+                        if val > 0: valid_history.append(int(val))
+                    except:
+                        pass
                 
-                if valid_ranks:
-                    last_rank = valid_ranks[-1] # Le dernier deck (ex: D4)
+                if valid_history:
+                    last_rank = valid_history[-1]
                     
-                    if "Team Raptors" in p_name:
+                    if "Team Raptors" in cell_val:
                         team_current_rank = last_rank
-                        team_rank_history = valid_ranks
+                        team_rank_history = valid_history
                     else:
-                        ranks_map[p_name] = last_rank
+                        ranks_map[cell_val] = last_rank
 
         return final_df, team_current_rank, bp_map, ranks_map, team_rank_history, daily_max_map
 
@@ -185,22 +189,21 @@ def compute_stats(df, bp_map, ranks_map, daily_max_map):
         l15_avg = avg_15.get(p, s_avg)
         progression_15 = l15_avg - s_avg
 
-        # Récupération du rang, défaut 99999 si pas trouvé
         g_rank = ranks_map.get(p, 0) 
-        if g_rank == 0: g_rank = 99999 # Pour trier en fin
+        if g_rank == 0: g_rank = 99999
 
         stats.append({
             'Player': p,
             'Total': scores.sum(),
             'Moyenne': scores.mean(),
-            'StdDev': scores.std(),
+            'StdDev': scores.std(), 
             'Best': scores.max(),
             'Worst': scores.min(),
-            'Last': scores[-1],
-            'Last5': last5_avg,
+            'Last': scores[-1], 
+            'Last5': last5_avg, 
             'Last15': scores[-15:].mean() if len(scores) >= 15 else scores.mean(),
             'Streak30': streak_30,
-            'Count30': len(scores[scores >= 30]),
+            'Count30': len(scores[scores >= 30]), 
             'Count40': len(scores[scores >= 40]),
             'Carottes': len(scores[scores < 20]),
             'Nukes': len(scores[scores >= 50]),
@@ -272,7 +275,7 @@ try:
             st.image("raptors-ttfl-min.png", use_container_width=True) 
             st.markdown("</div>", unsafe_allow_html=True)
             menu = option_menu(menu_title=None, options=["Dashboard", "Team HQ", "Player Lab", "Trends", "Hall of Fame", "Admin"], icons=["grid-fill", "people-fill", "person-bounding-box", "fire", "trophy-fill", "shield-lock"], default_index=0, styles={"container": {"padding": "0!important", "background-color": "#000000"}, "icon": {"color": "#666", "font-size": "1.1rem"}, "nav-link": {"font-family": "Rajdhani, sans-serif", "font-weight": "700", "font-size": "15px", "text-transform": "uppercase", "color": "#AAA", "text-align": "left", "margin": "5px 0px", "--hover-color": "#111"}, "nav-link-selected": {"background-color": C_ACCENT, "color": "#FFF", "icon-color": "#FFF", "box-shadow": "0px 4px 20px rgba(206, 17, 65, 0.4)"}})
-            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v5.3</div></div>""", unsafe_allow_html=True)
+            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v5.4</div></div>""", unsafe_allow_html=True)
 
         if menu == "Dashboard":
             section_title("RAPTORS <span class='highlight'>DASHBOARD</span>", f"Daily Briefing • Pick #{int(latest_pick)}")
@@ -351,7 +354,6 @@ try:
                 kpi_card("MOYENNE SAISON", f"{p_data['Moyenne']:.1f}", "PTS")
                 c1, c2 = st.columns(2)
                 
-                # FIX: Si rank > 90000 (non trouvé), on affiche N/A
                 rank_val = p_data['GeneralRank']
                 rank_str = f"#{rank_val}" if rank_val < 90000 else "N/A"
                 

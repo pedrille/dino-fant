@@ -294,7 +294,7 @@ try:
             st.image("raptors-ttfl-min.png", use_container_width=True) 
             st.markdown("</div>", unsafe_allow_html=True)
             menu = option_menu(menu_title=None, options=["Dashboard", "Team HQ", "Player Lab", "Bonus x2", "Trends", "Hall of Fame", "Admin"], icons=["grid-fill", "people-fill", "person-bounding-box", "lightning-charge-fill", "fire", "trophy-fill", "shield-lock"], default_index=0, styles={"container": {"padding": "0!important", "background-color": "#000000"}, "icon": {"color": "#666", "font-size": "1.1rem"}, "nav-link": {"font-family": "Rajdhani, sans-serif", "font-weight": "700", "font-size": "15px", "text-transform": "uppercase", "color": "#AAA", "text-align": "left", "margin": "5px 0px", "--hover-color": "#111"}, "nav-link-selected": {"background-color": C_ACCENT, "color": "#FFF", "icon-color": "#FFF", "box-shadow": "0px 4px 20px rgba(206, 17, 65, 0.4)"}})
-            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v9.5</div></div>""", unsafe_allow_html=True)
+            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v9.6</div></div>""", unsafe_allow_html=True)
 
         if menu == "Dashboard":
             section_title("RAPTORS <span class='highlight'>DASHBOARD</span>", f"Daily Briefing • Pick #{int(latest_pick)}")
@@ -429,13 +429,12 @@ try:
                     if hot.empty: h += "<div style='color:#666'>Aucune donnée</div>"
                     else:
                         for p, v in hot.head(3).items():
-                            vf = f"{v:.1f}" if isinstance(v, float) else str(int(v))
-                            # CORRECTION DE L'AFFICHAGE DES SIGNES
-                            if metric == "diff":
-                                if v > 0: vf = f"+{vf}"
-                            if metric == "pct":
-                                if v > 0: vf = f"+{vf}%"
-                                else: vf = f"{vf}%"
+                            val = float(v)
+                            if metric in ["diff", "pct"]:
+                                vf = f"{val:+.1f}"
+                            else:
+                                vf = f"{val:.1f}" if metric == "raw" else str(int(val))
+                            if metric == "pct": vf += "%"
                             h += f"<div class='t-row'><span class='t-name'>{p}</span><span class='t-val' style='color:{C_GREEN}'>{vf} <span style='font-size:0.8rem; color:#888'>{unit}</span></span></div>"
                     st.markdown(h+"</div>", unsafe_allow_html=True)
                 with c2:
@@ -443,9 +442,12 @@ try:
                     if cold.empty: h += "<div style='color:#666'>Aucune donnée</div>"
                     else:
                         for p, v in cold.head(3).items():
-                            vf = f"{v:.1f}" if isinstance(v, float) else str(int(v))
-                            # CORRECTION DE L'AFFICHAGE DES SIGNES
-                            if metric == "pct": vf = f"{vf}%"
+                            val = float(v)
+                            if metric in ["diff", "pct"]:
+                                vf = f"{val:+.1f}"
+                            else:
+                                vf = f"{val:.1f}" if metric == "raw" else str(int(val))
+                            if metric == "pct": vf += "%"
                             h += f"<div class='t-row'><span class='t-name'>{p}</span><span class='t-val' style='color:#F87171'>{vf} <span style='font-size:0.8rem; color:#888'>{unit}</span></span></div>"
                     st.markdown(h+"</div>", unsafe_allow_html=True)
                 st.markdown("<div style='margin-bottom:30px'></div>", unsafe_allow_html=True)

@@ -20,6 +20,8 @@ C_BG = "#050505"
 C_ACCENT = "#CE1141" # Raptors Red
 C_TEXT = "#E5E7EB"
 C_GOLD = "#FFD700"
+C_GREEN = "#10B981"
+C_BLUE = "#3B82F6"
 
 # --- 2. CSS PREMIUM (GLASSMORPHISM & TYPO) ---
 st.markdown(f"""
@@ -31,7 +33,21 @@ st.markdown(f"""
     
     /* SIDEBAR FIX */
     section[data-testid="stSidebar"] {{ background-color: #000000; border-right: 1px solid #222; }}
-    div[data-testid="stSidebarNav"] {{ display: none; }} /* Cache la nav par défaut si elle apparait */
+    
+    /* OPTION MENU HACK */
+    /* Supprime les bordures blanches et force le style sombre */
+    .nav-link {{
+        font-family: 'Rajdhani', sans-serif !important;
+        font-weight: 700 !important;
+        font-size: 1.2rem !important;
+        text-transform: uppercase !important;
+        letter-spacing: 1px !important;
+        margin: 5px 0 !important;
+    }}
+    .nav-link-selected {{
+        background-color: {C_ACCENT} !important;
+        color: #FFF !important;
+    }}
     
     /* HEADINGS */
     h1, h2, h3 {{ font-family: 'Rajdhani', sans-serif; text-transform: uppercase; margin: 0; }}
@@ -48,13 +64,22 @@ st.markdown(f"""
         background: linear-gradient(145deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%);
         backdrop-filter: blur(10px);
         border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 16px;
+        border-radius: 12px;
         padding: 20px;
         margin-bottom: 20px;
         transition: all 0.3s ease;
     }}
     .glass-card:hover {{ border-color: {C_ACCENT}; transform: translateY(-2px); box-shadow: 0 4px 20px rgba(206, 17, 65, 0.15); }}
 
+    /* VERSUS CARDS FOR TRENDS */
+    .vs-card {{
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 10px 0;
+        border-bottom: 1px solid rgba(255,255,255,0.05);
+    }}
+    .vs-card:last-child {{ border-bottom: none; }}
+    .vs-val {{ font-family: 'Rajdhani'; font-size: 1.5rem; font-weight: 700; }}
+    
     /* KPI BLOCKS */
     .kpi-container {{ text-align: center; }}
     .kpi-label {{ font-size: 0.75rem; color: #888; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }}
@@ -68,14 +93,6 @@ st.markdown(f"""
         font-family: 'Rajdhani'; font-size: 1.1rem;
     }}
     .ranking-row:last-child {{ border-bottom: none; }}
-    
-    /* TRENDS LIST */
-    .trend-item {{
-        display: flex; justify-content: space-between; align-items: center;
-        padding: 8px 0; border-bottom: 1px solid #222;
-    }}
-    .trend-item:last-child {{ border-bottom: none; }}
-    .trend-val {{ font-family: 'Rajdhani'; font-weight: 700; font-size: 1.2rem; }}
 
     /* BADGES HOF */
     .hof-badge {{
@@ -87,6 +104,7 @@ st.markdown(f"""
     /* CLEANUP STREAMLIT */
     .stPlotlyChart {{ width: 100% !important; }}
     div[data-testid="stDataFrame"] {{ border: none !important; }}
+    [data-testid="stSidebarUserContent"] {{ padding-top: 0rem; }}
 </style>
 """, unsafe_allow_html=True)
 
@@ -153,6 +171,29 @@ def compute_stats(df):
         })
     return pd.DataFrame(stats)
 
+def get_comparative_stats(df, current_pick, lookback=15):
+    """Calcule l'évolution sur les X derniers picks"""
+    # Point de départ
+    start_pick = max(1, current_pick - lookback)
+    
+    # Stats actuelles
+    current_stats = df.groupby('Player')['Score'].agg(['sum', 'mean'])
+    current_stats['rank'] = current_stats['sum'].rank(ascending=False)
+    
+    # Stats passées
+    df_past = df[df['Pick'] <= start_pick]
+    if df_past.empty: return pd.DataFrame() # Pas assez de recul
+    
+    past_stats = df_past.groupby('Player')['Score'].agg(['sum', 'mean'])
+    past_stats['rank'] = past_stats['sum'].rank(ascending=False)
+    
+    # Delta
+    stats_delta = pd.DataFrame(index=current_stats.index)
+    stats_delta['mean_diff'] = current_stats['mean'] - past_stats['mean']
+    stats_delta['rank_diff'] = past_stats['rank'] - current_stats['rank'] # Positif = gain de places
+    
+    return stats_delta
+
 # --- 4. DISCORD ---
 def send_discord_webhook(day_df, pick_num, url_app):
     if "DISCORD_WEBHOOK" not in st.secrets: return "missing_secret"
@@ -200,38 +241,35 @@ def kpi_card(label, value, sub, color="#FFF"):
 def section_title(title, subtitle):
     st.markdown(f"<h1>{title}</h1><div class='sub-header'>{subtitle}</div>", unsafe_allow_html=True)
 
-def trend_list_html(title, icon, data_list, value_key, is_good=True, val_suffix=""):
-    """Générateur de liste top 3 pour trends secondaires"""
-    color = "#4ADE80" if is_good else "#F87171" 
-    if title == "CASINO": color = "#A78BFA" 
-    if title == "ROBOTS": color = "#60A5FA" 
+def comparison_html(title, icon, data_series, is_positive_good=True, unit="", is_rank=False):
+    """Génère une carte de comparaison Top 3"""
+    color = C_GREEN if is_positive_good else C_BLUE # Vert pour positif, Bleu pour "Froid"
+    if not is_positive_good: color = C_ACCENT # Rouge pour négatif
     
-    html = f"<div class='glass-card'><div style='font-size:1.1rem; font-weight:bold; margin-bottom:10px; color:{color}'>{icon} {title}</div>"
-    if data_list.empty: html += "<div style='color:#666'>Pas de données</div>"
+    html = f"""
+    <div class="glass-card" style="height:100%">
+        <div style="display:flex; align-items:center; margin-bottom:15px; border-bottom:1px solid #333; padding-bottom:10px">
+            <span style="font-size:1.5rem; margin-right:10px">{icon}</span>
+            <span style="font-family:Rajdhani; font-weight:700; font-size:1.2rem; color:#FFF">{title}</span>
+        </div>
+    """
+    
+    if data_series.empty:
+        html += "<div style='color:#666'>Données insuffisantes</div>"
     else:
-        for name, val in data_list.items():
-            v_display = f"{val:.1f}" if isinstance(val, float) else f"{int(val)}"
-            html += f"<div class='trend-item'><span style='font-weight:600'>{name}</span><span class='trend-val' style='color:{color}'>{v_display}{val_suffix}</span></div>"
+        for player, val in data_series.items():
+            val_fmt = f"{val:.1f}" if isinstance(val, float) else f"{int(val)}"
+            if is_rank: val_fmt = f"+{int(val)}" if val > 0 else f"{int(val)}"
+            elif val > 0 and not is_rank: val_fmt = f"+{val_fmt}"
+            
+            html += f"""
+            <div class="vs-card">
+                <span style="font-weight:600; color:#EEE">{player}</span>
+                <span class="vs-val" style="color:{color}">{val_fmt}<span style="font-size:0.8rem; margin-left:2px">{unit}</span></span>
+            </div>
+            """
     html += "</div>"
     return html
-
-def trend_card_html(player, score, is_hot=True):
-    """Générateur de carte visuelle pour On Fire / Ice Cold"""
-    border_color = "#CE1141" if is_hot else "#3B82F6"
-    text_color = "#FFD700" if is_hot else "#A5F3FC"
-    icon = "🔥" if is_hot else "❄️"
-    
-    return f"""
-    <div class="glass-card" style="border-left: 4px solid {border_color}; padding: 15px; display:flex; justify-content:space-between; align-items:center;">
-        <div>
-            <div style="font-weight:bold; font-size:1.1rem; color:#FFF;">{player}</div>
-            <div style="font-size:0.75rem; color:#888; text-transform:uppercase;">Moyenne 7j</div>
-        </div>
-        <div style="text-align:right;">
-            <div style="font-family:Rajdhani; font-size:1.8rem; font-weight:700; color:{text_color};">{score:.1f}</div>
-        </div>
-    </div>
-    """
 
 # --- 6. MAIN APP ---
 try:
@@ -243,25 +281,26 @@ try:
         full_stats = compute_stats(df)
         leader = full_stats.sort_values('Total', ascending=False).iloc[0]
         
-        # --- SIDEBAR ---
+        # --- SIDEBAR 2.0 ---
         with st.sidebar:
-            # LOGO LOCAL (Doit être à la racine du repo)
-            st.image("raptors-ttfl-min.png", width=120) 
+            st.markdown("<br>", unsafe_allow_html=True) # Spacer
+            st.image("raptors-ttfl-min.png", use_container_width=True) # LOGO XXL
+            st.markdown("<br>", unsafe_allow_html=True)
             
-            # MENU STYLISÉ DARK
+            # MENU STYLISÉ
             menu = option_menu(
                 menu_title=None,
                 options=["Dashboard", "Team HQ", "Player Lab", "Trends", "Hall of Fame", "Admin"],
                 icons=["grid-fill", "people-fill", "person-bounding-box", "activity", "trophy-fill", "shield-lock"],
                 default_index=0,
                 styles={
-                    "container": {"padding": "0!important", "background-color": "#000000"},
-                    "icon": {"color": "#CE1141", "font-size": "18px"}, 
-                    "nav-link": {"font-family": "Rajdhani", "font-size": "16px", "text-align": "left", "margin": "0px", "color": "#9ca3af", "font-weight": "600"},
-                    "nav-link-selected": {"background-color": "#1f1f1f", "color": "#CE1141", "border-left": "3px solid #CE1141"},
+                    "container": {"padding": "0!important", "background-color": "transparent"},
+                    "icon": {"color": C_ACCENT, "font-size": "1.2rem"}, 
+                    "nav-link": {"background-color": "transparent", "margin": "0px", "--hover-color": "#222"},
+                    "nav-link-selected": {"background-color": "transparent", "color": C_ACCENT, "border-right": f"4px solid {C_ACCENT}"},
                 }
             )
-            st.markdown(f"<div style='text-align:center; color:#444; font-size:11px; margin-top:30px; font-family:Rajdhani'>PICK #{int(latest_pick)}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='text-align:center; color:#444; font-size:11px; margin-top:50px; font-family:Rajdhani; border-top:1px solid #222; padding-top:10px'>DATA PICK #{int(latest_pick)}</div>", unsafe_allow_html=True)
 
         # --- DASHBOARD ---
         if menu == "Dashboard":
@@ -326,43 +365,44 @@ try:
                     color = "#4ADE80" if s >= 30 else ("#F87171" if s < 20 else "#FFF")
                     cols[i].markdown(f"<div style='text-align:center; font-family:Rajdhani; font-weight:bold; color:{color}; border:1px solid #333; border-radius:8px; padding:5px'>{int(s)}</div>", unsafe_allow_html=True)
 
-        # --- TRENDS (REWORKED) ---
+        # --- TRENDS (NOUVELLE LOGIQUE COMPARATIVE) ---
         elif menu == "Trends":
-            section_title("MOMENTUM <span class='highlight'>TRACKER</span>", "Les forces en présence")
+            section_title("MOMENTUM <span class='highlight'>TRACKER</span>", "Analyses comparatives sur 15 jours")
             
-            # 1. DATA PREP
-            # Last 7 Picks
-            df_7 = df[df['Pick'] > (latest_pick - 7)]
-            avg_7 = df_7.groupby('Player')['Score'].mean().sort_values(ascending=False)
-            top_hot = avg_7.head(3)
-            top_cold = avg_7.tail(3).sort_values(ascending=True) # Les pires d'abord
-
-            # Last 15 days stats
+            # Calculs Delta
+            delta_df = get_comparative_stats(df, latest_pick, lookback=15)
             df_15 = df[df['Pick'] > (latest_pick - 15)]
-            cnt_40 = df_15[df_15['Score'] >= 40].groupby('Player').size().sort_values(ascending=False).head(3)
-            cnt_20 = df_15[df_15['Score'] < 20].groupby('Player').size().sort_values(ascending=False).head(3)
-            volatile = full_stats.set_index('Player')['StdDev'].sort_values(ascending=False).head(3)
-            stable = full_stats.set_index('Player')['StdDev'].sort_values(ascending=True).head(3)
-
-            # 2. AFFICHAGE CARTES (Top 3 Hot / Cold)
-            c_hot, c_cold = st.columns(2)
-            with c_hot:
-                st.markdown("### 🔥 ON FIRE (Last 7)")
-                for p, val in top_hot.items():
-                    st.markdown(trend_card_html(p, val, is_hot=True), unsafe_allow_html=True)
-            with c_cold:
-                st.markdown("### ❄️ ICE COLD (Last 7)")
-                for p, val in top_cold.items():
-                    st.markdown(trend_card_html(p, val, is_hot=False), unsafe_allow_html=True)
-
-            st.markdown("---")
             
-            # 3. AFFICHAGE COMPARATIFS
-            c1, c2, c3, c4 = st.columns(4)
-            with c1: st.markdown(trend_list_html("HEAVY HITTERS", "🚀", cnt_40, "Count", True, " picks >40"), unsafe_allow_html=True)
-            with c2: st.markdown(trend_list_html("CARROT FARMERS", "🥕", cnt_20, "Count", False, " picks <20"), unsafe_allow_html=True)
-            with c3: st.markdown(trend_list_html("CASINO", "🎰", volatile, "StdDev", False, ""), unsafe_allow_html=True)
-            with c4: st.markdown(trend_list_html("ROBOTS", "🤖", stable, "StdDev", True, ""), unsafe_allow_html=True)
+            # 1. PROGRESSION MOYENNE (Gain vs Perte)
+            avg_gain = delta_df['mean_diff'].sort_values(ascending=False).head(3)
+            avg_loss = delta_df['mean_diff'].sort_values(ascending=True).head(3)
+            
+            # 2. EVOLUTION CLASSEMENT (Remontada vs Chute)
+            rank_gain = delta_df['rank_diff'].sort_values(ascending=False).head(3) # Ceux qui ont le plus gros chiffre positif
+            rank_loss = delta_df['rank_diff'].sort_values(ascending=True).head(3) # Ceux qui ont le chiffre négatif
+            
+            # 3. NUKES VS CAROTTES (Volume sur 15j)
+            nuke_cnt = df_15[df_15['Score'] >= 50].groupby('Player').size().sort_values(ascending=False).head(3)
+            carrot_cnt = df_15[df_15['Score'] < 20].groupby('Player').size().sort_values(ascending=False).head(3)
+
+            # --- LIGNE 1 : FORME MOYENNE ---
+            c1, c2 = st.columns(2)
+            with c1: st.markdown(comparison_html("MOMENTUM (Pts Moy)", "🚀", avg_gain, True, " pts"), unsafe_allow_html=True)
+            with c2: st.markdown(comparison_html("DOWNSWING (Pts Moy)", "📉", avg_loss, False, " pts"), unsafe_allow_html=True)
+            
+            st.markdown("<br>", unsafe_allow_html=True)
+
+            # --- LIGNE 2 : CLASSEMENT ---
+            c3, c4 = st.columns(2)
+            with c3: st.markdown(comparison_html("LA REMONTADA (Places)", "🧗", rank_gain, True, " places", is_rank=True), unsafe_allow_html=True)
+            with c4: st.markdown(comparison_html("LA CHUTE (Places)", "🪂", rank_loss, False, " places", is_rank=True), unsafe_allow_html=True)
+            
+            st.markdown("<br>", unsafe_allow_html=True)
+
+            # --- LIGNE 3 : EXPLOSIVITÉ ---
+            c5, c6 = st.columns(2)
+            with c5: st.markdown(comparison_html("ATOMIC BOMBS (>50pts)", "☢️", nuke_cnt, True, " nukes"), unsafe_allow_html=True)
+            with c6: st.markdown(comparison_html("CARROT FIELD (<20pts)", "🥕", carrot_cnt, False, " carottes"), unsafe_allow_html=True)
 
         # --- HALL OF FAME ---
         elif menu == "Hall of Fame":

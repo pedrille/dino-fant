@@ -27,8 +27,8 @@ C_BLUE = "#3B82F6"
 C_PURPLE = "#8B5CF6"
 C_ALPHA = "#F472B6"
 C_IRON = "#A1A1AA"
-C_BONUS = "#06B6D4" # Cyan
-C_PURE = "#14B8A6" # Teal
+C_BONUS = "#06B6D4"
+C_PURE = "#14B8A6"
 C_ORANGE = "#F97316"
 
 # --- 2. CSS PREMIUM ---
@@ -74,7 +74,7 @@ st.markdown(f"""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 3. DATA ENGINE ---
+# --- 3. DATA ENGINE (CALCULS CORRIGÉS) ---
 @st.cache_data(ttl=300)
 def load_data():
     conn = st.connection("gsheets", type=GSheetsConnection)
@@ -100,11 +100,13 @@ def load_data():
         df_clean = df_players[cols].copy().rename(columns=valid_map)
         df_long = df_clean.melt(id_vars=['Player'], var_name='Pick', value_name='ScoreRaw')
         
-        # BONUS LOGIC
+        # LOGIQUE BONUS (LE RETOUR)
         df_long['IsBonus'] = df_long['ScoreRaw'].str.contains(r'\*', na=False)
         df_long['ScoreClean'] = df_long['ScoreRaw'].str.replace(r'\*', '', regex=True)
         df_long['ScoreVal'] = pd.to_numeric(df_long['ScoreClean'], errors='coerce')
-        df_long['Score'] = df_long['ScoreVal'] # Score final affiché dans gsheet
+        
+        # IMPORTANT : Score = Valeur lue * 2 si bonus (car le csv contient la base, ex: 54*)
+        df_long['Score'] = np.where(df_long['IsBonus'], df_long['ScoreVal'] * 2, df_long['ScoreVal'])
         
         df_long['Pick'] = pd.to_numeric(df_long['Pick'], errors='coerce')
         final_df = df_long.dropna(subset=['Score', 'Pick'])
@@ -153,12 +155,10 @@ def compute_stats(df, bp_map, daily_max_map):
     stats = []
     latest_pick = df['Pick'].max()
     
-    # Moyenne Saison (Final Score)
+    # Moyenne Saison (Sur Score final doublé)
     season_avgs = df.groupby('Player')['Score'].mean()
-    # Moyenne Raw (Score/2 si bonus)
-    # On crée une colonne virtuelle pour le raw
-    df['ScorePure'] = np.where(df['IsBonus'], df['Score']/2, df['Score'])
-    season_avgs_raw = df.groupby('Player')['ScorePure'].mean()
+    # Moyenne Raw (Sur ScoreVal, la base)
+    season_avgs_raw = df.groupby('Player')['ScoreVal'].mean()
     
     df_15 = df[df['Pick'] > (latest_pick - 15)]
     avg_15 = df_15.groupby('Player')['Score'].mean()
@@ -167,8 +167,8 @@ def compute_stats(df, bp_map, daily_max_map):
 
     for p in df['Player'].unique():
         d = df[df['Player'] == p].sort_values('Pick')
-        scores = d['Score'].values
-        scores_pure = d['ScorePure'].values
+        scores = d['Score'].values     # Scores finaux (avec x2)
+        scores_raw = d['ScoreVal'].values # Scores de base
         picks = d['Pick'].values
         bonuses = d['IsBonus'].values
         
@@ -188,8 +188,8 @@ def compute_stats(df, bp_map, daily_max_map):
             if pick_num in bp_map and score >= bp_map[pick_num] and score > 0: bp_count += 1
             if pick_num in daily_max_map and score >= daily_max_map[pick_num] and score > 0: alpha_count += 1
             if bonuses[i]: 
-                # Gain = Score - ScorePure (ex: 108 - 54 = 54)
-                gain = score - scores_pure[i]
+                # Score = 108. Raw = 54. Gain = 54.
+                gain = score - scores_raw[i]
                 bonus_points_gained += gain
                 bonus_scores_list.append(score)
         
@@ -213,9 +213,9 @@ def compute_stats(df, bp_map, daily_max_map):
             'Moyenne_Raw': s_avg_raw,
             'StdDev': scores.std(), 
             'Best': scores.max(),
-            'Best_Raw': scores_pure.max(),
+            'Best_Raw': scores_raw.max(),
             'Worst': scores.min(),
-            'Worst_Raw': scores_pure.min(),
+            'Worst_Raw': scores_raw.min(),
             'Last': scores[-1], 
             'LastIsBonus': bonuses[-1] if len(bonuses) > 0 else False,
             'Last5': last5_avg, 
@@ -297,7 +297,7 @@ try:
             st.image("raptors-ttfl-min.png", use_container_width=True) 
             st.markdown("</div>", unsafe_allow_html=True)
             menu = option_menu(menu_title=None, options=["Dashboard", "Team HQ", "Player Lab", "Bonus x2", "Trends", "Hall of Fame", "Admin"], icons=["grid-fill", "people-fill", "person-bounding-box", "lightning-charge-fill", "fire", "trophy-fill", "shield-lock"], default_index=0, styles={"container": {"padding": "0!important", "background-color": "#000000"}, "icon": {"color": "#666", "font-size": "1.1rem"}, "nav-link": {"font-family": "Rajdhani, sans-serif", "font-weight": "700", "font-size": "15px", "text-transform": "uppercase", "color": "#AAA", "text-align": "left", "margin": "5px 0px", "--hover-color": "#111"}, "nav-link-selected": {"background-color": C_ACCENT, "color": "#FFF", "icon-color": "#FFF", "box-shadow": "0px 4px 20px rgba(206, 17, 65, 0.4)"}})
-            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v8.6</div></div>""", unsafe_allow_html=True)
+            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v8.7</div></div>""", unsafe_allow_html=True)
 
         if menu == "Dashboard":
             section_title("RAPTORS <span class='highlight'>DASHBOARD</span>", f"Daily Briefing • Pick #{int(latest_pick)}")
@@ -468,16 +468,16 @@ try:
             sniper_bp = full_stats.sort_values('BP_Count', ascending=False).iloc[0]
             alpha_dog = full_stats.sort_values('Alpha_Count', ascending=False).iloc[0]
             alchemist = full_stats.sort_values('Bonus_Gained', ascending=False).iloc[0]
-            bad_business = full_stats.sort_values('Bonus_Gained', ascending=True).iloc[0]
             jackpot = full_stats.sort_values('Best_Bonus', ascending=False).iloc[0]
+            
+            # Crash Test : Pire Bonus (Eviter 0)
             has_bonus = full_stats[full_stats['Worst_Bonus'] > 0]
             crash_test = has_bonus.sort_values('Worst_Bonus', ascending=True).iloc[0] if not has_bonus.empty else full_stats.iloc[0]
+            
             pure_peak = full_stats.sort_values('Best_Raw', ascending=False).iloc[0]
             pure_avg = full_stats.sort_values('Moyenne_Raw', ascending=False).iloc[0]
             zen_master = full_stats.sort_values('ReliabilityPct', ascending=False).iloc[0]
             brick_layer = full_stats.sort_values('Worst_Raw', ascending=True).iloc[0]
-            ice_cube = full_stats.sort_values('Last15', ascending=True).iloc[0]
-            anchor = full_stats.sort_values('ProgressionPct', ascending=True).iloc[0]
 
             def hof_card(title, icon, color, p_name, val, unit, desc):
                 return f"""<div class="glass-card" style="position:relative; overflow:hidden"><div style="position:absolute; right:-10px; top:-10px; font-size:5rem; opacity:0.05; pointer-events:none">{icon}</div><div class="hof-badge" style="color:{color}; border:1px solid {color}">{icon} {title}</div><div style="display:flex; justify-content:space-between; align-items:flex-end;"><div><div class="hof-player">{p_name}</div><div style="font-size:0.8rem; color:#888; margin-top:4px">{desc}</div></div><div><div class="hof-stat" style="color:{color}">{val}</div><div class="hof-unit">{unit}</div></div></div></div>"""
@@ -493,19 +493,15 @@ try:
                 st.markdown(hof_card("THE CEILING", "🏔️", "#A78BFA", peak['Player'], int(peak['Best']), "PTS MAX", "Record de points sur un seul match (Bonus inclus)"), unsafe_allow_html=True)
                 st.markdown(hof_card("PURE SCORER", "🏀", "#F472B6", pure_peak['Player'], int(pure_peak['Best_Raw']), "PTS MAX (BRUT)", "Plus gros score réalisé sans bonus"), unsafe_allow_html=True)
                 st.markdown(hof_card("THE ALCHEMIST", "⚗️", C_BONUS, alchemist['Player'], int(alchemist['Bonus_Gained']), "PTS BONUS", "Plus grand nombre de points gagnés grâce aux bonus"), unsafe_allow_html=True)
-                st.markdown(hof_card("JACKPOT", "🎰", C_GREEN, jackpot['Player'], int(jackpot['Best_Bonus']), "PTS MAX (X2)", "Le plus gros score réalisé avec un bonus"), unsafe_allow_html=True)
-                st.markdown(hof_card("ZEN MASTER", "🧘", "#EAB308", zen_master['Player'], f"{int(zen_master['ReliabilityPct'])}%", "FIABILITÉ", "Plus haut % de matchs sans carotte"), unsafe_allow_html=True)
 
             with c2:
-                st.markdown(hof_card("THE ROCK", "🛡️", C_GREEN, rock['Player'], int(rock['Count30']), "MATCHS", "Nombre de scores > 30 pts (Assurance tous risques)"), unsafe_allow_html=True)
+                st.markdown(hof_card("JACKPOT", "🎰", C_GREEN, jackpot['Player'], int(jackpot['Best_Bonus']), "PTS MAX (X2)", "Le plus gros score réalisé avec un bonus"), unsafe_allow_html=True)
+                st.markdown(hof_card("ZEN MASTER", "🧘", "#EAB308", zen_master['Player'], f"{int(zen_master['ReliabilityPct'])}%", "FIABILITÉ", "Plus haut % de matchs sans carotte"), unsafe_allow_html=True)
                 st.markdown(hof_card("HEAVY HITTER", "🥊", "#64B5F6", heavy['Player'], int(heavy['Count40']), "PICKS >40", "Nombre de scores supérieurs à 40 points"), unsafe_allow_html=True)
                 st.markdown(hof_card("NUCLEAR", "☢️", "#EF4444", nuke['Player'], int(nuke['Nukes']), "BOMBS", "Nombre de scores supérieurs à 50 points"), unsafe_allow_html=True)
+                st.markdown(hof_card("THE ROCK", "🛡️", C_GREEN, rock['Player'], int(rock['Count30']), "MATCHS", "Nombre de scores > 30 pts (Assurance tous risques)"), unsafe_allow_html=True)
                 st.markdown(hof_card("UNSTOPPABLE", "⚡", "#FBBF24", intouch['Player'], int(intouch['Streak30']), "SERIE", "Plus longue série de matchs consécutifs > 30 pts"), unsafe_allow_html=True)
-                st.markdown(hof_card("ICE CUBE", "🥶", "#60A5FA", ice_cube['Player'], f"{ice_cube['Last15']:.1f}", "PTS / 15J", "Moyenne la plus froide sur les 15 derniers jours"), unsafe_allow_html=True)
-                st.markdown(hof_card("THE ANCHOR", "⚓", "#94A3B8", anchor['Player'], f"{anchor['ProgressionPct']:.1f}%", "REGRESSION", "Plus forte baisse (Moy. 15j vs Saison)"), unsafe_allow_html=True)
-                st.markdown(hof_card("THE FLOOR", "🧱", "#9CA3AF", floor['Player'], int(floor['Worst']), "PTS MIN", "Score le plus bas enregistré cette saison (Bonus inclus)"), unsafe_allow_html=True)
                 st.markdown(hof_card("THE BRICK", "🏗️", "#71717A", brick_layer['Player'], int(brick_layer['Worst_Raw']), "PTS MIN (BRUT)", "Score le plus bas enregistré sans bonus"), unsafe_allow_html=True)
-                st.markdown(hof_card("BAD BUSINESS", "💸", "#666", bad_business['Player'], int(bad_business['Bonus_Gained']), "PTS BONUS", "Le moins de points gagnés grâce aux bonus"), unsafe_allow_html=True)
                 st.markdown(hof_card("CRASH TEST", "💥", C_ORANGE, crash_test['Player'], int(crash_test['Worst_Bonus']), "PTS MIN (X2)", "Le pire score réalisé avec un bonus"), unsafe_allow_html=True)
                 st.markdown(hof_card("THE FARMER", "🥕", "#F97316", lapin['Player'], int(lapin['Carottes']), "CAROTTES", "Nombre de scores inférieurs à 20 points"), unsafe_allow_html=True)
 

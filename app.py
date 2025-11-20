@@ -197,6 +197,7 @@ def compute_stats(df, bp_map, daily_max_map):
         
         best_bonus = max(bonus_scores_list) if bonus_scores_list else 0
         worst_bonus = min(bonus_scores_list) if bonus_scores_list else 0
+        avg_bonus_score = np.mean(bonus_scores_list) if bonus_scores_list else 0
         
         s_avg = season_avgs.get(p, 0)
         s_avg_raw = season_avgs_raw.get(p, 0)
@@ -233,6 +234,7 @@ def compute_stats(df, bp_map, daily_max_map):
             'Bonus_Gained': bonus_points_gained,
             'Best_Bonus': best_bonus,
             'Worst_Bonus': worst_bonus,
+            'Avg_Bonus': avg_bonus_score,
             'Momentum': momentum,
             'Games': len(scores),
             'ProgressionPct': progression_pct,
@@ -299,23 +301,10 @@ try:
             st.image("raptors-ttfl-min.png", use_container_width=True) 
             st.markdown("</div>", unsafe_allow_html=True)
             menu = option_menu(menu_title=None, options=["Dashboard", "Team HQ", "Player Lab", "Bonus x2", "Trends", "Hall of Fame", "Admin"], icons=["grid-fill", "people-fill", "person-bounding-box", "lightning-charge-fill", "fire", "trophy-fill", "shield-lock"], default_index=0, styles={"container": {"padding": "0!important", "background-color": "#000000"}, "icon": {"color": "#666", "font-size": "1.1rem"}, "nav-link": {"font-family": "Rajdhani, sans-serif", "font-weight": "700", "font-size": "15px", "text-transform": "uppercase", "color": "#AAA", "text-align": "left", "margin": "5px 0px", "--hover-color": "#111"}, "nav-link-selected": {"background-color": C_ACCENT, "color": "#FFF", "icon-color": "#FFF", "box-shadow": "0px 4px 20px rgba(206, 17, 65, 0.4)"}})
-            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v9.9</div></div>""", unsafe_allow_html=True)
+            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v10.0 Final</div></div>""", unsafe_allow_html=True)
             
-            # SCRIPT JS POUR FERMER SIDEBAR AU CLIC (TENTATIVE UX)
-            components.html("""
-                <script>
-                    const options = window.parent.document.querySelectorAll('.nav-link');
-                    options.forEach((option) => {
-                        option.addEventListener('click', () => {
-                            const sidebar = window.parent.document.querySelector('section[data-testid="stSidebar"]');
-                            if (sidebar) {
-                                // Il est difficile de forcer la fermeture sans trigger un bouton, 
-                                // mais ceci est le hook si nous voulons ajouter un comportement plus tard.
-                            }
-                        });
-                    });
-                </script>
-            """, height=0, width=0)
+            # SCRIPT JS POUR FERMER SIDEBAR
+            components.html("""<script>const options = window.parent.document.querySelectorAll('.nav-link'); options.forEach((option) => { option.addEventListener('click', () => { const sidebar = window.parent.document.querySelector('section[data-testid="stSidebar"]'); if (sidebar) {} }); });</script>""", height=0, width=0)
 
         if menu == "Dashboard":
             section_title("RAPTORS <span class='highlight'>DASHBOARD</span>", f"Daily Briefing • Pick #{int(latest_pick)}")
@@ -324,7 +313,7 @@ try:
             with c1: kpi_card("MVP DU JOUR", top['Player'], f"{int(top['Score'])} PTS", C_GOLD)
             with c2: kpi_card("MOYENNE TEAM", int(day_df['Score'].mean()), "POINTS")
             
-            # NOUVELLE STAT : PERFORMANCE JOUR VS MOY SAISON
+            # STAT : PERFORMANCE JOUR VS MOY SAISON
             team_daily_avg = day_df['Score'].mean()
             team_season_avg = df['Score'].mean()
             diff_perf = ((team_daily_avg - team_season_avg) / team_season_avg) * 100
@@ -381,41 +370,92 @@ try:
         elif menu == "Player Lab":
             section_title("PLAYER <span class='highlight'>LAB</span>", "Deep Dive Analytics")
             sel_player = st.selectbox("Sélectionner un joueur", sorted(df['Player'].unique()))
-            col_radar, col_stats = st.columns([1, 1])
             p_data = full_stats[full_stats['Player'] == sel_player].iloc[0]
             sorted_team = full_stats.sort_values('Total', ascending=False).reset_index(drop=True)
             internal_rank = sorted_team[sorted_team['Player'] == sel_player].index[0] + 1
             nb_players = len(sorted_team)
-            sniper_pct = (p_data['BP_Count'] / p_data['Games']) * 100
-            form_10 = p_data['Last10']
-            diff_form = form_10 - p_data['Moyenne']
-            sign = "+" if diff_form > 0 else ""
-            color_diff = C_GREEN if diff_form > 0 else "#F87171"
+            
+            # --- HEADER ---
+            c1, c2, c3, c4 = st.columns(4)
+            with c1: kpi_card("TOTAL POINTS", int(p_data['Total']), "SAISON")
+            with c2: kpi_card("MOYENNE", f"{p_data['Moyenne']:.1f}", "PTS / PICK")
+            rank_col = C_GOLD if internal_rank == 1 else (C_SILVER if internal_rank == 2 else (C_BRONZE if internal_rank == 3 else "#FFF"))
+            with c3: kpi_card("CLASSEMENT", f"#{internal_rank}", f"SUR {nb_players}", rank_col)
+            with c4: kpi_card("BEST SCORE", int(p_data['Best']), "RECORD", C_GOLD)
+
+            # --- MAIN GRID ---
+            st.markdown("<br>", unsafe_allow_html=True)
+            col_radar, col_stats = st.columns([1, 2])
+            
             with col_radar:
+                st.markdown("<div class='glass-card' style='height:100%; display:flex; flex-direction:column; justify-content:center;'>", unsafe_allow_html=True)
                 max_avg = full_stats['Moyenne'].max(); max_best = full_stats['Best'].max(); max_last5 = full_stats['Last5'].max(); max_nukes = full_stats['Nukes'].max()
                 reg_score = 100 - ((p_data['StdDev'] / full_stats['StdDev'].max()) * 100)
                 r_vals = [(p_data['Moyenne'] / max_avg) * 100, (p_data['Best'] / max_best) * 100, (p_data['Last5'] / max_last5) * 100, reg_score, (p_data['Nukes'] / (max_nukes if max_nukes > 0 else 1)) * 100]
                 r_cats = ['SCORING', 'EXPLOSIVITÉ', 'FORME', 'RÉGULARITÉ', 'CLUTCH']
                 fig_radar = go.Figure(data=go.Scatterpolar(r=r_vals + [r_vals[0]], theta=r_cats + [r_cats[0]], fill='toself', line_color=C_ACCENT, fillcolor="rgba(206, 17, 65, 0.3)"))
-                fig_radar.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 100], showticklabels=False, linecolor='#333'), bgcolor='rgba(0,0,0,0)'), paper_bgcolor='rgba(0,0,0,0)', font=dict(color='white', size=12, family="Rajdhani"), margin=dict(t=20, b=20))
-                st.markdown("<div class='glass-card'>", unsafe_allow_html=True); st.plotly_chart(fig_radar, use_container_width=True); st.markdown("</div>", unsafe_allow_html=True)
+                fig_radar.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 100], showticklabels=False, linecolor='#333'), bgcolor='rgba(0,0,0,0)'), paper_bgcolor='rgba(0,0,0,0)', font=dict(color='white', size=12, family="Rajdhani"), margin=dict(t=20, b=20, l=20, r=20), height=280)
+                st.plotly_chart(fig_radar, use_container_width=True)
+                st.markdown("</div>", unsafe_allow_html=True)
+
             with col_stats:
-                kpi_card("MOYENNE SAISON", f"{p_data['Moyenne']:.1f}", "PTS")
-                c1, c2 = st.columns(2)
-                rank_col = C_GOLD if internal_rank == 1 else (C_SILVER if internal_rank == 2 else (C_BRONZE if internal_rank == 3 else "#FFF"))
-                with c1: kpi_card("CLASSEMENT TEAM", f"#{internal_rank}", f"SUR {nb_players}", rank_col)
-                with c2: kpi_card("BEST PICK", int(p_data['Best']), "RECORD")
-                k1, k2, k3 = st.columns(3)
-                with k1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(sniper_pct)}%</div><div class='stat-mini-lbl'>SNIPER RATE</div><div class='stat-mini-sub'>% Best Pick</div></div>", unsafe_allow_html=True)
-                with k2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{form_10:.1f}</div><div class='stat-mini-lbl'>FORME (10j)</div><div class='stat-mini-sub'>Moyenne récente</div></div>", unsafe_allow_html=True)
-                with k3: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{color_diff}'>{sign}{diff_form:.1f}</div><div class='stat-mini-lbl'>DYNAMIQUE</div><div class='stat-mini-sub'>vs Moy. Saison</div></div>", unsafe_allow_html=True)
-                st.markdown("#### 🔥 10 DERNIERS MATCHS")
-                p_hist = df[df['Player'] == sel_player].sort_values('Pick').tail(10)
-                cols = st.columns(10)
-                for i, (idx, r) in enumerate(p_hist.iterrows()):
-                    s = r['Score']; is_b = r['IsBonus']; c = "#4ADE80" if s >= 40 else ("#F87171" if s < 20 else "#FFF")
-                    border = f"2px solid {C_BONUS}" if is_b else "1px solid rgba(255,255,255,0.1)"
-                    cols[i].markdown(f"<div style='text-align:center; font-family:Rajdhani; font-size:0.9rem; font-weight:800; color:{c}; background:rgba(255,255,255,0.05); border:{border}; border-radius:6px; padding:6px 2px'>{int(s)}</div>", unsafe_allow_html=True)
+                # PERFORMANCE MATRIX 3x3
+                r1c1, r1c2, r1c3 = st.columns(3)
+                with r1c1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(p_data['ReliabilityPct'])}%</div><div class='stat-mini-lbl'>FIABILITÉ</div><div class='stat-mini-sub'>% Picks > 20pts</div></div>", unsafe_allow_html=True)
+                with r1c2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(p_data['Nukes'])}</div><div class='stat-mini-lbl'>NUKES</div><div class='stat-mini-sub'>Scores > 50pts</div></div>", unsafe_allow_html=True)
+                with r1c3: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:#F87171'>{int(p_data['Carottes'])}</div><div class='stat-mini-lbl'>CAROTTES</div><div class='stat-mini-sub'>Scores < 20pts</div></div>", unsafe_allow_html=True)
+                
+                st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
+                
+                r2c1, r2c2, r2c3 = st.columns(3)
+                sniper_rate = (p_data['BP_Count'] / p_data['Games']) * 100 if p_data['Games'] > 0 else 0
+                with r2c1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(sniper_rate)}%</div><div class='stat-mini-lbl'>SNIPER RATE</div><div class='stat-mini-sub'>% Best Pick</div></div>", unsafe_allow_html=True)
+                with r2c2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{p_data['Avg_Bonus']:.1f}</div><div class='stat-mini-lbl'>BONUS EFF.</div><div class='stat-mini-sub'>Moyenne sous x2</div></div>", unsafe_allow_html=True)
+                with r2c3: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(p_data['Count40'])}</div><div class='stat-mini-lbl'>HEAVY HITS</div><div class='stat-mini-sub'>Scores > 40pts</div></div>", unsafe_allow_html=True)
+
+                st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
+                
+                r3c1, r3c2, r3c3 = st.columns(3)
+                diff_form = p_data['Last10'] - p_data['Moyenne']
+                sign = "+" if diff_form > 0 else ""
+                col_form = C_GREEN if diff_form > 0 else "#F87171"
+                with r3c1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{p_data['Last10']:.1f}</div><div class='stat-mini-lbl'>FORME (10j)</div><div class='stat-mini-sub'>Moyenne récente</div></div>", unsafe_allow_html=True)
+                with r3c2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{col_form}'>{sign}{diff_form:.1f}</div><div class='stat-mini-lbl'>DYNAMIQUE</div><div class='stat-mini-sub'>vs Moy. Saison</div></div>", unsafe_allow_html=True)
+                with r3c3: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(p_data['Worst'])}</div><div class='stat-mini-lbl'>FLOOR</div><div class='stat-mini-sub'>Pire Score</div></div>", unsafe_allow_html=True)
+
+            # --- CHARTS ROW ---
+            c_dist, c_trend = st.columns(2)
+            p_hist_all = df[df['Player'] == sel_player]
+            
+            with c_dist:
+                st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
+                st.markdown("#### 📊 DISTRIBUTION DES SCORES", unsafe_allow_html=True)
+                fig_hist = px.histogram(p_hist_all, x="Score", nbins=15, color_discrete_sequence=[C_ACCENT])
+                fig_hist.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, margin=dict(l=0, r=0, t=30, b=0), height=200, xaxis_title=None, yaxis_title=None)
+                st.plotly_chart(fig_hist, use_container_width=True)
+                st.markdown("</div>", unsafe_allow_html=True)
+
+            with c_trend:
+                st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
+                st.markdown("#### 📈 TENDANCE (15 DERNIERS MATCHS)", unsafe_allow_html=True)
+                last_15_data = p_hist_all.sort_values('Pick').tail(15)
+                if not last_15_data.empty:
+                    fig_trend = px.scatter(last_15_data, x="Pick", y="Score", trendline="lowess", trendline_color_override=C_GOLD)
+                    fig_trend.update_traces(marker_color=C_ACCENT, marker_size=8)
+                    fig_trend.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, margin=dict(l=0, r=0, t=30, b=0), height=200, xaxis_title=None, yaxis_title=None)
+                    st.plotly_chart(fig_trend, use_container_width=True)
+                else:
+                    st.info("Pas assez de données")
+                st.markdown("</div>", unsafe_allow_html=True)
+
+            # --- HISTORY ROW ---
+            st.markdown("#### 🔥 10 DERNIERS MATCHS")
+            p_hist = p_hist_all.sort_values('Pick').tail(10)
+            cols = st.columns(10)
+            for i, (idx, r) in enumerate(p_hist.iterrows()):
+                s = r['Score']; is_b = r['IsBonus']; c = "#4ADE80" if s >= 40 else ("#F87171" if s < 20 else "#FFF")
+                border = f"2px solid {C_BONUS}" if is_b else "1px solid rgba(255,255,255,0.1)"
+                cols[i].markdown(f"<div style='text-align:center; font-family:Rajdhani; font-size:0.9rem; font-weight:800; color:{c}; background:rgba(255,255,255,0.05); border:{border}; border-radius:6px; padding:6px 2px'>{int(s)}</div>", unsafe_allow_html=True)
 
         elif menu == "Bonus x2":
             section_title("BONUS <span class='highlight'>ZONE</span>", "Analyse des Jokers x2")
@@ -457,7 +497,6 @@ try:
                     else:
                         for p, v in hot.head(3).items():
                             val = float(v)
-                            # LOGIQUE CORRIGÉE DU SIGNE +
                             if metric in ["diff", "pct"]:
                                 if val > 0: vf = f"+{val:.1f}"
                                 else: vf = f"{val:.1f}"
@@ -473,12 +512,8 @@ try:
                     else:
                         for p, v in cold.head(3).items():
                             val = float(v)
-                            # LOGIQUE CORRIGÉE DU SIGNE +
                             if metric in ["diff", "pct"]:
-                                # Ici normalement ce sont des valeurs négatives ou faibles, 
-                                # on laisse Python gérer le signe négatif, on ne force pas le +
-                                if val > 0: vf = f"+{val:.1f}" 
-                                else: vf = f"{val:.1f}"
+                                vf = f"{val:.1f}"
                             else:
                                 vf = f"{val:.1f}" if metric == "raw" else str(int(val))
 
@@ -508,13 +543,9 @@ try:
             alpha_dog = full_stats.sort_values('Alpha_Count', ascending=False).iloc[0]
             alchemist = full_stats.sort_values('Bonus_Gained', ascending=False).iloc[0]
             
-            # REMPLACEMENT DU DOUBLON JACKPOT PAR BAD BUSINESS
             bad_business = full_stats.sort_values('Bonus_Gained', ascending=True).iloc[0]
-            
-            # Crash Test : Pire Bonus (Eviter 0)
             has_bonus = full_stats[full_stats['Worst_Bonus'] > 0]
             crash_test = has_bonus.sort_values('Worst_Bonus', ascending=True).iloc[0] if not has_bonus.empty else full_stats.iloc[0]
-            
             pure_peak = full_stats.sort_values('Best_Raw', ascending=False).iloc[0]
             pure_avg = full_stats.sort_values('Moyenne_Raw', ascending=False).iloc[0]
             zen_master = full_stats.sort_values('ReliabilityPct', ascending=False).iloc[0]

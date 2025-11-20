@@ -20,8 +20,8 @@ C_BG = "#050505"
 C_ACCENT = "#CE1141" # Raptors Red
 C_TEXT = "#E5E7EB"
 C_GOLD = "#FFD700"
-C_SILVER = "#C0C0C0" # AJOUTÉ (Manquait)
-C_BRONZE = "#CD7F32" # AJOUTÉ (Manquait)
+C_SILVER = "#C0C0C0"
+C_BRONZE = "#CD7F32"
 C_GREEN = "#10B981"
 C_BLUE = "#3B82F6"
 C_PURPLE = "#8B5CF6"
@@ -78,9 +78,8 @@ def load_data():
     try:
         if "SPREADSHEET_URL" not in st.secrets: return None, None, None, None, []
 
-        # --- A. VALEURS ---
+        # A. VALEURS
         df_valeurs = conn.read(spreadsheet=st.secrets["SPREADSHEET_URL"], worksheet="Valeurs", header=None, ttl=0)
-        
         pick_row_idx = 2
         picks_series = pd.to_numeric(df_valeurs.iloc[pick_row_idx, 1:], errors='coerce')
         bp_row = df_valeurs[df_valeurs[0].astype(str).str.contains("Score BP", na=False)]
@@ -89,8 +88,6 @@ def load_data():
         df_players = df_valeurs.iloc[pick_row_idx+1:pick_row_idx+50].copy().rename(columns={0: 'Player'})
         stop = ["Team Raptors", "Score BP", "Classic", "BP", "nan", "Moyenne", "Somme"]
         df_players = df_players[~df_players['Player'].astype(str).isin(stop)].dropna(subset=['Player'])
-        
-        # NETTOYAGE DES NOMS (TRIM)
         df_players['Player'] = df_players['Player'].astype(str).str.strip()
 
         valid_map = {idx: int(val) for idx, val in picks_series.items() if pd.notna(val) and val > 0}
@@ -102,16 +99,13 @@ def load_data():
         df_long['Score'] = pd.to_numeric(df_long['Score'], errors='coerce')
         df_long['Pick'] = pd.to_numeric(df_long['Pick'], errors='coerce')
         final_df = df_long.dropna(subset=['Score', 'Pick'])
-        
-        # NETTOYAGE FINAL DF
         final_df['Player'] = final_df['Player'].astype(str).str.strip()
         
         bp_map = {int(picks_series[idx]): val for idx, val in bp_series.items() if idx in valid_map}
         daily_max_map = final_df.groupby('Pick')['Score'].max().to_dict()
 
-        # --- B. STATS (TEAM ONLY) ---
+        # B. STATS
         df_stats = conn.read(spreadsheet=st.secrets["SPREADSHEET_URL"], worksheet="Stats_Raptors_FR", header=None, ttl=0)
-        
         team_rank_history = []
         team_current_rank = 0
         start_row_rank = -1
@@ -213,26 +207,32 @@ def get_comparative_stats(df, current_pick, lookback=15):
     stats_delta['rank_diff'] = past_stats['rank'] - current_stats['rank'] 
     return stats_delta
 
-# --- 4. DISCORD ---
-def send_discord_webhook(day_df, pick_num, url_app, team_rank):
+# --- 4. DISCORD (V6.6 - TTFL FRIENDLY) ---
+def send_discord_webhook(day_df, pick_num, url_app):
     if "DISCORD_WEBHOOK" not in st.secrets: return "missing_secret"
     webhook_url = st.secrets["DISCORD_WEBHOOK"]
+    
     top_3 = day_df.head(3).reset_index(drop=True)
     podium_text = ""
     medals = ["🥇", "🥈", "🥉"]
     for i, row in top_3.iterrows():
         podium_text += f"{medals[i]} **{row['Player']}** • {int(row['Score'])} pts\n"
+    
     avg_score = int(day_df['Score'].mean())
-    rank_txt = f"#{int(team_rank)}" if team_rank > 0 else "N/A"
+
+    # Nouveau Message "TTFL Friendly"
     data = {
-        "username": "Raptors Intelligence",
+        "username": "Raptors Bot 🦖",
         "avatar_url": "https://cdn-icons-png.flaticon.com/512/2592/2592242.png", 
         "embeds": [{
-            "title": f"🦖 DEBRIEF • PICK #{int(pick_num)}",
-            "description": f"Rapport officiel.\n\n**MOYENNE TEAM :** `{avg_score} pts`\n**CLASSEMENT :** `{rank_txt}`",
+            "title": f"🏀 RECAP DU PICK #{int(pick_num)}",
+            "description": f"Les matchs sont terminés, voici les scores du clan !\n\n📊 **MOYENNE TEAM :** `{avg_score} pts`",
             "color": 13504833,
-            "fields": [{"name": "🏆 PODIUM", "value": podium_text, "inline": False}, {"name": "🔗 LIEN", "value": f"[Dashboard]({url_app})", "inline": False}],
-            "footer": {"text": "Raptors Elite System"}
+            "fields": [
+                {"name": "🏆 LE PODIUM", "value": podium_text, "inline": False},
+                {"name": "", "value": f"👉 [Voir tous les détails sur le Dashboard]({url_app})", "inline": False}
+            ],
+            "footer": {"text": "Raptors TTFL • We The North"}
         }]
     }
     try: requests.post(webhook_url, json=data); return "success"
@@ -259,7 +259,7 @@ try:
             st.image("raptors-ttfl-min.png", use_container_width=True) 
             st.markdown("</div>", unsafe_allow_html=True)
             menu = option_menu(menu_title=None, options=["Dashboard", "Team HQ", "Player Lab", "Trends", "Hall of Fame", "Admin"], icons=["grid-fill", "people-fill", "person-bounding-box", "fire", "trophy-fill", "shield-lock"], default_index=0, styles={"container": {"padding": "0!important", "background-color": "#000000"}, "icon": {"color": "#666", "font-size": "1.1rem"}, "nav-link": {"font-family": "Rajdhani, sans-serif", "font-weight": "700", "font-size": "15px", "text-transform": "uppercase", "color": "#AAA", "text-align": "left", "margin": "5px 0px", "--hover-color": "#111"}, "nav-link-selected": {"background-color": C_ACCENT, "color": "#FFF", "icon-color": "#FFF", "box-shadow": "0px 4px 20px rgba(206, 17, 65, 0.4)"}})
-            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v6.5</div></div>""", unsafe_allow_html=True)
+            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v6.6</div></div>""", unsafe_allow_html=True)
 
         if menu == "Dashboard":
             section_title("RAPTORS <span class='highlight'>DASHBOARD</span>", f"Daily Briefing • Pick #{int(latest_pick)}")
@@ -422,8 +422,8 @@ try:
                 st.markdown(hof_card("THE SNIPER", "🎯", C_PURPLE, sniper_bp['Player'], int(sniper_bp['BP_Count']), "BEST PICKS", "Plus grand nombre de 'Best Pick' TTFL trouvés"), unsafe_allow_html=True)
                 st.markdown(hof_card("ALPHA DOG", "🐺", C_ALPHA, alpha_dog['Player'], int(alpha_dog['Alpha_Count']), "TOPS TEAM", "Plus grand nombre de fois meilleur scoreur de l'équipe"), unsafe_allow_html=True)
                 st.markdown(hof_card("HUMAN TORCH", "🔥", "#FF5252", torche['Player'], f"{torche['Last15']:.1f}", "PTS / 15J", "Meilleure moyenne sur les 15 derniers jours"), unsafe_allow_html=True)
-                st.markdown(hof_card("THE CEILING", "🏔️", "#A78BFA", peak['Player'], int(peak['Best']), "PTS MAX", "Record de points sur un seul match"), unsafe_allow_html=True)
                 st.markdown(hof_card("RISING STAR", "🚀", C_GREEN, progression['Player'], f"+{progression['Progression15']:.1f}", "PTS GAIN", "Plus forte progression (Moy. 15j vs Saison)"), unsafe_allow_html=True)
+                st.markdown(hof_card("THE CEILING", "🏔️", "#A78BFA", peak['Player'], int(peak['Best']), "PTS MAX", "Record de points sur un seul match"), unsafe_allow_html=True)
             with c2:
                 st.markdown(hof_card("NUCLEAR", "☢️", "#EF4444", nuke['Player'], int(nuke['Nukes']), "BOMBS", "Nombre de scores supérieurs à 50 points"), unsafe_allow_html=True)
                 st.markdown(hof_card("HEAVY HITTER", "🥊", "#64B5F6", heavy['Player'], int(heavy['Count40']), "PICKS >40", "Nombre de scores supérieurs à 40 points"), unsafe_allow_html=True)
@@ -454,7 +454,7 @@ try:
                 with c2:
                     st.markdown("<div class='glass-card'><h4>📡 DISCORD</h4>", unsafe_allow_html=True)
                     if st.button("🚀 ENVOYER RAPPORT", type="primary"):
-                        res = send_discord_webhook(day_df, latest_pick, "https://dino-fant-tvewyye4t3dmqfeuvqsvmg.streamlit.app/", team_rank)
+                        res = send_discord_webhook(day_df, latest_pick, "https://dino-fant-tvewyye4t3dmqfeuvqsvmg.streamlit.app/")
                         if res == "success": st.success("✅ Envoyé !")
                         else: st.error(f"Erreur : {res}")
                     st.markdown("</div>", unsafe_allow_html=True)

@@ -79,6 +79,12 @@ st.markdown(f"""
     .stPlotlyChart {{ width: 100% !important; }}
     div[data-testid="stDataFrame"] {{ border: none !important; }}
     [data-testid="stSidebarUserContent"] {{ padding-top: 2rem; }}
+    
+    /* SPECIAL HQ CARDS */
+    .hq-card-row {{ display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid rgba(255,255,255,0.1); }}
+    .hq-card-row:last-child {{ border-bottom:none; }}
+    .hq-val {{ font-family:'Rajdhani'; font-weight:800; font-size:1.8rem; color:#FFF; }}
+    .hq-lbl {{ font-size:0.8rem; color:#AAA; text-transform:uppercase; display:flex; align-items:center; gap:8px; }}
 </style>
 """, unsafe_allow_html=True)
 
@@ -274,7 +280,6 @@ def send_discord_webhook(day_df, pick_num, url_app):
         "avatar_url": DISCORD_AVATAR_URL, 
         "embeds": [{
             "title": f"🏀 RECAP DU PICK #{int(pick_num)}",
-            # MODIFICATION DEMANDEE : Remplacement de "clan" par "l'équipe"
             "description": f"Les matchs sont terminés, voici les scores de l'équipe !\n\n📊 **MOYENNE TEAM :** `{avg_score} pts`",
             "color": 13504833,
             "fields": [{"name": "🏆 LE PODIUM", "value": podium_text, "inline": False}, {"name": "", "value": f"👉 [Voir tous les détails sur le Dashboard]({url_app})", "inline": False}],
@@ -305,7 +310,7 @@ try:
             st.image("raptors-ttfl-min.png", use_container_width=True) 
             st.markdown("</div>", unsafe_allow_html=True)
             menu = option_menu(menu_title=None, options=["Dashboard", "Team HQ", "Player Lab", "Bonus x2", "Trends", "Hall of Fame", "Admin"], icons=["grid-fill", "people-fill", "person-bounding-box", "lightning-charge-fill", "fire", "trophy-fill", "shield-lock"], default_index=0, styles={"container": {"padding": "0!important", "background-color": "#000000"}, "icon": {"color": "#666", "font-size": "1.1rem"}, "nav-link": {"font-family": "Rajdhani, sans-serif", "font-weight": "700", "font-size": "15px", "text-transform": "uppercase", "color": "#AAA", "text-align": "left", "margin": "5px 0px", "--hover-color": "#111"}, "nav-link-selected": {"background-color": C_ACCENT, "color": "#FFF", "icon-color": "#FFF", "box-shadow": "0px 4px 20px rgba(206, 17, 65, 0.4)"}})
-            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v11.1 Final</div></div>""", unsafe_allow_html=True)
+            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v11.2 Final</div></div>""", unsafe_allow_html=True)
             
             # SCRIPT JS POUR FERMER SIDEBAR
             components.html("""<script>const options = window.parent.document.querySelectorAll('.nav-link'); options.forEach((option) => { option.addEventListener('click', () => { const sidebar = window.parent.document.querySelector('section[data-testid="stSidebar"]'); if (sidebar) {} }); });</script>""", height=0, width=0)
@@ -316,11 +321,9 @@ try:
             c1, c2, c3, c4 = st.columns(4)
             with c1: kpi_card("MVP DU JOUR", top['Player'], f"{int(top['Score'])} PTS", C_GOLD)
             
-            # TOTAL TEAM JOUR
             total_day = day_df['Score'].sum()
             with c2: kpi_card("TOTAL TEAM JOUR", int(total_day), "POINTS")
             
-            # PERF TEAM JOUR
             team_daily_avg = day_df['Score'].mean()
             team_season_avg = df['Score'].mean()
             diff_perf = ((team_daily_avg - team_season_avg) / team_season_avg) * 100
@@ -354,43 +357,68 @@ try:
         elif menu == "Team HQ":
             section_title("TEAM <span class='highlight'>HQ</span>", "Vue d'ensemble de l'effectif")
             
-            # --- NEW: TEAM STATS MATRIX (3x3) ---
-            # Calculs globaux
+            # Calculs globaux Team
             total_pts_season = df['Score'].sum()
-            daily_scores_agg = df.groupby('Pick')['Score'].sum()
-            avg_daily_total = daily_scores_agg.mean()
-            best_daily_score = daily_scores_agg.max()
+            daily_agg = df.groupby('Pick')['Score'].sum()
+            best_night = daily_agg.max()
+            worst_night = daily_agg.min()
+            avg_night = daily_agg.mean()
             
             total_nukes_team = len(df[df['Score'] >= 50])
             total_carrots_team = len(df[df['Score'] < 20])
             total_bonus_played = len(df[df['IsBonus'] == True])
+            total_picks_played = len(df) # Nombre total de picks joués par tous les joueurs
             
             current_rank_disp = f"#{int(team_rank)}" if team_rank > 0 else "-"
             best_rank_ever = f"#{min(team_history)}" if len(team_history) > 0 else "-"
-
-            # Row 1
-            t1, t2, t3 = st.columns(3)
-            with t1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_GOLD}'>{int(total_pts_season)}</div><div class='stat-mini-lbl'>TOTAL SAISON</div><div class='stat-mini-sub'>Points Cumulés</div></div>", unsafe_allow_html=True)
-            with t2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(avg_daily_total)}</div><div class='stat-mini-lbl'>MOYENNE SOIR</div><div class='stat-mini-sub'>Pts / Soirée</div></div>", unsafe_allow_html=True)
-            with t3: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(best_daily_score)}</div><div class='stat-mini-lbl'>RECORD TEAM</div><div class='stat-mini-sub'>Meilleure Soirée</div></div>", unsafe_allow_html=True)
-            st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
-            
-            # Row 2
-            t4, t5, t6 = st.columns(3)
-            with t4: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_ACCENT}'>{total_nukes_team}</div><div class='stat-mini-lbl'>TOTAL NUKES</div><div class='stat-mini-sub'>Scores > 50pts</div></div>", unsafe_allow_html=True)
-            with t5: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_ORANGE}'>{total_carrots_team}</div><div class='stat-mini-lbl'>TOTAL CAROTTES</div><div class='stat-mini-sub'>Scores < 20pts</div></div>", unsafe_allow_html=True)
-            with t6: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_BONUS}'>{total_bonus_played}</div><div class='stat-mini-lbl'>BONUS JOUÉS</div><div class='stat-mini-sub'>Total Équipe</div></div>", unsafe_allow_html=True)
-            st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
-            
-            # Row 3
-            t7, t8, t9 = st.columns(3)
-            with t7: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{best_rank_ever}</div><div class='stat-mini-lbl'>MEILLEUR RANG</div><div class='stat-mini-sub'>Historique</div></div>", unsafe_allow_html=True)
-            with t8: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{current_rank_disp}</div><div class='stat-mini-lbl'>RANG ACTUEL</div><div class='stat-mini-sub'>Classement Général</div></div>", unsafe_allow_html=True)
-            
-            # Efficience du bonus global (Moyenne des points marqués sous bonus par l'équipe)
             bonus_df = df[df['IsBonus'] == True]
             avg_bonus_team = bonus_df['Score'].mean() if not bonus_df.empty else 0
-            with t9: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{avg_bonus_team:.1f}</div><div class='stat-mini-lbl'>EFFICIENCE</div><div class='stat-mini-sub'>Moyenne sous Bonus</div></div>", unsafe_allow_html=True)
+
+            # --- NOUVELLE MISE EN PAGE 60/40 ---
+            c_stats, c_info = st.columns([3, 2])
+
+            with c_stats:
+                # 3x3 MATRIX
+                r1c1, r1c2, r1c3 = st.columns(3)
+                with r1c1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_GOLD}'>{int(total_pts_season)}</div><div class='stat-mini-lbl'>TOTAL SAISON</div><div class='stat-mini-sub'>Points Cumulés</div></div>", unsafe_allow_html=True)
+                with r1c2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_BONUS}'>{total_bonus_played}</div><div class='stat-mini-lbl'>BONUS JOUÉS</div><div class='stat-mini-sub'>Total Équipe</div></div>", unsafe_allow_html=True)
+                with r1c3: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{avg_bonus_team:.1f}</div><div class='stat-mini-lbl'>EFFICIENCE</div><div class='stat-mini-sub'>Moyenne sous Bonus</div></div>", unsafe_allow_html=True)
+                st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
+                
+                r2c1, r2c2, r2c3 = st.columns(3)
+                with r2c1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_ACCENT}'>{total_nukes_team}</div><div class='stat-mini-lbl'>TOTAL NUKES</div><div class='stat-mini-sub'>Sur {total_picks_played} picks</div></div>", unsafe_allow_html=True)
+                with r2c2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_ORANGE}'>{total_carrots_team}</div><div class='stat-mini-lbl'>TOTAL CAROTTES</div><div class='stat-mini-sub'>Sur {total_picks_played} picks</div></div>", unsafe_allow_html=True)
+                with r2c3: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(len(df)/30)}</div><div class='stat-mini-lbl'>MATCHS JOUÉS</div><div class='stat-mini-sub'>Jours de compétition</div></div>", unsafe_allow_html=True) # Approx
+                st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
+                
+                r3c1, r3c2, r3c3 = st.columns(3)
+                with r3c1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{best_rank_ever}</div><div class='stat-mini-lbl'>MEILLEUR RANG</div><div class='stat-mini-sub'>Historique</div></div>", unsafe_allow_html=True)
+                with r3c2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{current_rank_disp}</div><div class='stat-mini-lbl'>RANG ACTUEL</div><div class='stat-mini-sub'>Classement Général</div></div>", unsafe_allow_html=True)
+                with r3c3: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{len(df['Player'].unique())}</div><div class='stat-mini-lbl'>ROSTER</div><div class='stat-mini-sub'>Joueurs Actifs</div></div>", unsafe_allow_html=True)
+
+            with c_info:
+                # VERTICAL CARD FOR RECORDS
+                st.markdown(f"""
+                <div class="glass-card" style="height:100%; display:flex; flex-direction:column; justify-content:space-around; padding:20px;">
+                    <div style="text-align:center; margin-bottom:15px; font-family:Rajdhani; font-weight:700; font-size:1.2rem; color:#AAA; letter-spacing:2px; border-bottom:1px solid #333; padding-bottom:10px;">PERFORMANCES COLLECTIVES</div>
+                    
+                    <div class="hq-card-row">
+                        <div class="hq-lbl">🚀 PLAFOND <span style="font-size:0.6rem; color:#666">(RECORD)</span></div>
+                        <div class="hq-val" style="color:{C_GREEN}">{int(best_night)}</div>
+                    </div>
+                    
+                    <div class="hq-card-row">
+                        <div class="hq-lbl">⚖️ MOYENNE <span style="font-size:0.6rem; color:#666">(SAISON)</span></div>
+                        <div class="hq-val">{int(avg_night)}</div>
+                    </div>
+                    
+                    <div class="hq-card-row">
+                        <div class="hq-lbl">🧱 PLANCHER <span style="font-size:0.6rem; color:#666">(PIRE SOIR)</span></div>
+                        <div class="hq-val" style="color:{C_ACCENT}">{int(worst_night)}</div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+
             st.markdown("<div style='margin-bottom:30px'></div>", unsafe_allow_html=True)
 
             if len(team_history) > 1:
@@ -401,17 +429,13 @@ try:
                 fig_h.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, yaxis=dict(autorange="reversed", gridcolor='#222'), xaxis=dict(showgrid=False))
                 st.plotly_chart(fig_h, use_container_width=True)
             
-            # --- TEAM DYNAMIC (TOTAL SCORES) ---
             st.markdown("### 📈 DYNAMIQUE TEAM (15 DERNIERS MATCHS)")
-            # Sum scores by Pick to get Daily Total
             team_daily_totals = df.groupby('Pick')['Score'].sum().reset_index()
             last_15_team = team_daily_totals[team_daily_totals['Pick'] > (latest_pick - 15)]
-            # Average of the daily totals over the season
             team_season_avg_total = team_daily_totals['Score'].mean()
             
             fig_team_trend = px.line(last_15_team, x='Pick', y='Score', markers=True)
             fig_team_trend.update_traces(line_color=C_ACCENT, line_width=3, marker_size=8)
-            # Add Average Line for Totals
             fig_team_trend.add_hline(y=team_season_avg_total, line_dash="dot", line_color=C_TEXT, annotation_text="Moy. Totaux Saison", annotation_position="bottom right")
             fig_team_trend.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, yaxis=dict(gridcolor='#222'), xaxis=dict(showgrid=False))
             st.plotly_chart(fig_team_trend, use_container_width=True)

@@ -294,7 +294,7 @@ try:
             st.image("raptors-ttfl-min.png", use_container_width=True) 
             st.markdown("</div>", unsafe_allow_html=True)
             menu = option_menu(menu_title=None, options=["Dashboard", "Team HQ", "Player Lab", "Bonus x2", "Trends", "Hall of Fame", "Admin"], icons=["grid-fill", "people-fill", "person-bounding-box", "lightning-charge-fill", "fire", "trophy-fill", "shield-lock"], default_index=0, styles={"container": {"padding": "0!important", "background-color": "#000000"}, "icon": {"color": "#666", "font-size": "1.1rem"}, "nav-link": {"font-family": "Rajdhani, sans-serif", "font-weight": "700", "font-size": "15px", "text-transform": "uppercase", "color": "#AAA", "text-align": "left", "margin": "5px 0px", "--hover-color": "#111"}, "nav-link-selected": {"background-color": C_ACCENT, "color": "#FFF", "icon-color": "#FFF", "box-shadow": "0px 4px 20px rgba(206, 17, 65, 0.4)"}})
-            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v9.7</div></div>""", unsafe_allow_html=True)
+            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v9.8</div></div>""", unsafe_allow_html=True)
 
         if menu == "Dashboard":
             section_title("RAPTORS <span class='highlight'>DASHBOARD</span>", f"Daily Briefing • Pick #{int(latest_pick)}")
@@ -431,7 +431,8 @@ try:
                         for p, v in hot.head(3).items():
                             val = float(v)
                             if metric in ["diff", "pct"]:
-                                vf = f"{val:+.1f}"
+                                if val > 0: vf = f"+{val:.1f}"
+                                else: vf = f"{val:.1f}"
                             else:
                                 vf = f"{val:.1f}" if metric == "raw" else str(int(val))
                             
@@ -445,7 +446,7 @@ try:
                         for p, v in cold.head(3).items():
                             val = float(v)
                             if metric in ["diff", "pct"]:
-                                vf = f"{val:+.1f}"
+                                vf = f"{val:.1f}"
                             else:
                                 vf = f"{val:.1f}" if metric == "raw" else str(int(val))
 

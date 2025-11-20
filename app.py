@@ -23,7 +23,7 @@ C_GOLD = "#FFD700"
 C_GREEN = "#10B981"
 C_BLUE = "#3B82F6"
 C_PURPLE = "#8B5CF6"
-C_IRON = "#A1A1AA" # Gris Metal pour Iron Man
+C_IRON = "#A1A1AA"
 
 # --- 2. CSS PREMIUM ---
 st.markdown(f"""
@@ -89,30 +89,26 @@ st.markdown(f"""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 3. DATA ENGINE (V5 - ADVANCED PARSING) ---
-@st.cache_data(ttl=300) # 5 min cache
+# --- 3. DATA ENGINE ---
+@st.cache_data(ttl=300)
 def load_data():
     conn = st.connection("gsheets", type=GSheetsConnection)
     try:
-        if "SPREADSHEET_URL" not in st.secrets: return None, None, None, None
+        if "SPREADSHEET_URL" not in st.secrets: return None, None, None, None, []
 
-        # --- A. ONGLET VALEURS (SCORES) ---
+        # --- A. ONGLET VALEURS ---
         df_valeurs = conn.read(spreadsheet=st.secrets["SPREADSHEET_URL"], worksheet="Valeurs", header=None, ttl=0)
         
-        # 1. Structure de base
         pick_row_idx = 2
         picks_series = pd.to_numeric(df_valeurs.iloc[pick_row_idx, 1:], errors='coerce')
         
-        # 2. Score BP
         bp_row = df_valeurs[df_valeurs[0].astype(str).str.contains("Score BP", na=False)]
         bp_series = pd.to_numeric(bp_row.iloc[0, 1:], errors='coerce') if not bp_row.empty else pd.Series()
         
-        # 3. Joueurs
         df_players = df_valeurs.iloc[pick_row_idx+1:pick_row_idx+50].copy().rename(columns={0: 'Player'})
         stop = ["Team Raptors", "Score BP", "Classic", "BP", "nan", "Moyenne", "Somme"]
         df_players = df_players[~df_players['Player'].astype(str).isin(stop)].dropna(subset=['Player'])
         
-        # 4. Clean DF
         valid_map = {idx: int(val) for idx, val in picks_series.items() if pd.notna(val) and val > 0}
         cols = ['Player'] + list(valid_map.keys())
         cols = [c for c in cols if c in df_players.columns]
@@ -125,17 +121,13 @@ def load_data():
         
         bp_map = {int(picks_series[idx]): val for idx, val in bp_series.items() if idx in valid_map}
 
-        # --- B. ONGLET STATS (CLASSEMENTS & HISTORY) ---
+        # --- B. ONGLET STATS ---
         df_stats = conn.read(spreadsheet=st.secrets["SPREADSHEET_URL"], worksheet="Stats_Raptors_FR", header=None, ttl=0)
         
-        # 1. Extraction Classement Indiv & Team
-        # On repère le bloc "Classement" (Colonne ~AJ/AK)
-        # On va scanner pour trouver les lignes
-        ranks_map = {} # {Player: LastRank}
+        ranks_map = {}
         team_rank_history = []
         team_current_rank = 0
         
-        # Recherche dynamique des blocs
         start_row_rank = -1
         col_start_rank = -1
         
@@ -148,21 +140,17 @@ def load_data():
             if start_row_rank != -1: break
             
         if start_row_rank != -1:
-            # On lit les lignes sous "Classement"
-            for i in range(start_row_rank+1, start_row_rank+20): # Scan 20 lignes
+            for i in range(start_row_rank+1, start_row_rank+20):
                 if i >= len(df_stats): break
                 p_name = str(df_stats.iloc[i, col_start_rank])
-                
-                # Récupération de la série historique (colonnes suivantes)
                 hist_vals = df_stats.iloc[i, col_start_rank+1:].values
-                # On nettoie les valeurs (garde que les nombres)
                 nums = [x for x in hist_vals if isinstance(x, (int, float, np.number)) and not pd.isna(x) and x > 0]
                 
                 if nums:
                     last_rank = nums[-1]
                     if p_name == "Team Raptors":
                         team_current_rank = last_rank
-                        team_rank_history = nums # Historique complet
+                        team_rank_history = nums
                     else:
                         ranks_map[p_name] = last_rank
 
@@ -172,7 +160,6 @@ def load_data():
 
 def compute_stats(df, bp_map, ranks_map):
     stats = []
-    # Pour le Rising Star (15j vs Saison)
     latest_pick = df['Pick'].max()
     season_avgs = df.groupby('Player')['Score'].mean()
     
@@ -198,19 +185,23 @@ def compute_stats(df, bp_map, ranks_map):
             if pick_num in bp_map and score >= bp_map[pick_num] and score > 0:
                 bp_count += 1
         
-        # Rising Star Metric (15j delta)
         s_avg = season_avgs.get(p, 0)
         l15_avg = avg_15.get(p, s_avg)
         progression_15 = l15_avg - s_avg
 
+        # --- FIX: Ajout des clés manquantes (Count30, Last5, StdDev, Last) ---
         stats.append({
             'Player': p,
             'Total': scores.sum(),
             'Moyenne': scores.mean(),
+            'StdDev': scores.std(), # RE-ADDED
             'Best': scores.max(),
             'Worst': scores.min(),
+            'Last': scores[-1], # RE-ADDED
+            'Last5': last5_avg, # RE-ADDED
             'Last15': scores[-15:].mean() if len(scores) >= 15 else scores.mean(),
             'Streak30': streak_30,
+            'Count30': len(scores[scores >= 30]), # RE-ADDED
             'Count40': len(scores[scores >= 40]),
             'Carottes': len(scores[scores < 20]),
             'Nukes': len(scores[scores >= 50]),
@@ -218,7 +209,7 @@ def compute_stats(df, bp_map, ranks_map):
             'Momentum': momentum,
             'Games': len(scores),
             'Progression15': progression_15,
-            'GeneralRank': ranks_map.get(p, 9999) # Rank indiv
+            'GeneralRank': ranks_map.get(p, 9999)
         })
     return pd.DataFrame(stats)
 
@@ -281,7 +272,7 @@ try:
             st.image("raptors-ttfl-min.png", use_container_width=True) 
             st.markdown("</div>", unsafe_allow_html=True)
             menu = option_menu(menu_title=None, options=["Dashboard", "Team HQ", "Player Lab", "Trends", "Hall of Fame", "Admin"], icons=["grid-fill", "people-fill", "person-bounding-box", "fire", "trophy-fill", "shield-lock"], default_index=0, styles={"container": {"padding": "0!important", "background-color": "#000000"}, "icon": {"color": "#666", "font-size": "1.1rem"}, "nav-link": {"font-family": "Rajdhani, sans-serif", "font-weight": "700", "font-size": "15px", "text-transform": "uppercase", "color": "#AAA", "text-align": "left", "margin": "5px 0px", "--hover-color": "#111"}, "nav-link-selected": {"background-color": C_ACCENT, "color": "#FFF", "icon-color": "#FFF", "box-shadow": "0px 4px 20px rgba(206, 17, 65, 0.4)"}})
-            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v5.0</div></div>""", unsafe_allow_html=True)
+            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v5.1</div></div>""", unsafe_allow_html=True)
 
         if menu == "Dashboard":
             section_title("RAPTORS <span class='highlight'>DASHBOARD</span>", f"Daily Briefing • Pick #{int(latest_pick)}")
@@ -317,8 +308,6 @@ try:
 
         elif menu == "Team HQ":
             section_title("TEAM <span class='highlight'>HQ</span>", "Vue d'ensemble de l'effectif")
-            
-            # GRAPHIQUE HISTORIQUE CLASSEMENT
             if len(team_history) > 1:
                 st.markdown("### 📈 ÉVOLUTION DU CLASSEMENT")
                 hist_df = pd.DataFrame({'Deck': range(1, len(team_history)+1), 'Rank': team_history})

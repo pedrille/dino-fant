@@ -301,7 +301,7 @@ try:
             st.image("raptors-ttfl-min.png", use_container_width=True) 
             st.markdown("</div>", unsafe_allow_html=True)
             menu = option_menu(menu_title=None, options=["Dashboard", "Team HQ", "Player Lab", "Bonus x2", "Trends", "Hall of Fame", "Admin"], icons=["grid-fill", "people-fill", "person-bounding-box", "lightning-charge-fill", "fire", "trophy-fill", "shield-lock"], default_index=0, styles={"container": {"padding": "0!important", "background-color": "#000000"}, "icon": {"color": "#666", "font-size": "1.1rem"}, "nav-link": {"font-family": "Rajdhani, sans-serif", "font-weight": "700", "font-size": "15px", "text-transform": "uppercase", "color": "#AAA", "text-align": "left", "margin": "5px 0px", "--hover-color": "#111"}, "nav-link-selected": {"background-color": C_ACCENT, "color": "#FFF", "icon-color": "#FFF", "box-shadow": "0px 4px 20px rgba(206, 17, 65, 0.4)"}})
-            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v10.0 Final</div></div>""", unsafe_allow_html=True)
+            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v10.1</div></div>""", unsafe_allow_html=True)
             
             # SCRIPT JS POUR FERMER SIDEBAR
             components.html("""<script>const options = window.parent.document.querySelectorAll('.nav-link'); options.forEach((option) => { option.addEventListener('click', () => { const sidebar = window.parent.document.querySelector('section[data-testid="stSidebar"]'); if (sidebar) {} }); });</script>""", height=0, width=0)
@@ -313,7 +313,6 @@ try:
             with c1: kpi_card("MVP DU JOUR", top['Player'], f"{int(top['Score'])} PTS", C_GOLD)
             with c2: kpi_card("MOYENNE TEAM", int(day_df['Score'].mean()), "POINTS")
             
-            # STAT : PERFORMANCE JOUR VS MOY SAISON
             team_daily_avg = day_df['Score'].mean()
             team_season_avg = df['Score'].mean()
             diff_perf = ((team_daily_avg - team_season_avg) / team_season_avg) * 100
@@ -383,8 +382,19 @@ try:
             with c3: kpi_card("CLASSEMENT", f"#{internal_rank}", f"SUR {nb_players}", rank_col)
             with c4: kpi_card("BEST SCORE", int(p_data['Best']), "RECORD", C_GOLD)
 
-            # --- MAIN GRID ---
+            # --- LAST 10 PICKS (MOVED HERE) ---
             st.markdown("<br>", unsafe_allow_html=True)
+            st.markdown("#### 🔥 10 DERNIERS MATCHS")
+            p_hist_all = df[df['Player'] == sel_player]
+            p_hist = p_hist_all.sort_values('Pick').tail(10)
+            cols = st.columns(10)
+            for i, (idx, r) in enumerate(p_hist.iterrows()):
+                s = r['Score']; is_b = r['IsBonus']; c = "#4ADE80" if s >= 40 else ("#F87171" if s < 20 else "#FFF")
+                border = f"2px solid {C_BONUS}" if is_b else "1px solid rgba(255,255,255,0.1)"
+                cols[i].markdown(f"<div style='text-align:center; font-family:Rajdhani; font-size:0.9rem; font-weight:800; color:{c}; background:rgba(255,255,255,0.05); border:{border}; border-radius:6px; padding:6px 2px'>{int(s)}</div>", unsafe_allow_html=True)
+            st.markdown("<br>", unsafe_allow_html=True)
+
+            # --- MAIN GRID ---
             col_radar, col_stats = st.columns([1, 2])
             
             with col_radar:
@@ -396,10 +406,19 @@ try:
                 fig_radar = go.Figure(data=go.Scatterpolar(r=r_vals + [r_vals[0]], theta=r_cats + [r_cats[0]], fill='toself', line_color=C_ACCENT, fillcolor="rgba(206, 17, 65, 0.3)"))
                 fig_radar.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 100], showticklabels=False, linecolor='#333'), bgcolor='rgba(0,0,0,0)'), paper_bgcolor='rgba(0,0,0,0)', font=dict(color='white', size=12, family="Rajdhani"), margin=dict(t=20, b=20, l=20, r=20), height=280)
                 st.plotly_chart(fig_radar, use_container_width=True)
+                # LEGEND DEFINITIONS
+                st.markdown("""
+                <div style='font-size:0.7rem; color:#888; text-align:center; margin-top:5px; line-height:1.4;'>
+                <span style='color:#FFF'>SCORING</span>: Moyenne Saison<br>
+                <span style='color:#FFF'>EXPLOSIVITÉ</span>: Record de points<br>
+                <span style='color:#FFF'>FORME</span>: 5 derniers matchs<br>
+                <span style='color:#FFF'>RÉGULARITÉ</span>: Stabilité (Ecart-type)<br>
+                <span style='color:#FFF'>CLUTCH</span>: Scores > 50pts
+                </div>
+                """, unsafe_allow_html=True)
                 st.markdown("</div>", unsafe_allow_html=True)
 
             with col_stats:
-                # PERFORMANCE MATRIX 3x3
                 r1c1, r1c2, r1c3 = st.columns(3)
                 with r1c1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(p_data['ReliabilityPct'])}%</div><div class='stat-mini-lbl'>FIABILITÉ</div><div class='stat-mini-sub'>% Picks > 20pts</div></div>", unsafe_allow_html=True)
                 with r1c2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(p_data['Nukes'])}</div><div class='stat-mini-lbl'>NUKES</div><div class='stat-mini-sub'>Scores > 50pts</div></div>", unsafe_allow_html=True)
@@ -425,7 +444,6 @@ try:
 
             # --- CHARTS ROW ---
             c_dist, c_trend = st.columns(2)
-            p_hist_all = df[df['Player'] == sel_player]
             
             with c_dist:
                 st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
@@ -440,22 +458,15 @@ try:
                 st.markdown("#### 📈 TENDANCE (15 DERNIERS MATCHS)", unsafe_allow_html=True)
                 last_15_data = p_hist_all.sort_values('Pick').tail(15)
                 if not last_15_data.empty:
-                    fig_trend = px.scatter(last_15_data, x="Pick", y="Score", trendline="lowess", trendline_color_override=C_GOLD)
-                    fig_trend.update_traces(marker_color=C_ACCENT, marker_size=8)
+                    # FIXED: Removed statsmodels dependency (trendline="lowess")
+                    # Replaced with simple line chart
+                    fig_trend = px.line(last_15_data, x="Pick", y="Score", markers=True)
+                    fig_trend.update_traces(line_color=C_GOLD, marker_color=C_ACCENT, marker_size=8)
                     fig_trend.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, margin=dict(l=0, r=0, t=30, b=0), height=200, xaxis_title=None, yaxis_title=None)
                     st.plotly_chart(fig_trend, use_container_width=True)
                 else:
                     st.info("Pas assez de données")
                 st.markdown("</div>", unsafe_allow_html=True)
-
-            # --- HISTORY ROW ---
-            st.markdown("#### 🔥 10 DERNIERS MATCHS")
-            p_hist = p_hist_all.sort_values('Pick').tail(10)
-            cols = st.columns(10)
-            for i, (idx, r) in enumerate(p_hist.iterrows()):
-                s = r['Score']; is_b = r['IsBonus']; c = "#4ADE80" if s >= 40 else ("#F87171" if s < 20 else "#FFF")
-                border = f"2px solid {C_BONUS}" if is_b else "1px solid rgba(255,255,255,0.1)"
-                cols[i].markdown(f"<div style='text-align:center; font-family:Rajdhani; font-size:0.9rem; font-weight:800; color:{c}; background:rgba(255,255,255,0.05); border:{border}; border-radius:6px; padding:6px 2px'>{int(s)}</div>", unsafe_allow_html=True)
 
         elif menu == "Bonus x2":
             section_title("BONUS <span class='highlight'>ZONE</span>", "Analyse des Jokers x2")

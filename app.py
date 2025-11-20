@@ -314,7 +314,7 @@ try:
             st.image("raptors-ttfl-min.png", use_container_width=True) 
             st.markdown("</div>", unsafe_allow_html=True)
             menu = option_menu(menu_title=None, options=["Dashboard", "Team HQ", "Player Lab", "Bonus x2", "Trends", "Hall of Fame", "Admin"], icons=["grid-fill", "people-fill", "person-bounding-box", "lightning-charge-fill", "fire", "trophy-fill", "shield-lock"], default_index=0, styles={"container": {"padding": "0!important", "background-color": "#000000"}, "icon": {"color": "#666", "font-size": "1.1rem"}, "nav-link": {"font-family": "Rajdhani, sans-serif", "font-weight": "700", "font-size": "15px", "text-transform": "uppercase", "color": "#AAA", "text-align": "left", "margin": "5px 0px", "--hover-color": "#111"}, "nav-link-selected": {"background-color": C_ACCENT, "color": "#FFF", "icon-color": "#FFF", "box-shadow": "0px 4px 20px rgba(206, 17, 65, 0.4)"}})
-            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v11.8 Final</div></div>""", unsafe_allow_html=True)
+            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v11.9 Final</div></div>""", unsafe_allow_html=True)
             
             # SCRIPT JS POUR FERMER SIDEBAR
             components.html("""<script>const options = window.parent.document.querySelectorAll('.nav-link'); options.forEach((option) => { option.addEventListener('click', () => { const sidebar = window.parent.document.querySelector('section[data-testid="stSidebar"]'); if (sidebar) {} }); });</script>""", height=0, width=0)
@@ -416,17 +416,18 @@ try:
 
             nb_matchs_joues = latest_pick 
             daily_totals = df.groupby('Pick')['Score'].sum()
-            # Handle cases where we have less than 15 days
             if len(daily_totals) > 15:
                 avg_team_15 = daily_totals[daily_totals.index > (latest_pick - 15)].mean()
             else:
                 avg_team_15 = daily_totals.mean()
-                
+            
             avg_team_season = daily_totals.mean()
             diff_team = avg_team_15 - avg_team_season
             col_dyn = C_GREEN if diff_team > 0 else C_ORANGE
-            sign_dyn = "+" if diff_team > 0 else ""
             
+            # Calcul Moyenne Score Indiv
+            team_avg_per_pick = df['Score'].mean()
+
             team_daily_totals = df.groupby('Pick')['Score'].sum().reset_index()
             last_15_team = team_daily_totals[team_daily_totals['Pick'] > (latest_pick - 15)]
             team_season_avg_total = team_daily_totals['Score'].mean()
@@ -448,8 +449,10 @@ try:
                 
                 r3c1, r3c2, r3c3 = st.columns(3)
                 with r3c1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{best_rank_ever}</div><div class='stat-mini-lbl'>MEILLEUR RANG</div><div class='stat-mini-sub'>Historique (Maj Hebdo)</div></div>", unsafe_allow_html=True)
-                # REPLACEMENT : RANG ACTUEL -> SCORE MOYEN
-                with r3c2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{avg_night:.0f}</div><div class='stat-mini-lbl'>SCORE MOYEN</div><div class='stat-mini-sub'>Par Soir (Saison)</div></div>", unsafe_allow_html=True)
+                
+                # --- CHANGEMENT ICI : SCORE MOYEN INDIVIDUEL GLOBAL ---
+                with r3c2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{team_avg_per_pick:.1f}</div><div class='stat-mini-lbl'>MOY. / PICK</div><div class='stat-mini-sub'>Global Saison</div></div>", unsafe_allow_html=True)
+                
                 with r3c3: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{col_dyn}'>{int(avg_team_15)}</div><div class='stat-mini-lbl'>DYNAMIQUE (15J)</div><div class='stat-mini-sub'>vs {int(avg_team_season)} (Saison)</div></div>", unsafe_allow_html=True)
 
             with c_info:
@@ -559,7 +562,6 @@ try:
                 r1c1, r1c2, r1c3 = st.columns(3)
                 with r1c1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(p_data['ReliabilityPct'])}%</div><div class='stat-mini-lbl'>FIABILITÉ</div><div class='stat-mini-sub'>% Picks > 20pts</div></div>", unsafe_allow_html=True)
                 with r1c2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(p_data['Nukes'])}</div><div class='stat-mini-lbl'>NUKES</div><div class='stat-mini-sub'>Scores > 50pts</div></div>", unsafe_allow_html=True)
-                # ERROR FIX HERE: Added C_RED variable usage
                 with r1c3: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_RED}'>{int(p_data['Carottes'])}</div><div class='stat-mini-lbl'>CAROTTES</div><div class='stat-mini-sub'>Scores < 20pts</div></div>", unsafe_allow_html=True)
                 st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
                 

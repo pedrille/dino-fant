@@ -221,7 +221,7 @@ def send_discord_webhook(day_df, pick_num, url_app):
     for i, row in top_3.iterrows():
         podium_text += f"{medals[i]} **{row['Player']}** • {int(row['Score'])} pts\n"
     
-    worst = day_df.iloc[-1]
+    # Calcul de la moyenne
     avg_score = int(day_df['Score'].mean())
 
     data = {
@@ -233,8 +233,8 @@ def send_discord_webhook(day_df, pick_num, url_app):
             "color": 13504833,
             "fields": [
                 {"name": "🏆 PODIUM", "value": podium_text, "inline": False},
-                {"name": "🧱 LE MAÇON", "value": f"{worst['Player']} ({int(worst['Score'])} pts)", "inline": True},
-                {"name": "🔗 LIEN RAPIDE", "value": f"[Accéder au Dashboard]({url_app})", "inline": True}
+                # LE MAÇON A ÉTÉ SUPPRIMÉ
+                {"name": "🔗 LIEN RAPIDE", "value": f"[Accéder au Dashboard]({url_app})", "inline": False}
             ],
             "footer": {"text": "Raptors Elite System • Data is Power"}
         }]
@@ -362,7 +362,7 @@ try:
                 r_vals = [(p_data['Moyenne'] / max_avg) * 100, (p_data['Best'] / max_best) * 100, (p_data['Last5'] / max_last5) * 100, reg_score, (p_data['Nukes'] / (max_nukes if max_nukes > 0 else 1)) * 100]
                 r_cats = ['SCORING', 'EXPLOSIVITÉ', 'FORME', 'RÉGULARITÉ', 'CLUTCH']
                 fig_radar = go.Figure(data=go.Scatterpolar(r=r_vals + [r_vals[0]], theta=r_cats + [r_cats[0]], fill='toself', line_color=C_ACCENT, fillcolor="rgba(206, 17, 65, 0.3)"))
-                fig_radar.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 100], showticklabels=False, linecolor='#333'), bgcolor='rgba(0,0,0,0)'), paper_bgcolor='rgba(0,0,0,0)', font=dict(color='white', size=12, family="Rajdhani"), margin=dict(t=20, b=20))
+                fig_radar.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 100], showticklabels=False, linecolor='#333'), bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font=dict(color='white', size=12, family="Rajdhani"), margin=dict(t=20, b=20))
                 st.markdown("<div class='glass-card'>", unsafe_allow_html=True); st.plotly_chart(fig_radar, use_container_width=True); st.markdown("</div>", unsafe_allow_html=True)
             with col_stats:
                 kpi_card("MOYENNE SAISON", f"{p_data['Moyenne']:.1f}", "PTS")

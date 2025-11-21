@@ -36,7 +36,7 @@ C_PURE = "#14B8A6"
 C_ORANGE = "#F97316"
 C_RED = "#EF4444"
 C_DARK_GREY = "#1F2937"
-C_GREY_BAR = "#374151" # Variable indispensable pour le graph Dashboard
+C_GREY_BAR = "#374151"
 
 # --- 2. CSS PREMIUM ---
 st.markdown(f"""
@@ -73,19 +73,20 @@ st.markdown(f"""
     .kpi-label {{ color: #888; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px; }}
     .kpi-num {{ font-family: 'Rajdhani'; font-weight: 800; font-size: 2.8rem; line-height: 1; color: #FFF; }}
     
-    /* STAT BOX MINI (Grille 3x3) - Padding Augmenté */
+    /* STAT BOX MINI (Grille 3x3) - PADDING INTERNE OK, MARGE RÉDUITE */
     .stat-box-mini {{ 
         background: rgba(255,255,255,0.03); 
         border:1px solid rgba(255,255,255,0.05); 
         border-radius:12px; 
-        padding: 25px 15px; /* Padding augmenté */
+        padding: 25px 10px; 
         text-align:center; 
         height:100%; 
         display:flex; 
         flex-direction:column; 
         justify-content:center; 
-        margin-bottom: 15px; /* Marge augmentée */
+        margin-bottom: 8px; /* Marge réduite pour resserrer la grille */
     }}
+    
     .stat-mini-val {{ font-family:'Rajdhani'; font-weight:700; font-size:1.8rem; color:#FFF; line-height:1; }}
     .stat-mini-lbl {{ font-size:0.75rem; color:#888; text-transform:uppercase; margin-top:8px; letter-spacing:1px; }}
     .stat-mini-sub {{ font-size:0.7rem; font-weight:600; margin-top:4px; color:#555; }}
@@ -162,39 +163,32 @@ def load_data():
         team_current_rank = 0
         team_bp_real = 0
         
-        # 1. Recherche de la colonne "BP" dans les 20 premières lignes (headers)
+        # 1. Repérage colonne BP
         bp_col_idx = -1
-        header_row_idx = -1
-        for r in range(20):
-            for c in range(len(df_stats.columns)):
-                val = str(df_stats.iloc[r, c]).strip()
-                if val == "BP":
+        for c in range(len(df_stats.columns)):
+            for r in range(10): 
+                if str(df_stats.iloc[r, c]).strip() == "BP":
                     bp_col_idx = c
-                    header_row_idx = r
                     break
             if bp_col_idx != -1: break
         
-        # 2. Si colonne trouvée, on cherche "Team Raptors" dans la colonne 0 ou 1
-        if bp_col_idx != -1:
-            for r_idx in range(header_row_idx + 1, len(df_stats)):
-                val_col0 = str(df_stats.iloc[r_idx, 0]).strip()
-                val_col1 = str(df_stats.iloc[r_idx, 1]).strip()
-                if "Team Raptors" in val_col0 or "Team Raptors" in val_col1:
-                    try:
-                        raw_bp = df_stats.iloc[r_idx, bp_col_idx]
-                        team_bp_real = int(float(str(raw_bp).replace(',', '.')))
-                    except: 
-                        team_bp_real = 0
-                    break
-
-        # 3. Récupération Historique Rang
+        # 2. Repérage ligne Team Raptors
         start_row_rank = -1
         col_start_rank = -1
+        
         for r_idx, row in df_stats.iterrows():
+            row_str = str(row[0]) if pd.notna(row[0]) else ""
+            if "Team Raptors" in row_str and bp_col_idx != -1:
+                try:
+                    val = str(df_stats.iloc[r_idx, bp_col_idx]).replace(',', '.')
+                    team_bp_real = int(float(val))
+                except: pass
+
             for c_idx, val in enumerate(row):
                 if str(val).strip() == "Classement":
                     start_row_rank = r_idx; col_start_rank = c_idx; break
             if start_row_rank != -1: break
+            
         if start_row_rank != -1:
             for i in range(start_row_rank+1, start_row_rank+30):
                 if i >= len(df_stats): break
@@ -361,7 +355,7 @@ def section_title(title, subtitle):
 try:
     df, team_rank, bp_map, team_history, daily_max_map, team_bp_real_load = load_data()
     
-    # GLOBAL METRIC
+    # ✅ FIX: Define Global Metric first
     if df is not None and not df.empty:
         team_avg_per_pick = df['Score'].mean()
     else:
@@ -373,7 +367,7 @@ try:
         full_stats = compute_stats(df, bp_map, daily_max_map)
         leader = full_stats.sort_values('Total', ascending=False).iloc[0]
         
-        # BP Calculation Check
+        # Use real BP from sheet if found, else fallback
         total_bp_team = team_bp_real_load if team_bp_real_load > 0 else full_stats['BP_Count'].sum()
 
         with st.sidebar:
@@ -381,7 +375,7 @@ try:
             st.image("raptors-ttfl-min.png", use_container_width=True) 
             st.markdown("</div>", unsafe_allow_html=True)
             menu = option_menu(menu_title=None, options=["Dashboard", "Team HQ", "Player Lab", "Bonus x2", "Trends", "Hall of Fame", "Admin"], icons=["grid-fill", "people-fill", "person-bounding-box", "lightning-charge-fill", "fire", "trophy-fill", "shield-lock"], default_index=0, styles={"container": {"padding": "0!important", "background-color": "#000000"}, "icon": {"color": "#666", "font-size": "1.1rem"}, "nav-link": {"font-family": "Rajdhani, sans-serif", "font-weight": "700", "font-size": "15px", "text-transform": "uppercase", "color": "#AAA", "text-align": "left", "margin": "5px 0px", "--hover-color": "#111"}, "nav-link-selected": {"background-color": C_ACCENT, "color": "#FFF", "icon-color": "#FFF", "box-shadow": "0px 4px 20px rgba(206, 17, 65, 0.4)"}})
-            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v14.9</div></div>""", unsafe_allow_html=True)
+            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v15.0</div></div>""", unsafe_allow_html=True)
             components.html("""<script>const options = window.parent.document.querySelectorAll('.nav-link'); options.forEach((option) => { option.addEventListener('click', () => { const sidebar = window.parent.document.querySelector('section[data-testid="stSidebar"]'); if (sidebar) {} }); });</script>""", height=0, width=0)
 
         if menu == "Dashboard":
@@ -488,11 +482,8 @@ try:
             last_15_team = team_daily_totals[team_daily_totals['Pick'] > (latest_pick - 15)]
             team_season_avg_total = team_daily_totals['Score'].mean()
             
-            if 'Month' in df.columns:
-                best_m_team = df.groupby('Month')['Score'].sum().idxmax()
-                best_m_val_team = df.groupby('Month')['Score'].sum().max()
-            else:
-                best_m_team = "-"; best_m_val_team = 0
+            # NEW KPI: Safe Zone Count (Score > 30)
+            safe_zone_count = len(df[df['Score'] > 30])
 
             k1, k2, k3, k4 = st.columns(4)
             with k1: kpi_card("TOTAL SAISON", int(total_pts_season), "POINTS CUMULÉS", C_GOLD)
@@ -514,7 +505,7 @@ try:
                 st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
                 
                 g4, g5, g6 = st.columns(3)
-                with g4: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{best_m_team}</div><div class='stat-mini-lbl'>MEILLEUR MOIS ({int(best_m_val_team)})</div></div>", unsafe_allow_html=True)
+                with g4: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{safe_zone_count}</div><div class='stat-mini-lbl'>SAFE ZONE (>30 PTS)</div></div>", unsafe_allow_html=True)
                 with g5: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_GREEN}'>{total_nukes_team}</div><div class='stat-mini-lbl'>TOTAL NUKES (50+)</div></div>", unsafe_allow_html=True)
                 with g6: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_RED}'>{total_carrots_team}</div><div class='stat-mini-lbl'>TOTAL CAROTTES (<20)</div></div>", unsafe_allow_html=True)
                 st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)

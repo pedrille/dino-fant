@@ -309,7 +309,7 @@ try:
             st.image("raptors-ttfl-min.png", use_container_width=True)
             st.markdown("</div>", unsafe_allow_html=True)
             menu = option_menu(menu_title=None, options=["Dashboard", "Team HQ", "Player Lab", "Bonus x2", "Trends", "Hall of Fame", "Admin"], icons=["grid-fill", "people-fill", "person-bounding-box", "lightning-charge-fill", "fire", "trophy-fill", "shield-lock"], default_index=0, styles={"container": {"padding": "0!important", "background-color": "#000000"}, "icon": {"color": "#666", "font-size": "1.1rem"}, "nav-link": {"font-family": "Rajdhani, sans-serif", "font-weight": "700", "font-size": "15px", "text-transform": "uppercase", "color": "#AAA", "text-align": "left", "margin": "5px 0px", "--hover-color": "#111"}, "nav-link-selected": {"background-color": C_ACCENT, "color": "#FFF", "icon-color": "#FFF", "box-shadow": "0px 4px 20px rgba(206, 17, 65, 0.4)"}})
-            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v12.4 (Cyan/Green)</div></div>""", unsafe_allow_html=True)
+            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v12.5 (PerfectPivot)</div></div>""", unsafe_allow_html=True)
             # SCRIPT JS POUR FERMER SIDEBAR
             components.html("""<script>const options = window.parent.document.querySelectorAll('.nav-link'); options.forEach((option) => { option.addEventListener('click', () => { const sidebar = window.parent.document.querySelector('section[data-testid="stSidebar"]'); if (sidebar) {} }); });</script>""", height=0, width=0)
 
@@ -473,23 +473,31 @@ try:
             fig_team_trend.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, yaxis=dict(gridcolor='#222'), xaxis=dict(showgrid=False))
             st.plotly_chart(fig_team_trend, use_container_width=True)
 
-            # --- AJOUT: HEATMAP (Couleurs Corrigées - "Cyan & Green") ---
-            st.markdown("### 🔥 HEATMAP DE LA SAISON (Cyan & Green)")
-            st.markdown("<div class='chart-desc'>Rouge < 30 | Cyan 40-49 (Validé) | Vert 50+ (Elite)</div>", unsafe_allow_html=True)
+            # --- AJOUT: HEATMAP (Couleurs Dynamiques : Vert dès la Moyenne) ---
+            st.markdown("### 🔥 HEATMAP DE LA SAISON (Dynamique)")
+            st.markdown(f"<div class='chart-desc'>Le Vert démarre à la moyenne de l'équipe ({team_avg_per_pick:.1f} pts). Le Rouge sous 30 pts.</div>", unsafe_allow_html=True)
+            
             heatmap_data = df.pivot_table(index='Player', columns='Pick', values='Score', aggfunc='sum')
+            
+            # Calcul du Pivot Point (La Moyenne de l'équipe exprimée en % de 80 pts)
+            # Ex: Si moyenne = 42, Pivot = 42/80 = 0.525
+            team_avg_val = df['Score'].mean()
+            max_scale_val = 80 # On fixe le "max" visuel à 80 pour garder de la consistance
+            pivot_point = team_avg_val / max_scale_val
+            
             fig_heat = px.imshow(
                 heatmap_data, 
                 labels=dict(x="Pick", y="Player", color="Score"), 
                 x=heatmap_data.columns, 
                 y=heatmap_data.index, 
                 color_continuous_scale=[
-                    [0.0, '#EF4444'],   # 0 pts -> Rouge Vif
-                    [0.3, '#1F2937'],   # ~25 pts -> Sombre/Rouge
-                    [0.5, '#06B6D4'],   # ~40 pts -> CYAN (Bonus/Validé)
-                    [0.6, '#06B6D4'],   # ~49 pts -> CYAN (Reste Cyan)
-                    [0.65, '#10B981'],  # ~52 pts -> VERT (Elite)
-                    [1.0, '#10B981']    # Max -> Vert
-                ], 
+                    [0.0, '#EF4444'],               # 0 pts : ROUGE VIF
+                    [pivot_point - 0.15, '#1F2937'], # ~30 pts : GRIS SOMBRE (Zone neutre basse)
+                    [pivot_point, '#10B981'],       # ~42 pts : VERT (Dès la moyenne !)
+                    [1.0, '#6EE7B7']                # 80+ pts : VERT FLUO (Exploit)
+                ],
+                zmin=0,
+                zmax=max_scale_val, # Fixe le max pour que le vert ne "recule" pas si qqn fait 100
                 aspect="auto"
             )
             fig_heat.update_traces(xgap=1, ygap=1)

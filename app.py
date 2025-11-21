@@ -309,7 +309,7 @@ try:
             st.image("raptors-ttfl-min.png", use_container_width=True)
             st.markdown("</div>", unsafe_allow_html=True)
             menu = option_menu(menu_title=None, options=["Dashboard", "Team HQ", "Player Lab", "Bonus x2", "Trends", "Hall of Fame", "Admin"], icons=["grid-fill", "people-fill", "person-bounding-box", "lightning-charge-fill", "fire", "trophy-fill", "shield-lock"], default_index=0, styles={"container": {"padding": "0!important", "background-color": "#000000"}, "icon": {"color": "#666", "font-size": "1.1rem"}, "nav-link": {"font-family": "Rajdhani, sans-serif", "font-weight": "700", "font-size": "15px", "text-transform": "uppercase", "color": "#AAA", "text-align": "left", "margin": "5px 0px", "--hover-color": "#111"}, "nav-link-selected": {"background-color": C_ACCENT, "color": "#FFF", "icon-color": "#FFF", "box-shadow": "0px 4px 20px rgba(206, 17, 65, 0.4)"}})
-            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v12.0 (Enhanced)</div></div>""", unsafe_allow_html=True)
+            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v12.1 (ColorFix)</div></div>""", unsafe_allow_html=True)
             # SCRIPT JS POUR FERMER SIDEBAR
             components.html("""<script>const options = window.parent.document.querySelectorAll('.nav-link'); options.forEach((option) => { option.addEventListener('click', () => { const sidebar = window.parent.document.querySelector('section[data-testid="stSidebar"]'); if (sidebar) {} }); });</script>""", height=0, width=0)
 
@@ -473,11 +473,24 @@ try:
             fig_team_trend.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, yaxis=dict(gridcolor='#222'), xaxis=dict(showgrid=False))
             st.plotly_chart(fig_team_trend, use_container_width=True)
 
-            # --- AJOUT: HEATMAP ---
-            st.markdown("### 🔥 HEATMAP DE LA SAISON (Ajout v12.0)")
-            st.markdown("<div class='chart-desc'>Vue thermique pour repérer les séries (rouge = bas, vert = haut).</div>", unsafe_allow_html=True)
+            # --- AJOUT: HEATMAP (Couleurs Corrigées) ---
+            st.markdown("### 🔥 HEATMAP DE LA SAISON (Ajout v12.1)")
+            st.markdown("<div class='chart-desc'>Rouge = Bas, Gris = Moyen, Vert = Haut.</div>", unsafe_allow_html=True)
             heatmap_data = df.pivot_table(index='Player', columns='Pick', values='Score', aggfunc='sum')
-            fig_heat = px.imshow(heatmap_data, labels=dict(x="Pick", y="Player", color="Score"), x=heatmap_data.columns, y=heatmap_data.index, color_continuous_scale=[[0.0, '#EF4444'], [0.3, '#1F2937'], [0.5, '#374151'], [0.7, '#10B981'], [1.0, '#CE1141']], aspect="auto")
+            fig_heat = px.imshow(
+                heatmap_data, 
+                labels=dict(x="Pick", y="Player", color="Score"), 
+                x=heatmap_data.columns, 
+                y=heatmap_data.index, 
+                color_continuous_scale=[
+                    [0.0, '#EF4444'],   # Rouge (0 pts)
+                    [0.2, '#1F2937'],   # Gris très sombre (vers 15-20 pts)
+                    [0.5, '#1F2937'],   # Gris (Moyen)
+                    [0.8, '#059669'],   # Vert Sombre
+                    [1.0, '#10B981']    # Vert Flashy (Top Score)
+                ], 
+                aspect="auto"
+            )
             fig_heat.update_traces(xgap=1, ygap=1)
             fig_heat.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, height=500, xaxis={'showgrid': False}, yaxis={'showgrid': False})
             st.plotly_chart(fig_heat, use_container_width=True)

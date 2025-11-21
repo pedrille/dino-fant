@@ -94,7 +94,7 @@ st.markdown(f"""
         margin: 2px;
         color: #FFF;
     }}
-    .match-row {{ display: flex; justify-content: center; flex-wrap: wrap; gap: 2px; margin: 15px 0; }}
+    .match-row {{ display: flex; justify-content: center; flex-wrap: wrap; gap: 3px; margin: 15px 0; width: 100%; }}
 
     .stPlotlyChart {{ width: 100% !important; }}
     div[data-testid="stDataFrame"] {{ border: none !important; }}
@@ -112,11 +112,11 @@ st.markdown(f"""
     .gauge-label {{ display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 4px; color: #DDD; }}
     
     /* Custom Legend Radar */
-    .radar-legend {{ font-size: 0.75rem; color: #888; margin-top: 15px; background: rgba(255,255,255,0.03); padding: 10px; border-radius: 8px; }}
-    .radar-item {{ display: flex; justify-content: space-between; border-bottom: 1px solid #333; padding: 4px 0; }}
-    .radar-item:last-child {{ border: none; }}
-    .radar-key {{ color: #FFF; font-weight: 600; }}
-    
+    .radar-legend {{ font-size: 0.85rem; color: #DDD; margin-top: 15px; background: rgba(255,255,255,0.03); padding: 15px; border-radius: 8px; display: flex; justify-content: space-around; flex-wrap: wrap; gap: 15px; }}
+    .radar-item {{ text-align: center; }}
+    .radar-key {{ color: {C_ACCENT}; font-weight: 700; font-family: 'Rajdhani'; display: block; margin-bottom: 2px; font-size: 0.9rem; }}
+    .radar-desc {{ color: #888; font-size: 0.75rem; font-style: italic; }}
+
     /* Widget Title Custom */
     .widget-title {{ font-family: 'Rajdhani'; font-weight: 700; text-transform: uppercase; color: #AAA; letter-spacing: 1px; margin-bottom: 5px; }}
 </style>
@@ -601,12 +601,12 @@ try:
             with c4: kpi_card("CLASSEMENT", f"#{internal_rank}", f"SUR {nb_players}", rank_col)
             with c5: kpi_card("BEST SCORE", int(p_data['Best']), "RECORD", C_GOLD)
 
-            # --- NEW ROW: LAST 20 PICKS VISUALIZER ---
-            st.markdown("<div style='margin-top:20px; margin-bottom:5px; color:#888; font-size:0.8rem; text-transform:uppercase; letter-spacing:1px; text-align:center'>FORME RÉCENTE (20 DERNIERS MATCHS)</div>", unsafe_allow_html=True)
-            last_20_picks = p_hist_all.sort_values('Pick', ascending=False).head(20)
-            if not last_20_picks.empty:
-                html_picks = "<div class='match-row'>"
-                for _, r in last_20_picks.iterrows():
+            # --- NEW ROW: LAST 30 PICKS VISUALIZER (FULL WIDTH) ---
+            st.markdown("<div style='margin-top:20px; margin-bottom:5px; color:#888; font-size:0.8rem; text-transform:uppercase; letter-spacing:1px; text-align:center'>FORME RÉCENTE (30 DERNIERS MATCHS)</div>", unsafe_allow_html=True)
+            last_30_picks = p_hist_all.sort_values('Pick', ascending=False).head(30)
+            if not last_30_picks.empty:
+                html_picks = "<div class='match-row' style='width:100%'>"
+                for _, r in last_30_picks.iterrows():
                     sc = r['Score']
                     bg = C_RED if sc < 20 else (C_GREEN if sc > 40 else "#333")
                     border = f"2px solid {C_BONUS}" if r['IsBonus'] else "1px solid rgba(255,255,255,0.1)"
@@ -618,86 +618,83 @@ try:
 
             st.markdown("<br>", unsafe_allow_html=True)
 
-            # --- COMPACT ROW: TOP 5 & BONUS ---
-            c_split_1, c_split_2 = st.columns(2, gap="large")
-            
-            with c_split_1:
-                st.markdown("#### 🌟 TOP 5 PERFORMANCES")
-                top_5 = p_hist_all.sort_values('Score', ascending=False).head(5)
-                for i, r in top_5.reset_index().iterrows():
-                    b_icon = "⚡(x2)" if r['IsBonus'] else ""
-                    st.markdown(f"<div style='border-bottom:1px solid #222; padding:6px 0; display:flex; justify-content:space-between; align-items:center; font-size:0.9rem'><div style='color:#AAA'>Pick #{r['Pick']}</div><div style='font-family:Rajdhani; font-weight:700; color:{C_TEXT}'>{int(r['Score'])} pts <span style='color:{C_BONUS}; font-size:0.7rem'>{b_icon}</span></div></div>", unsafe_allow_html=True)
+            # --- SPLIT 3/4 (GRID) + 1/4 (TOP 5) ---
+            col_grid, col_top5 = st.columns([3, 1], gap="medium")
 
-            with c_split_2:
-                st.markdown("#### ⚖️ FOCUS BONUS")
+            with col_grid:
+                # REIMPLEMENTATION DU 3x4 GRID KPI (AVEC BONUS INTEGRÉS)
                 gain_total = p_data['Bonus_Gained']
                 col_gn = C_GREEN if gain_total > 0 else C_RED
-                
-                # Compact Layout for Bonus
-                b1, b2 = st.columns(2)
-                with b1: 
-                    st.markdown(f"<div style='background:rgba(255,255,255,0.03); padding:10px; border-radius:8px; text-align:center'><div style='font-size:1.5rem; font-weight:bold; color:{C_BONUS}'>{p_data['BonusPlayed']}</div><div style='font-size:0.7rem; color:#888'>BONUS JOUÉS</div></div>", unsafe_allow_html=True)
-                with b2:
-                    st.markdown(f"<div style='background:rgba(255,255,255,0.03); padding:10px; border-radius:8px; text-align:center'><div style='font-size:1.5rem; font-weight:bold; color:{col_gn}'>{int(gain_total)}</div><div style='font-size:0.7rem; color:#888'>POINTS GAGNÉS</div></div>", unsafe_allow_html=True)
-                
-                st.markdown(f"<div style='margin-top:10px; font-size:0.85rem; display:flex; justify-content:space-between; color:#AAA'><span>Moy. AVEC Bonus:</span> <span style='color:#FFF'>{p_data['AvgWithBonus']:.1f}</span></div>", unsafe_allow_html=True)
-                st.markdown(f"<div style='font-size:0.85rem; display:flex; justify-content:space-between; color:#AAA'><span>Moy. SANS Bonus:</span> <span style='color:#FFF'>{p_data['AvgWithoutBonus']:.1f}</span></div>", unsafe_allow_html=True)
 
-            st.markdown("<br>", unsafe_allow_html=True)
-
-            # --- REDESIGNED STATS BLOCK (1/3 - 2/3) ---
-            col_radar, col_adv_stats = st.columns([1, 2], gap="medium")
-            
-            with col_radar:
-                st.markdown("<div class='glass-card' style='height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center'>", unsafe_allow_html=True)
-                st.markdown("<div style='margin-bottom:15px; font-family:Rajdhani; font-weight:700; font-size:1.1rem;'>📡 PROFIL JOUEUR</div>", unsafe_allow_html=True)
-                max_avg = full_stats['Moyenne'].max(); max_best = full_stats['Best'].max(); max_last5 = full_stats['Last5'].max(); max_nukes = full_stats['Nukes'].max()
-                reg_score = 100 - ((p_data['StdDev'] / full_stats['StdDev'].max()) * 100)
-                r_vals = [(p_data['Moyenne'] / max_avg) * 100, (p_data['Best'] / max_best) * 100, (p_data['Last5'] / max_last5) * 100, reg_score, (p_data['Nukes'] / (max_nukes if max_nukes > 0 else 1)) * 100]
-                r_cats = ['SCORING', 'CEILING', 'FORME', 'REGUL.', 'CLUTCH']
-                fig_radar = go.Figure(data=go.Scatterpolar(r=r_vals + [r_vals[0]], theta=r_cats + [r_cats[0]], fill='toself', line_color=C_ACCENT, fillcolor="rgba(206, 17, 65, 0.3)"))
-                fig_radar.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 100], showticklabels=False, linecolor='#333'), bgcolor='rgba(0,0,0,0)'), paper_bgcolor='rgba(0,0,0,0)', font=dict(color='white', size=11, family="Rajdhani"), margin=dict(t=10, b=10, l=25, r=25), height=220)
-                st.plotly_chart(fig_radar, use_container_width=True)
-                
-                # LEGENDE
-                st.markdown("""
-                <div class='radar-legend'>
-                    <div class='radar-item'><span class='radar-key'>SCORING</span> <span>Moyenne de points</span></div>
-                    <div class='radar-item'><span class='radar-key'>CEILING</span> <span>Record personnel</span></div>
-                    <div class='radar-item'><span class='radar-key'>FORME</span> <span>5 derniers matchs</span></div>
-                    <div class='radar-item'><span class='radar-key'>REGUL.</span> <span>Stabilité (Ecart-type)</span></div>
-                    <div class='radar-item'><span class='radar-key'>CLUTCH</span> <span>Explosivité (Nukes)</span></div>
-                </div>
-                """, unsafe_allow_html=True)
-                st.markdown("</div>", unsafe_allow_html=True)
-
-            with col_adv_stats:
-                # REIMPLEMENTATION DU 3x4 GRID KPI
                 r1c1, r1c2, r1c3 = st.columns(3, gap="small")
                 with r1c1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(p_data['ReliabilityPct'])}%</div><div class='stat-mini-lbl'>FIABILITÉ (>20)</div></div>", unsafe_allow_html=True)
-                with r1c2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(p_data['Nukes'])}</div><div class='stat-mini-lbl'>NUKES (>50)</div></div>", unsafe_allow_html=True)
-                with r1c3: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_RED}'>{int(p_data['Carottes'])}</div><div class='stat-mini-lbl'>CAROTTES (<20)</div></div>", unsafe_allow_html=True)
+                with r1c2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(p_data['Count30'])}</div><div class='stat-mini-lbl'>SAFE ZONE (>30)</div></div>", unsafe_allow_html=True)
+                with r1c3: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(p_data['Count40'])}</div><div class='stat-mini-lbl'>HEAVY HITS (>40)</div></div>", unsafe_allow_html=True)
                 
                 st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
                 
                 r2c1, r2c2, r2c3 = st.columns(3, gap="small")
-                with r2c1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(sniper_pct)}%</div><div class='stat-mini-lbl'>SNIPER RATE</div></div>", unsafe_allow_html=True)
-                with r2c2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{p_data['Avg_Bonus']:.1f}</div><div class='stat-mini-lbl'>BONUS EFF.</div></div>", unsafe_allow_html=True)
-                with r2c3: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(p_data['Count40'])}</div><div class='stat-mini-lbl'>HEAVY HITS (>40)</div></div>", unsafe_allow_html=True)
+                with r2c1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(p_data['Nukes'])}</div><div class='stat-mini-lbl'>NUKES (>50)</div></div>", unsafe_allow_html=True)
+                with r2c2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_RED}'>{int(p_data['Carottes'])}</div><div class='stat-mini-lbl'>CAROTTES (<20)</div></div>", unsafe_allow_html=True)
+                with r2c3: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(p_data['Worst'])}</div><div class='stat-mini-lbl'>FLOOR</div></div>", unsafe_allow_html=True)
                 
                 st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
                 
                 r3c1, r3c2, r3c3 = st.columns(3, gap="small")
-                with r3c1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{p_data['Last10']:.1f}</div><div class='stat-mini-lbl'>FORME (10j)</div></div>", unsafe_allow_html=True)
-                with r3c2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{color_diff}'>{sign}{diff_form:.1f}</div><div class='stat-mini-lbl'>DYNAMIQUE</div></div>", unsafe_allow_html=True)
-                with r3c3: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(p_data['Worst'])}</div><div class='stat-mini-lbl'>FLOOR</div></div>", unsafe_allow_html=True)
-                
+                with r3c1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{p_data['Moyenne_Raw']:.1f}</div><div class='stat-mini-lbl'>MOY. PURE</div></div>", unsafe_allow_html=True)
+                with r3c2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(sniper_pct)}%</div><div class='stat-mini-lbl'>SNIPER RATE</div></div>", unsafe_allow_html=True)
+                with r3c3: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_GOLD}'>{int(alpha_rate)}%</div><div class='stat-mini-lbl'>ALPHA %</div></div>", unsafe_allow_html=True)
+
                 st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
-                
+
                 r4c1, r4c2, r4c3 = st.columns(3, gap="small")
-                with r4c1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_GOLD}'>{int(alpha_rate)}%</div><div class='stat-mini-lbl'>ALPHA %</div></div>", unsafe_allow_html=True)
-                with r4c2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{p_data['Moyenne_Raw']:.1f}</div><div class='stat-mini-lbl'>MOY. PURE</div></div>", unsafe_allow_html=True)
-                with r4c3: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(p_data['Count30'])}</div><div class='stat-mini-lbl'>SAFE ZONE (>30)</div></div>", unsafe_allow_html=True)
+                with r4c1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_BONUS}'>{p_data['BonusPlayed']}</div><div class='stat-mini-lbl'>BONUS JOUÉS</div></div>", unsafe_allow_html=True)
+                with r4c2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{col_gn}'>{int(gain_total)}</div><div class='stat-mini-lbl'>GAINS BONUS</div></div>", unsafe_allow_html=True)
+                with r4c3: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{p_data['AvgWithBonus']:.1f}</div><div class='stat-mini-lbl'>MOY. SOUS BONUS</div></div>", unsafe_allow_html=True)
+
+
+            with col_top5:
+                st.markdown("#### 🌟 TOP 5 PICS")
+                st.markdown("<div class='chart-desc'>Meilleurs scores de la saison.</div>", unsafe_allow_html=True)
+                top_5 = p_hist_all.sort_values('Score', ascending=False).head(5)
+                for i, r in top_5.reset_index().iterrows():
+                    b_icon = "⚡(x2)" if r['IsBonus'] else ""
+                    st.markdown(f"<div style='border-bottom:1px solid #222; padding:12px 0; display:flex; justify-content:space-between; align-items:center; font-size:0.9rem'><div style='color:#AAA'>Pick #{r['Pick']}</div><div style='font-family:Rajdhani; font-weight:700; color:{C_TEXT}'>{int(r['Score'])} pts <span style='color:{C_BONUS}; font-size:0.7rem'>{b_icon}</span></div></div>", unsafe_allow_html=True)
+
+            st.markdown("<br>", unsafe_allow_html=True)
+
+            # --- ROW 4 : RADAR PROFILE FULL WIDTH ---
+            st.markdown("<div class='glass-card' style='height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center'>", unsafe_allow_html=True)
+            st.markdown("<div style='margin-bottom:5px; font-family:Rajdhani; font-weight:700; font-size:1.1rem;'>📡 PROFIL ATHLÉTIQUE</div>", unsafe_allow_html=True)
+            
+            max_avg = full_stats['Moyenne'].max(); max_best = full_stats['Best'].max(); max_last10 = full_stats['Last10'].max(); max_nukes = full_stats['Nukes'].max()
+            reg_score = 100 - ((p_data['StdDev'] / full_stats['StdDev'].max()) * 100)
+            
+            # New Radar Metrics
+            r_vals = [
+                (p_data['Moyenne'] / max_avg) * 100, 
+                (p_data['Best'] / max_best) * 100, 
+                (p_data['Last10'] / max_last10) * 100, 
+                reg_score, 
+                (p_data['Nukes'] / (max_nukes if max_nukes > 0 else 1)) * 100
+            ]
+            r_cats = ['SCORING', 'CEILING', 'FORME', 'CONSISTENCY', 'CLUTCH']
+            
+            fig_radar = go.Figure(data=go.Scatterpolar(r=r_vals + [r_vals[0]], theta=r_cats + [r_cats[0]], fill='toself', line_color=C_ACCENT, fillcolor="rgba(206, 17, 65, 0.3)"))
+            fig_radar.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 100], showticklabels=False, linecolor='#333'), bgcolor='rgba(0,0,0,0)'), paper_bgcolor='rgba(0,0,0,0)', font=dict(color='white', size=12, family="Rajdhani"), margin=dict(t=10, b=10, l=25, r=25), height=300)
+            st.plotly_chart(fig_radar, use_container_width=True)
+            
+            # LEGENDE EXPLICITE
+            st.markdown("""
+            <div class='radar-legend'>
+                <div class='radar-item'><span class='radar-key'>SCORING</span> <span class='radar-desc'>Capacité à scorer fort en moyenne (Volume)</span></div>
+                <div class='radar-item'><span class='radar-key'>CEILING</span> <span class='radar-desc'>Potentiel de score maximal sur un match (Record)</span></div>
+                <div class='radar-item'><span class='radar-key'>FORME</span> <span class='radar-desc'>Dynamique actuelle sur les 10 derniers matchs</span></div>
+                <div class='radar-item'><span class='radar-key'>CONSISTENCY</span> <span class='radar-desc'>Régularité des performances (inverse de l'écart-type)</span></div>
+                <div class='radar-item'><span class='radar-key'>CLUTCH</span> <span class='radar-desc'>Fréquence des très gros scores (> 50 points)</span></div>
+            </div>
+            """, unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
 
 
             # --- GRAPHS ---
@@ -707,7 +704,6 @@ try:
                     st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
                     st.markdown("#### 📊 DISTRIBUTION DES SCORES", unsafe_allow_html=True)
                     st.markdown("<div class='chart-desc'>Répartition de tous les scores de la saison par tranches de points.</div>", unsafe_allow_html=True)
-                    # Improved Histogram for readability
                     fig_hist = px.histogram(p_hist_all, x="Score", nbins=15, color_discrete_sequence=[C_ACCENT], text_auto=True)
                     fig_hist.update_traces(marker_line_color='white', marker_line_width=1, opacity=0.8)
                     fig_hist.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, margin=dict(l=0, r=0, t=10, b=0), height=250, xaxis_title=None, yaxis_title=None, bargap=0.1)

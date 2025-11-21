@@ -111,11 +111,31 @@ st.markdown(f"""
     .gauge-fill {{ height: 10px; border-radius: 10px; transition: width 1s ease-in-out; }}
     .gauge-label {{ display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 4px; color: #DDD; }}
     
-    /* Custom Legend Radar */
-    .radar-legend {{ font-size: 0.85rem; color: #DDD; margin-top: 15px; background: rgba(255,255,255,0.03); padding: 15px; border-radius: 8px; display: flex; justify-content: space-around; flex-wrap: wrap; gap: 15px; }}
-    .radar-item {{ text-align: center; }}
-    .radar-key {{ color: {C_ACCENT}; font-weight: 700; font-family: 'Rajdhani'; display: block; margin-bottom: 2px; font-size: 0.9rem; }}
-    .radar-desc {{ color: #888; font-size: 0.75rem; font-style: italic; }}
+    /* TOP 5 PICKS STYLING */
+    .top-pick-row {{
+        display: flex; justify-content: space-between; align-items: center;
+        background: rgba(255,255,255,0.03);
+        border-left: 4px solid {C_ACCENT};
+        padding: 12px 15px;
+        margin-bottom: 8px;
+        border-radius: 4px;
+        transition: background 0.2s;
+    }}
+    .top-pick-row:hover {{ background: rgba(255,255,255,0.08); }}
+    .tp-rank {{ font-family: 'Rajdhani'; font-weight: 800; font-size: 1.2rem; color: #666; width: 25px; }}
+    .tp-info {{ flex-grow: 1; padding-left: 10px; }}
+    .tp-pick {{ color: #888; font-size: 0.75rem; text-transform: uppercase; }}
+    .tp-score {{ font-family: 'Rajdhani'; font-weight: 700; font-size: 1.5rem; color: #FFF; }}
+    .tp-bonus {{ font-size: 0.9rem; color: {C_BONUS}; margin-left: 5px; }}
+
+    /* RADAR LEGEND CUSTOM */
+    .legend-box {{
+        display: flex; flex-direction: column; justify-content: center; height: 100%;
+        padding-left: 20px; border-left: 1px solid #333;
+    }}
+    .legend-item {{ margin-bottom: 15px; }}
+    .legend-title {{ color: {C_ACCENT}; font-family: 'Rajdhani'; font-weight: 700; font-size: 1rem; margin-bottom: 2px; }}
+    .legend-desc {{ color: #888; font-size: 0.8rem; line-height: 1.3; }}
 
     /* Widget Title Custom */
     .widget-title {{ font-family: 'Rajdhani'; font-weight: 700; text-transform: uppercase; color: #AAA; letter-spacing: 1px; margin-bottom: 5px; }}
@@ -654,47 +674,72 @@ try:
 
 
             with col_top5:
-                st.markdown("#### 🌟 TOP 5 PICS")
+                st.markdown("#### 🌟 TOP 5 PICKS")
                 st.markdown("<div class='chart-desc'>Meilleurs scores de la saison.</div>", unsafe_allow_html=True)
                 top_5 = p_hist_all.sort_values('Score', ascending=False).head(5)
                 for i, r in top_5.reset_index().iterrows():
-                    b_icon = "⚡(x2)" if r['IsBonus'] else ""
-                    st.markdown(f"<div style='border-bottom:1px solid #222; padding:12px 0; display:flex; justify-content:space-between; align-items:center; font-size:0.9rem'><div style='color:#AAA'>Pick #{r['Pick']}</div><div style='font-family:Rajdhani; font-weight:700; color:{C_TEXT}'>{int(r['Score'])} pts <span style='color:{C_BONUS}; font-size:0.7rem'>{b_icon}</span></div></div>", unsafe_allow_html=True)
+                    rank_num = i + 1
+                    b_icon = "⚡ x2" if r['IsBonus'] else ""
+                    st.markdown(f"""
+                    <div class="top-pick-row">
+                        <div class="tp-rank">#{rank_num}</div>
+                        <div class="tp-info">
+                            <div class="tp-pick">Pick #{r['Pick']}</div>
+                            <span class="tp-bonus">{b_icon}</span>
+                        </div>
+                        <div class="tp-score">{int(r['Score'])}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
 
             st.markdown("<br>", unsafe_allow_html=True)
+            st.markdown("<h3 style='margin-bottom:10px'>📡 PROFIL ATHLÉTIQUE</h3>", unsafe_allow_html=True)
 
-            # --- ROW 4 : RADAR PROFILE FULL WIDTH ---
-            st.markdown("<div class='glass-card' style='height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center'>", unsafe_allow_html=True)
-            st.markdown("<div style='margin-bottom:5px; font-family:Rajdhani; font-weight:700; font-size:1.1rem;'>📡 PROFIL ATHLÉTIQUE</div>", unsafe_allow_html=True)
+            # --- ROW 4 : RADAR PROFILE FULL WIDTH (2/3 + 1/3) ---
+            # Container sans glass-card pour éviter les cadres vides
+            c_radar_graph, c_radar_legend = st.columns([2, 1], gap="large")
             
-            max_avg = full_stats['Moyenne'].max(); max_best = full_stats['Best'].max(); max_last10 = full_stats['Last10'].max(); max_nukes = full_stats['Nukes'].max()
-            reg_score = 100 - ((p_data['StdDev'] / full_stats['StdDev'].max()) * 100)
+            with c_radar_graph:
+                max_avg = full_stats['Moyenne'].max(); max_best = full_stats['Best'].max(); max_last10 = full_stats['Last10'].max(); max_nukes = full_stats['Nukes'].max()
+                reg_score = 100 - ((p_data['StdDev'] / full_stats['StdDev'].max()) * 100)
+                
+                r_vals = [
+                    (p_data['Moyenne'] / max_avg) * 100, 
+                    (p_data['Best'] / max_best) * 100, 
+                    (p_data['Last10'] / max_last10) * 100, 
+                    reg_score, 
+                    (p_data['Nukes'] / (max_nukes if max_nukes > 0 else 1)) * 100
+                ]
+                r_cats = ['SCORING', 'CEILING', 'FORME', 'CONSISTENCY', 'CLUTCH']
+                
+                fig_radar = go.Figure(data=go.Scatterpolar(r=r_vals + [r_vals[0]], theta=r_cats + [r_cats[0]], fill='toself', line_color=C_ACCENT, fillcolor="rgba(206, 17, 65, 0.3)"))
+                fig_radar.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 100], showticklabels=False, linecolor='#333'), bgcolor='rgba(0,0,0,0)'), paper_bgcolor='rgba(0,0,0,0)', font=dict(color='white', size=14, family="Rajdhani"), margin=dict(t=20, b=20, l=40, r=40), height=400)
+                st.plotly_chart(fig_radar, use_container_width=True)
             
-            # New Radar Metrics
-            r_vals = [
-                (p_data['Moyenne'] / max_avg) * 100, 
-                (p_data['Best'] / max_best) * 100, 
-                (p_data['Last10'] / max_last10) * 100, 
-                reg_score, 
-                (p_data['Nukes'] / (max_nukes if max_nukes > 0 else 1)) * 100
-            ]
-            r_cats = ['SCORING', 'CEILING', 'FORME', 'CONSISTENCY', 'CLUTCH']
-            
-            fig_radar = go.Figure(data=go.Scatterpolar(r=r_vals + [r_vals[0]], theta=r_cats + [r_cats[0]], fill='toself', line_color=C_ACCENT, fillcolor="rgba(206, 17, 65, 0.3)"))
-            fig_radar.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 100], showticklabels=False, linecolor='#333'), bgcolor='rgba(0,0,0,0)'), paper_bgcolor='rgba(0,0,0,0)', font=dict(color='white', size=12, family="Rajdhani"), margin=dict(t=10, b=10, l=25, r=25), height=300)
-            st.plotly_chart(fig_radar, use_container_width=True)
-            
-            # LEGENDE EXPLICITE
-            st.markdown("""
-            <div class='radar-legend'>
-                <div class='radar-item'><span class='radar-key'>SCORING</span> <span class='radar-desc'>Capacité à scorer fort en moyenne (Volume)</span></div>
-                <div class='radar-item'><span class='radar-key'>CEILING</span> <span class='radar-desc'>Potentiel de score maximal sur un match (Record)</span></div>
-                <div class='radar-item'><span class='radar-key'>FORME</span> <span class='radar-desc'>Dynamique actuelle sur les 10 derniers matchs</span></div>
-                <div class='radar-item'><span class='radar-key'>CONSISTENCY</span> <span class='radar-desc'>Régularité des performances (inverse de l'écart-type)</span></div>
-                <div class='radar-item'><span class='radar-key'>CLUTCH</span> <span class='radar-desc'>Fréquence des très gros scores (> 50 points)</span></div>
-            </div>
-            """, unsafe_allow_html=True)
-            st.markdown("</div>", unsafe_allow_html=True)
+            with c_radar_legend:
+                st.markdown("""
+                <div class='legend-box'>
+                    <div class='legend-item'>
+                        <div class='legend-title'>SCORING</div>
+                        <div class='legend-desc'>Volume de points moyen sur la saison.</div>
+                    </div>
+                    <div class='legend-item'>
+                        <div class='legend-title'>CEILING (PLAFOND)</div>
+                        <div class='legend-desc'>Record personnel (Potentiel max sur un match).</div>
+                    </div>
+                    <div class='legend-item'>
+                        <div class='legend-title'>FORME</div>
+                        <div class='legend-desc'>Dynamique actuelle sur les 10 derniers matchs.</div>
+                    </div>
+                    <div class='legend-item'>
+                        <div class='legend-title'>CONSISTENCY</div>
+                        <div class='legend-desc'>Régularité des performances (Faible écart-type).</div>
+                    </div>
+                    <div class='legend-item'>
+                        <div class='legend-title'>CLUTCH</div>
+                        <div class='legend-desc'>Fréquence des très gros scores (> 50 points).</div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
 
 
             # --- GRAPHS ---

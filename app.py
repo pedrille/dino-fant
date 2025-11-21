@@ -664,8 +664,9 @@ try:
                 st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
                 
                 r2c1, r2c2, r2c3 = st.columns(3, gap="small")
-                with r2c1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(p_data['Best_Raw'])}</div><div class='stat-mini-lbl'>MEILLEUR SCORE SEC</div></div>", unsafe_allow_html=True)
-                with r2c2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(p_data['Best_Bonus'])}</div><div class='stat-mini-lbl'>RECORD SOUS BONUS</div></div>", unsafe_allow_html=True)
+                # UPDATE REQUEST: Moyenne Pure & Best Raw (Meilleur Score Sec)
+                with r2c1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{p_data['Moyenne_Raw']:.1f}</div><div class='stat-mini-lbl'>MOYENNE PURE</div></div>", unsafe_allow_html=True)
+                with r2c2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(p_data['Best_Raw'])}</div><div class='stat-mini-lbl'>MEILLEUR SCORE SEC</div></div>", unsafe_allow_html=True)
                 with r2c3: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(p_data['Worst'])}</div><div class='stat-mini-lbl'>PIRE SCORE</div></div>", unsafe_allow_html=True)
                 
                 st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
@@ -680,7 +681,7 @@ try:
                 r4c1, r4c2, r4c3 = st.columns(3, gap="small")
                 with r4c1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_PURPLE}'>{int(p_data['BP_Count'])}</div><div class='stat-mini-lbl'>TOTAL BEST PICKS</div></div>", unsafe_allow_html=True)
                 with r4c2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_GOLD}'>{int(p_data['Alpha_Count'])}</div><div class='stat-mini-lbl'>MVP DU SOIR</div></div>", unsafe_allow_html=True)
-                with r4c3: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_BONUS}'>{p_data['Avg_Bonus']:.1f}</div><div class='stat-mini-lbl'>MOYENNE BONUS</div></div>", unsafe_allow_html=True)
+                with r4c3: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_BONUS}'>{p_data['Avg_Bonus']:.1f}</div><div class='stat-mini-lbl'>MOYENNE SOUS BONUS</div></div>", unsafe_allow_html=True)
 
 
             with col_top5:
@@ -788,42 +789,72 @@ try:
                 st.plotly_chart(fig_evol, use_container_width=True)
 
         elif menu == "Bonus x2":
-            section_title("BONUS <span class='highlight'>ZONE</span>", "Analyse des Jokers x2")
+            section_title("BONUS <span class='highlight'>ZONE</span>", "Analyse de Rentabilité")
+            
+            # FILTER DATA
             df_bonus = df[df['IsBonus'] == True].copy()
-            df_bonus['Gain'] = df_bonus['Score'] / 2
-
+            # Calculate Real Gain (Score - Score without bonus)
+            df_bonus['RealGain'] = df_bonus['Score'] - df_bonus['ScoreVal']
+            
             available_months = df['Month'].unique().tolist()
             sel_month = st.selectbox("Filtrer par Mois", ["Tous"] + [m for m in available_months if m != "Inconnu"])
             
-            if sel_month != "Tous": df_bonus_disp = df_bonus[df_bonus['Month'] == sel_month]
-            else: df_bonus_disp = df_bonus
+            if sel_month != "Tous": 
+                df_bonus_disp = df_bonus[df_bonus['Month'] == sel_month]
+            else: 
+                df_bonus_disp = df_bonus
 
-            if df_bonus_disp.empty: st.info("Aucun bonus trouvé pour cette sélection.")
+            if df_bonus_disp.empty: 
+                st.info("Aucun bonus trouvé pour cette sélection.")
             else:
-                nb_bonus = len(df_bonus_disp); avg_bonus = df_bonus_disp['Score'].mean(); best_bonus = df_bonus_disp['Score'].max()
-                k1, k2, k3 = st.columns(3)
-                with k1: kpi_card("BONUS JOUÉS", nb_bonus, f"PÉRIODE : {sel_month.upper()}", C_BONUS)
-                with k2: kpi_card("MOYENNE BONUS", f"{avg_bonus:.1f}", "POINTS DOUBLÉS", "#FFF")
-                with k3: kpi_card("MEILLEUR BONUS", int(best_bonus), "RECORD", C_GOLD)
+                # 5 STRATEGIC KPIS
+                nb_bonus = len(df_bonus_disp)
+                avg_bonus = df_bonus_disp['Score'].mean()
+                total_gain = df_bonus_disp['RealGain'].sum()
+                success_rate = (len(df_bonus_disp[df_bonus_disp['Score'] >= 40]) / nb_bonus * 100) if nb_bonus > 0 else 0
+                best_bonus = df_bonus_disp['Score'].max()
+
+                k1, k2, k3, k4, k5 = st.columns(5)
+                with k1: kpi_card("BONUS JOUÉS", nb_bonus, "VOLUME", C_BONUS)
+                with k2: kpi_card("MOYENNE", f"{avg_bonus:.1f}", "PTS / BONUS", "#FFF")
+                with k3: kpi_card("GAIN RÉEL", f"+{int(total_gain)}", "PTS AJOUTÉS", C_GREEN)
+                with k4: kpi_card("RENTABILITÉ", f"{int(success_rate)}%", "SCORES > 40 PTS", C_PURPLE)
+                with k5: kpi_card("RECORD", int(best_bonus), "MAX SCORE", C_GOLD)
                 
                 st.markdown("<br>", unsafe_allow_html=True)
                 
-                c_chart, c_kpi = st.columns([2, 1])
-                with c_chart:
-                    st.markdown("<div class='glass-card'><h4>📅 MOYENNE PAR MOIS</h4>", unsafe_allow_html=True)
-                    monthly_avg = df_bonus.groupby('Month')['Score'].mean().reindex(["Octobre", "Novembre", "Decembre", "Janvier", "Fevrier", "Mars", "Avril"]).dropna().reset_index()
-                    fig_m = px.bar(monthly_avg, x='Month', y='Score', text='Score', color='Score', color_continuous_scale='Teal')
-                    fig_m.update_traces(texttemplate='%{text:.1f}', textposition='outside')
-                    fig_m.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, xaxis=dict(title=None), yaxis=dict(showgrid=False, visible=False), height=250, showlegend=False, coloraxis_showscale=False)
-                    st.plotly_chart(fig_m, use_container_width=True)
-                    st.markdown("</div>", unsafe_allow_html=True)
+                # CHARTS: IMPACT & SCATTER
+                c_chart1, c_chart2 = st.columns(2, gap="medium")
                 
-                with c_kpi:
-                    success_rate = len(df_bonus[df_bonus['Score'] >= 80]) / len(df_bonus) * 100 if len(df_bonus) > 0 else 0
-                    st.markdown(f"<div class='stat-box-mini' style='height:100%'><div class='stat-mini-val' style='color:{C_GREEN}'>{int(success_rate)}%</div><div class='stat-mini-lbl'>TAUX DE SUCCÈS</div><div class='stat-mini-sub'>Bonus > 40pts (x2)</div></div>", unsafe_allow_html=True)
+                with c_chart1:
+                    st.markdown("#### 💰 IMPACT MENSUEL (GAINS RÉELS)")
+                    st.markdown("<div class='chart-desc'>Points supplémentaires générés par le x2 chaque mois.</div>", unsafe_allow_html=True)
+                    monthly_gain = df_bonus.groupby('Month')['RealGain'].sum().reindex(["Octobre", "Novembre", "Decembre", "Janvier", "Fevrier", "Mars", "Avril"]).dropna().reset_index()
+                    fig_m = px.bar(monthly_gain, x='Month', y='RealGain', text='RealGain', color='RealGain', color_continuous_scale='Teal')
+                    fig_m.update_traces(texttemplate='+%{text}', textposition='outside')
+                    fig_m.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, xaxis=dict(title=None), yaxis=dict(showgrid=False, visible=False), height=300, showlegend=False, coloraxis_showscale=False)
+                    st.plotly_chart(fig_m, use_container_width=True)
+                
+                with c_chart2:
+                    st.markdown("#### 🎯 MATRICE DE RENTABILITÉ")
+                    st.markdown("<div class='chart-desc'>Distribution des scores bonus. Cible : Coin supérieur droit.</div>", unsafe_allow_html=True)
+                    fig_scat = px.scatter(df_bonus_disp, x="Pick", y="Score", color="Score", size="Score", hover_data=['Player'], color_continuous_scale='RdYlGn')
+                    fig_scat.add_hline(y=40, line_dash="dash", line_color="#666", annotation_text="Seuil Rentabilité (40)", annotation_position="bottom right")
+                    fig_scat.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, height=300, xaxis_title="Pick #", yaxis_title="Score Total", coloraxis_showscale=False)
+                    st.plotly_chart(fig_scat, use_container_width=True)
 
-                st.markdown("### 📜 HISTORIQUE & DÉTAILS")
-                st.dataframe(df_bonus_disp[['Player', 'Pick', 'Month', 'Score', 'Gain']].sort_values('Pick', ascending=False), hide_index=True, use_container_width=True, column_config={"Score": st.column_config.NumberColumn("Score Final (x2)", format="%d pts"), "Gain": st.column_config.NumberColumn("Gain Réel", format="+%d pts")})
+                st.markdown("### 📜 HISTORIQUE DÉTAILLÉ")
+                st.dataframe(
+                    df_bonus_disp[['Pick', 'Player', 'Month', 'ScoreVal', 'Score', 'RealGain']].sort_values('Pick', ascending=False), 
+                    hide_index=True, 
+                    use_container_width=True, 
+                    column_config={
+                        "Pick": st.column_config.NumberColumn("Pick #", format="%d"),
+                        "ScoreVal": st.column_config.NumberColumn("Score Brut", format="%d pts"),
+                        "Score": st.column_config.NumberColumn("Score Final (x2)", format="%d pts"),
+                        "RealGain": st.column_config.NumberColumn("Gain Net", format="+%d pts")
+                    }
+                )
 
         elif menu == "Trends":
             section_title("MARKET <span class='highlight'>WATCH</span>", "Analyse des tendances sur 15 jours")

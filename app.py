@@ -72,21 +72,7 @@ st.markdown(f"""
     .rank-score {{ font-family: 'Rajdhani'; font-weight: 700; font-size: 1.3rem; color: #FFF; }}
     .kpi-label {{ color: #888; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px; }}
     .kpi-num {{ font-family: 'Rajdhani'; font-weight: 800; font-size: 2.8rem; line-height: 1; color: #FFF; }}
-    
-    /* PADDING ET MARGIN AUGMENTÉS POUR AÉRER */
-    .stat-box-mini {{ 
-        background: rgba(255,255,255,0.03); 
-        border:1px solid rgba(255,255,255,0.05); 
-        border-radius:8px; 
-        padding: 20px 10px; 
-        text-align:center; 
-        height:100%; 
-        display:flex; 
-        flex-direction:column; 
-        justify-content:center; 
-        margin-bottom: 15px; 
-    }}
-    
+    .stat-box-mini {{ background: rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.05); border-radius:8px; padding:20px 10px; text-align:center; height:100%; display:flex; flex-direction:column; justify-content:center; margin-bottom:15px; }}
     .stat-mini-val {{ font-family:'Rajdhani'; font-weight:700; font-size:1.6rem; color:#FFF; line-height:1; }}
     .stat-mini-lbl {{ font-size:0.7rem; color:#888; text-transform:uppercase; margin-top:5px; letter-spacing:0.5px; }}
     .stat-mini-sub {{ font-size:0.7rem; font-weight:600; margin-top:2px; }}
@@ -112,7 +98,6 @@ def load_data():
     try:
         if "SPREADSHEET_URL" not in st.secrets: return None, None, None, None, [], 0
 
-        # A. VALEURS
         df_valeurs = conn.read(spreadsheet=st.secrets["SPREADSHEET_URL"], worksheet="Valeurs", header=None, ttl=0).astype(str)
         month_row = df_valeurs.iloc[0]
         pick_row_idx = 2
@@ -156,7 +141,6 @@ def load_data():
         final_df = pd.merge(final_df, daily_stats, on='Pick', how='left')
         final_df['ZScore'] = np.where(final_df['DailyStd'] > 0, (final_df['Score'] - final_df['DailyMean']) / final_df['DailyStd'], 0)
 
-        # B. STATS & RECUP BP
         df_stats = conn.read(spreadsheet=st.secrets["SPREADSHEET_URL"], worksheet="Stats_Raptors_FR", header=None, ttl=0)
         team_rank_history = []
         team_current_rank = 0
@@ -165,18 +149,17 @@ def load_data():
         # 1. Repérage colonne BP
         bp_col_idx = -1
         for c in range(len(df_stats.columns)):
-            for r in range(10): # Check dans les 10 premieres lignes
+            for r in range(10): 
                 if str(df_stats.iloc[r, c]).strip() == "BP":
                     bp_col_idx = c
                     break
             if bp_col_idx != -1: break
         
-        # 2. Repérage ligne Team Raptors + Recup BP
+        # 2. Repérage ligne Team Raptors
         start_row_rank = -1
         col_start_rank = -1
         
         for r_idx, row in df_stats.iterrows():
-            # Check BP
             row_str = str(row[0]) if pd.notna(row[0]) else ""
             if "Team Raptors" in row_str and bp_col_idx != -1:
                 try:
@@ -184,7 +167,6 @@ def load_data():
                     team_bp_real = int(float(val))
                 except: pass
 
-            # Check Classement
             for c_idx, val in enumerate(row):
                 if str(val).strip() == "Classement":
                     start_row_rank = r_idx; col_start_rank = c_idx; break
@@ -213,13 +195,15 @@ def load_data():
 
 def compute_stats(df, bp_map, daily_max_map):
     stats = []
-    latest_pick = df['Pick'].max()
     season_avgs = df.groupby('Player')['Score'].mean()
     season_avgs_raw = df.groupby('Player')['ScoreVal'].mean()
+    
+    latest_pick = df['Pick'].max()
     df_15 = df[df['Pick'] > (latest_pick - 15)]
     avg_15 = df_15.groupby('Player')['Score'].mean()
     df_10 = df[df['Pick'] > (latest_pick - 10)]
     avg_10 = df_10.groupby('Player')['Score'].mean()
+    
     trend_data = {}
     for p, d in df.sort_values('Pick').groupby('Player'): trend_data[p] = d['Score'].tail(20).tolist()
 
@@ -246,7 +230,7 @@ def compute_stats(df, bp_map, daily_max_map):
         last_5 = scores[-5:]
         last5_avg = last_5.mean() if len(scores) >= 5 else scores.mean()
         momentum = last5_avg - scores.mean()
-        bp_count = 0; alpha_count = 0; bonus_points_gained = 0; bonus_scores_list = []
+        bp_count = 0; alpha_count = 0; bonus_points_gained = 0
         
         for i, (pick_num, score) in enumerate(zip(picks, scores)):
             if pick_num in bp_map and score >= bp_map[pick_num] and score > 0: bp_count += 1
@@ -254,11 +238,11 @@ def compute_stats(df, bp_map, daily_max_map):
             if bonuses[i]: 
                 gain = score - scores_raw[i]
                 bonus_points_gained += gain
-                bonus_scores_list.append(score)
         
-        best_bonus = max(bonus_scores_list) if bonus_scores_list else 0
-        worst_bonus = min(bonus_scores_list) if bonus_scores_list else 0
-        avg_bonus_score = np.mean(bonus_scores_list) if bonus_scores_list else 0
+        best_bonus = max(scores_with_bonus) if len(scores_with_bonus) > 0 else 0
+        worst_bonus = min(scores_with_bonus) if len(scores_with_bonus) > 0 else 0
+        avg_bonus_score = np.mean(scores_with_bonus) if len(scores_with_bonus) > 0 else 0
+        
         s_avg = season_avgs.get(p, 0)
         s_avg_raw = season_avgs_raw.get(p, 0)
         l15_avg = avg_15.get(p, s_avg)
@@ -356,7 +340,6 @@ def section_title(title, subtitle):
 try:
     df, team_rank, bp_map, team_history, daily_max_map, team_bp_real_load = load_data()
     
-    # ✅ FIX: Define Global Metric first
     if df is not None and not df.empty:
         team_avg_per_pick = df['Score'].mean()
     else:
@@ -364,7 +347,8 @@ try:
 
     if df is not None and not df.empty:
         latest_pick = df['Pick'].max()
-        day_df = df[df['Pick'] == latest_pick].sort_values('Score', ascending=False)
+        # CRITICAL FIX: Use copy to avoid SettingWithCopyWarning
+        day_df = df[df['Pick'] == latest_pick].sort_values('Score', ascending=False).copy()
         full_stats = compute_stats(df, bp_map, daily_max_map)
         leader = full_stats.sort_values('Total', ascending=False).iloc[0]
         
@@ -376,7 +360,7 @@ try:
             st.image("raptors-ttfl-min.png", use_container_width=True) 
             st.markdown("</div>", unsafe_allow_html=True)
             menu = option_menu(menu_title=None, options=["Dashboard", "Team HQ", "Player Lab", "Bonus x2", "Trends", "Hall of Fame", "Admin"], icons=["grid-fill", "people-fill", "person-bounding-box", "lightning-charge-fill", "fire", "trophy-fill", "shield-lock"], default_index=0, styles={"container": {"padding": "0!important", "background-color": "#000000"}, "icon": {"color": "#666", "font-size": "1.1rem"}, "nav-link": {"font-family": "Rajdhani, sans-serif", "font-weight": "700", "font-size": "15px", "text-transform": "uppercase", "color": "#AAA", "text-align": "left", "margin": "5px 0px", "--hover-color": "#111"}, "nav-link-selected": {"background-color": C_ACCENT, "color": "#FFF", "icon-color": "#FFF", "box-shadow": "0px 4px 20px rgba(206, 17, 65, 0.4)"}})
-            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v14.8</div></div>""", unsafe_allow_html=True)
+            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v14.9</div></div>""", unsafe_allow_html=True)
             components.html("""<script>const options = window.parent.document.querySelectorAll('.nav-link'); options.forEach((option) => { option.addEventListener('click', () => { const sidebar = window.parent.document.querySelector('section[data-testid="stSidebar"]'); if (sidebar) {} }); });</script>""", height=0, width=0)
 
         if menu == "Dashboard":
@@ -397,23 +381,24 @@ try:
             day_merged['Delta'] = day_merged['Score'] - day_merged['Moyenne']
             top_clutch = day_merged.sort_values('Delta', ascending=False).head(3)
             
+            # --- PRE-CALCULATIONS FOR PLOTS ---
             bins = [-1, 35, 45, 200]
             labels = ['< 35', '35-45', '45+']
             day_df['Range'] = pd.cut(day_df['Score'], bins=bins, labels=labels)
             dist_counts = day_df['Range'].value_counts().reset_index()
             dist_counts.columns = ['Range', 'Count']
             
+            def get_bar_color(score):
+                if score < 35: return C_RED
+                elif score <= 45: return C_GREY_BAR
+                else: return C_GREEN
+            
+            day_df['BarColor'] = day_df['Score'].apply(get_bar_color)
+
+            # --- MAIN SECTION : GRAPH + CLUTCH ---
             c_perf, c_clutch = st.columns([2, 1])
             with c_perf:
                 st.markdown("<h3 style='margin-bottom:10px; margin-top:0; color:#FFF; font-family:Rajdhani; font-weight:700'>📊 SCORES DU SOIR</h3>", unsafe_allow_html=True)
-                
-                def get_bar_color(score):
-                    if score < 35: return C_RED
-                    elif score <= 45: return C_GREY_BAR
-                    else: return C_GREEN
-                
-                day_df['BarColor'] = day_df['Score'].apply(get_bar_color)
-                
                 fig = px.bar(day_df, x='Player', y='Score', text='Score', color='BarColor', color_discrete_map="identity")
                 fig.update_traces(textposition='outside', marker_line_width=0, textfont_size=14, textfont_family="Rajdhani", cliponaxis=False)
                 fig.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA', 'family': 'Inter'}, yaxis=dict(showgrid=False, visible=False), xaxis=dict(title=None, tickfont=dict(size=14, family='Rajdhani', weight=600)), height=350, showlegend=False, coloraxis_showscale=False, margin=dict(l=0, r=0, t=0, b=0))
@@ -483,13 +468,11 @@ try:
             last_15_team = team_daily_totals[team_daily_totals['Pick'] > (latest_pick - 15)]
             team_season_avg_total = team_daily_totals['Score'].mean()
             
-            # Best Month Team
             if 'Month' in df.columns:
                 best_m_team = df.groupby('Month')['Score'].sum().idxmax()
                 best_m_val_team = df.groupby('Month')['Score'].sum().max()
             else:
-                best_m_team = "-"
-                best_m_val_team = 0
+                best_m_team = "-"; best_m_val_team = 0
 
             k1, k2, k3, k4 = st.columns(4)
             with k1: kpi_card("TOTAL SAISON", int(total_pts_season), "POINTS CUMULÉS", C_GOLD)

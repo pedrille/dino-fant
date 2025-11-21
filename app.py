@@ -655,32 +655,32 @@ try:
             col_grid, col_top5 = st.columns([3, 1], gap="medium")
 
             with col_grid:
-                # CUSTOM GRID 3x4 (12 KPIs)
+                # CUSTOM GRID 3x4 (12 KPIs) - UNIFORMISÉ
                 r1c1, r1c2, r1c3 = st.columns(3, gap="small")
-                with r1c1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(p_data['ReliabilityPct'])}%</div><div class='stat-mini-lbl'>FIABILITÉ (>20)</div></div>", unsafe_allow_html=True)
-                with r1c2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{p_data['Last15']:.1f}</div><div class='stat-mini-lbl'>MOY. 15J</div></div>", unsafe_allow_html=True)
-                with r1c3: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{color_diff}'>{sign}{diff_form:.1f}%</div><div class='stat-mini-lbl'>DYNAMIQUE (15J)</div></div>", unsafe_allow_html=True)
+                with r1c1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(p_data['ReliabilityPct'])}%</div><div class='stat-mini-lbl'>FIABILITÉ (> 20 PTS)</div></div>", unsafe_allow_html=True)
+                with r1c2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{p_data['Last15']:.1f}</div><div class='stat-mini-lbl'>MOYENNE 15 JOURS</div></div>", unsafe_allow_html=True)
+                with r1c3: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{color_diff}'>{sign}{diff_form:.1f}%</div><div class='stat-mini-lbl'>DYNAMIQUE 15J</div></div>", unsafe_allow_html=True)
                 
                 st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
                 
                 r2c1, r2c2, r2c3 = st.columns(3, gap="small")
-                with r2c1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(p_data['Best_Raw'])}</div><div class='stat-mini-lbl'>MAX SCORE SEC</div></div>", unsafe_allow_html=True)
-                with r2c2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(p_data['Best_Bonus'])}</div><div class='stat-mini-lbl'>MAX SOUS BONUS</div></div>", unsafe_allow_html=True)
+                with r2c1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(p_data['Best_Raw'])}</div><div class='stat-mini-lbl'>MEILLEUR SCORE SEC</div></div>", unsafe_allow_html=True)
+                with r2c2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(p_data['Best_Bonus'])}</div><div class='stat-mini-lbl'>RECORD SOUS BONUS</div></div>", unsafe_allow_html=True)
                 with r2c3: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(p_data['Worst'])}</div><div class='stat-mini-lbl'>PIRE SCORE</div></div>", unsafe_allow_html=True)
                 
                 st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
                 
                 r3c1, r3c2, r3c3 = st.columns(3, gap="small")
-                with r3c1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_BLUE}'>{int(p_data['Count35'])}</div><div class='stat-mini-lbl'>SAFE ZONE (>35)</div></div>", unsafe_allow_html=True)
-                with r3c2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_GREEN}'>{int(p_data['Nukes'])}</div><div class='stat-mini-lbl'>NUKES (>50)</div></div>", unsafe_allow_html=True)
-                with r3c3: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_RED}'>{int(p_data['Carottes'])}</div><div class='stat-mini-lbl'>CAROTTES (<20)</div></div>", unsafe_allow_html=True)
+                with r3c1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_BLUE}'>{int(p_data['Count35'])}</div><div class='stat-mini-lbl'>SAFE ZONE (> 35 PTS)</div></div>", unsafe_allow_html=True)
+                with r3c2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_GREEN}'>{int(p_data['Nukes'])}</div><div class='stat-mini-lbl'>NUKES (> 50 PTS)</div></div>", unsafe_allow_html=True)
+                with r3c3: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_RED}'>{int(p_data['Carottes'])}</div><div class='stat-mini-lbl'>CAROTTES (< 20 PTS)</div></div>", unsafe_allow_html=True)
 
                 st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
 
                 r4c1, r4c2, r4c3 = st.columns(3, gap="small")
-                with r4c1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_PURPLE}'>{int(p_data['BP_Count'])}</div><div class='stat-mini-lbl'>BEST PICKS TTFL</div></div>", unsafe_allow_html=True)
-                with r4c2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_GOLD}'>{int(p_data['Alpha_Count'])}</div><div class='stat-mini-lbl'>ALPHA TEAM (SOIR)</div></div>", unsafe_allow_html=True)
-                with r4c3: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_BONUS}'>{p_data['Avg_Bonus']:.1f}</div><div class='stat-mini-lbl'>MOYENNE DES BONUS</div></div>", unsafe_allow_html=True)
+                with r4c1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_PURPLE}'>{int(p_data['BP_Count'])}</div><div class='stat-mini-lbl'>TOTAL BEST PICKS</div></div>", unsafe_allow_html=True)
+                with r4c2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_GOLD}'>{int(p_data['Alpha_Count'])}</div><div class='stat-mini-lbl'>MVP DU SOIR</div></div>", unsafe_allow_html=True)
+                with r4c3: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_BONUS}'>{p_data['Avg_Bonus']:.1f}</div><div class='stat-mini-lbl'>MOYENNE BONUS</div></div>", unsafe_allow_html=True)
 
 
             with col_top5:

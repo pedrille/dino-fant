@@ -36,7 +36,6 @@ C_PURE = "#14B8A6"
 C_ORANGE = "#F97316"
 C_RED = "#EF4444"
 C_DARK_GREY = "#1F2937"
-C_GREY_BAR = "#374151" # Gris un peu plus clair pour les barres du graph (lisibilité)
 
 # --- 2. CSS PREMIUM ---
 st.markdown(f"""
@@ -333,7 +332,7 @@ try:
             st.image("raptors-ttfl-min.png", use_container_width=True) 
             st.markdown("</div>", unsafe_allow_html=True)
             menu = option_menu(menu_title=None, options=["Dashboard", "Team HQ", "Player Lab", "Bonus x2", "Trends", "Hall of Fame", "Admin"], icons=["grid-fill", "people-fill", "person-bounding-box", "lightning-charge-fill", "fire", "trophy-fill", "shield-lock"], default_index=0, styles={"container": {"padding": "0!important", "background-color": "#000000"}, "icon": {"color": "#666", "font-size": "1.1rem"}, "nav-link": {"font-family": "Rajdhani, sans-serif", "font-weight": "700", "font-size": "15px", "text-transform": "uppercase", "color": "#AAA", "text-align": "left", "margin": "5px 0px", "--hover-color": "#111"}, "nav-link-selected": {"background-color": C_ACCENT, "color": "#FFF", "icon-color": "#FFF", "box-shadow": "0px 4px 20px rgba(206, 17, 65, 0.4)"}})
-            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v14.5</div></div>""", unsafe_allow_html=True)
+            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v14.6</div></div>""", unsafe_allow_html=True)
             components.html("""<script>const options = window.parent.document.querySelectorAll('.nav-link'); options.forEach((option) => { option.addEventListener('click', () => { const sidebar = window.parent.document.querySelector('section[data-testid="stSidebar"]'); if (sidebar) {} }); });</script>""", height=0, width=0)
 
         if menu == "Dashboard":
@@ -444,26 +443,37 @@ try:
             team_daily_totals = df.groupby('Pick')['Score'].sum().reset_index()
             last_15_team = team_daily_totals[team_daily_totals['Pick'] > (latest_pick - 15)]
             team_season_avg_total = team_daily_totals['Score'].mean()
+            team_heavy_hits = full_stats['Count40'].sum()
 
-            c_stats, c_info = st.columns([3, 2])
-            with c_stats:
-                r1c1, r1c2, r1c3 = st.columns(3)
-                with r1c1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_GOLD}'>{int(total_pts_season)}</div><div class='stat-mini-lbl'>TOTAL SAISON</div><div class='stat-mini-sub'>Points Cumulés</div></div>", unsafe_allow_html=True)
-                with r1c2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_BONUS}'>{total_bonus_played}</div><div class='stat-mini-lbl'>BONUS JOUÉS</div><div class='stat-mini-sub'>Total Équipe</div></div>", unsafe_allow_html=True)
-                with r1c3: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{avg_bonus_team:.1f}</div><div class='stat-mini-lbl'>EFFICIENCE</div><div class='stat-mini-sub'>Moyenne sous Bonus</div></div>", unsafe_allow_html=True)
-                st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
-                r2c1, r2c2, r2c3 = st.columns(3)
-                with r2c1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_ACCENT}'>{total_nukes_team}</div><div class='stat-mini-lbl'>TOTAL NUKES</div><div class='stat-mini-sub'>Sur {len(df)} picks</div></div>", unsafe_allow_html=True)
-                with r2c2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_ORANGE}'>{total_carrots_team}</div><div class='stat-mini-lbl'>TOTAL CAROTTES</div><div class='stat-mini-sub'>Sur {len(df)} picks</div></div>", unsafe_allow_html=True)
-                with r2c3: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(latest_pick)}</div><div class='stat-mini-lbl'>MATCHS JOUÉS</div><div class='stat-mini-sub'>Jours de compétition</div></div>", unsafe_allow_html=True)
-                st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
-                r3c1, r3c2, r3c3 = st.columns(3)
-                with r3c1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{best_rank_ever}</div><div class='stat-mini-lbl'>MEILLEUR RANG</div><div class='stat-mini-sub'>Historique (Maj Hebdo)</div></div>", unsafe_allow_html=True)
-                with r3c2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{team_avg_per_pick:.1f}</div><div class='stat-mini-lbl'>MOY. / PICK</div><div class='stat-mini-sub'>Global Saison</div></div>", unsafe_allow_html=True)
-                with r3c3: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{col_dyn}'>{int(avg_team_15)}</div><div class='stat-mini-lbl'>DYNAMIQUE (15J)</div><div class='stat-mini-sub'>vs {int(daily_totals.mean())} (Saison)</div></div>", unsafe_allow_html=True)
+            # LIGNE 1 : 4 KPI PRINCIPAUX
+            k1, k2, k3, k4 = st.columns(4)
+            with k1: kpi_card("TOTAL SAISON", int(total_pts_season), "POINTS CUMULÉS", C_GOLD)
+            with k2: kpi_card("MOYENNE / PICK", f"{team_avg_per_pick:.1f}", "GLOBAL ÉQUIPE", "#FFF")
+            best_rank_val = min(team_history) if team_history else 9999
+            with k3: kpi_card("MEILLEUR RANG", f"#{best_rank_val}", "HISTORIQUE", C_ACCENT)
+            with k4: kpi_card("MATCHS JOUÉS", int(latest_pick), "JOURS DE COMPÉTITION", "#FFF")
 
-            with c_info:
-                st.markdown(f"""<div class="glass-card" style="height:100%; display:flex; flex-direction:column; justify-content:space-around; padding:20px;"><div style="text-align:center; margin-bottom:15px; font-family:Rajdhani; font-weight:700; font-size:1.2rem; color:#AAA; letter-spacing:2px; border-bottom:1px solid #333; padding-bottom:10px;">PERFORMANCES COLLECTIVES</div><div class="hq-card-row"><div class="hq-lbl">🚀 PLAFOND <span style="font-size:0.6rem; color:#666">(RECORD)</span></div><div class="hq-val" style="color:{C_GREEN}">{int(best_night)}</div></div><div class="hq-card-row"><div class="hq-lbl">⚖️ MOYENNE <span style="font-size:0.6rem; color:#666">(SAISON)</span></div><div class="hq-val">{int(avg_night)}</div></div><div class="hq-card-row"><div class="hq-lbl">🧱 PLANCHER <span style="font-size:0.6rem; color:#666">(PIRE SOIR)</span></div><div class="hq-val" style="color:{C_ACCENT}">{int(worst_night)}</div></div></div>""", unsafe_allow_html=True)
+            st.markdown("<br>", unsafe_allow_html=True)
+
+            # LIGNE 2 : DETAIL 3/4 + RECORDS 1/4
+            c_grid, c_rec = st.columns([3, 1])
+            
+            with c_grid:
+                # Grille 3 colonnes x 2 lignes = 6 cartes
+                g1, g2, g3 = st.columns(3)
+                with g1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_BONUS}'>{total_bonus_played}</div><div class='stat-mini-lbl'>BONUS JOUÉS</div></div>", unsafe_allow_html=True)
+                with g2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{avg_bonus_team:.1f}</div><div class='stat-mini-lbl'>EFFICIENCE BONUS</div></div>", unsafe_allow_html=True)
+                with g3: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_ACCENT}'>{total_nukes_team}</div><div class='stat-mini-lbl'>TOTAL NUKES (50+)</div></div>", unsafe_allow_html=True)
+                
+                st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
+                
+                g4, g5, g6 = st.columns(3)
+                with g4: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_ORANGE}'>{total_carrots_team}</div><div class='stat-mini-lbl'>TOTAL CAROTTES (<20)</div></div>", unsafe_allow_html=True)
+                with g5: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{col_dyn}'>{int(avg_team_15)}</div><div class='stat-mini-lbl'>DYNAMIQUE 15J</div></div>", unsafe_allow_html=True)
+                with g6: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_GREEN}'>{team_heavy_hits}</div><div class='stat-mini-lbl'>HEAVY HITS (40+)</div></div>", unsafe_allow_html=True)
+
+            with c_rec:
+                st.markdown(f"""<div class="glass-card" style="height:100%; display:flex; flex-direction:column; justify-content:center; padding:20px;"><div style="text-align:center; margin-bottom:15px; font-family:Rajdhani; font-weight:700; font-size:1.1rem; color:#AAA; letter-spacing:1px; border-bottom:1px solid #333; padding-bottom:10px;">RECORDS & MOYENNES</div><div class="hq-card-row"><div class="hq-lbl">🚀 RECORD</div><div class="hq-val" style="color:{C_GREEN}">{int(best_night)}</div></div><div class="hq-card-row"><div class="hq-lbl">⚖️ MOYENNE</div><div class="hq-val">{int(avg_night)}</div></div><div class="hq-card-row"><div class="hq-lbl">🧱 PLANCHER</div><div class="hq-val" style="color:{C_ACCENT}">{int(worst_night)}</div></div></div>""", unsafe_allow_html=True)
 
             st.markdown("<div style='margin-bottom:30px'></div>", unsafe_allow_html=True)
             if len(team_history) > 1:
@@ -473,13 +483,13 @@ try:
                 fig_h.update_traces(line_color=C_ACCENT, line_width=3, marker_size=8)
                 fig_h.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, yaxis=dict(autorange="reversed", gridcolor='#222'), xaxis=dict(showgrid=False))
                 st.plotly_chart(fig_h, use_container_width=True)
-            st.markdown("### 📈 DYNAMIQUE TEAM (15 DERNIERS MATCHS)")
-            st.markdown("<div class='chart-desc'>Cumul des points de toute l'équipe soir après soir vs la moyenne habituelle.</div>", unsafe_allow_html=True)
-            fig_team_trend = px.line(last_15_team, x='Pick', y='Score', markers=True)
-            fig_team_trend.update_traces(line_color=C_ACCENT, line_width=3, marker_size=8)
-            fig_team_trend.add_hline(y=team_season_avg_total, line_dash="dot", line_color=C_TEXT, annotation_text="Moy. Totaux Saison", annotation_position="bottom right")
-            fig_team_trend.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, yaxis=dict(gridcolor='#222'), xaxis=dict(showgrid=False))
-            st.plotly_chart(fig_team_trend, use_container_width=True)
+            
+            st.markdown("### 🏔️ CONTRIBUTION CUMULÉE (STACKED AREA)")
+            # Stacked Area Chart
+            contrib_df = df.groupby(['Pick', 'Player'])['Score'].sum().reset_index()
+            fig_area = px.area(contrib_df, x='Pick', y='Score', color='Player', line_group='Player')
+            fig_area.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, yaxis=dict(gridcolor='#222'), xaxis=dict(showgrid=False))
+            st.plotly_chart(fig_area, use_container_width=True)
 
             st.markdown("### 🔥 HEATMAP DE LA SAISON")
             st.markdown(f"<div class='chart-desc'>Rouge < 35 | Gris 35-45 (Neutre) | Vert > 45.</div>", unsafe_allow_html=True)

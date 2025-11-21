@@ -36,7 +36,7 @@ C_PURE = "#14B8A6"
 C_ORANGE = "#F97316"
 C_RED = "#EF4444"
 C_DARK_GREY = "#1F2937"
-C_GREY_BAR = "#374151"
+C_GREY_BAR = "#374151" # Variable indispensable pour le graph Dashboard
 
 # --- 2. CSS PREMIUM ---
 st.markdown(f"""
@@ -73,23 +73,22 @@ st.markdown(f"""
     .kpi-label {{ color: #888; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px; }}
     .kpi-num {{ font-family: 'Rajdhani'; font-weight: 800; font-size: 2.8rem; line-height: 1; color: #FFF; }}
     
-    /* STAT BOX MINI - AJUSTEMENT PADDING/MARGIN (Demande 1) */
+    /* STAT BOX MINI (Grille 3x3) - Padding Augmenté */
     .stat-box-mini {{ 
         background: rgba(255,255,255,0.03); 
         border:1px solid rgba(255,255,255,0.05); 
         border-radius:12px; 
-        padding: 20px 10px; /* Padding interne augmenté */
+        padding: 25px 15px; /* Padding augmenté */
         text-align:center; 
         height:100%; 
         display:flex; 
         flex-direction:column; 
         justify-content:center; 
-        margin-bottom: 10px; /* Marge externe réduite */
+        margin-bottom: 15px; /* Marge augmentée */
     }}
-    
-    .stat-mini-val {{ font-family:'Rajdhani'; font-weight:700; font-size:1.6rem; color:#FFF; line-height:1; }}
-    .stat-mini-lbl {{ font-size:0.7rem; color:#888; text-transform:uppercase; margin-top:5px; letter-spacing:0.5px; }}
-    .stat-mini-sub {{ font-size:0.7rem; font-weight:600; margin-top:2px; }}
+    .stat-mini-val {{ font-family:'Rajdhani'; font-weight:700; font-size:1.8rem; color:#FFF; line-height:1; }}
+    .stat-mini-lbl {{ font-size:0.75rem; color:#888; text-transform:uppercase; margin-top:8px; letter-spacing:1px; }}
+    .stat-mini-sub {{ font-size:0.7rem; font-weight:600; margin-top:4px; color:#555; }}
     
     .stPlotlyChart {{ width: 100% !important; }}
     div[data-testid="stDataFrame"] {{ border: none !important; }}
@@ -163,32 +162,39 @@ def load_data():
         team_current_rank = 0
         team_bp_real = 0
         
-        # 1. Repérage colonne BP
+        # 1. Recherche de la colonne "BP" dans les 20 premières lignes (headers)
         bp_col_idx = -1
-        for c in range(len(df_stats.columns)):
-            for r in range(10): 
-                if str(df_stats.iloc[r, c]).strip() == "BP":
+        header_row_idx = -1
+        for r in range(20):
+            for c in range(len(df_stats.columns)):
+                val = str(df_stats.iloc[r, c]).strip()
+                if val == "BP":
                     bp_col_idx = c
+                    header_row_idx = r
                     break
             if bp_col_idx != -1: break
         
-        # 2. Repérage ligne Team Raptors
+        # 2. Si colonne trouvée, on cherche "Team Raptors" dans la colonne 0 ou 1
+        if bp_col_idx != -1:
+            for r_idx in range(header_row_idx + 1, len(df_stats)):
+                val_col0 = str(df_stats.iloc[r_idx, 0]).strip()
+                val_col1 = str(df_stats.iloc[r_idx, 1]).strip()
+                if "Team Raptors" in val_col0 or "Team Raptors" in val_col1:
+                    try:
+                        raw_bp = df_stats.iloc[r_idx, bp_col_idx]
+                        team_bp_real = int(float(str(raw_bp).replace(',', '.')))
+                    except: 
+                        team_bp_real = 0
+                    break
+
+        # 3. Récupération Historique Rang
         start_row_rank = -1
         col_start_rank = -1
-        
         for r_idx, row in df_stats.iterrows():
-            row_str = str(row[0]) if pd.notna(row[0]) else ""
-            if "Team Raptors" in row_str and bp_col_idx != -1:
-                try:
-                    val = str(df_stats.iloc[r_idx, bp_col_idx]).replace(',', '.')
-                    team_bp_real = int(float(val))
-                except: pass
-
             for c_idx, val in enumerate(row):
                 if str(val).strip() == "Classement":
                     start_row_rank = r_idx; col_start_rank = c_idx; break
             if start_row_rank != -1: break
-            
         if start_row_rank != -1:
             for i in range(start_row_rank+1, start_row_rank+30):
                 if i >= len(df_stats): break
@@ -355,7 +361,7 @@ def section_title(title, subtitle):
 try:
     df, team_rank, bp_map, team_history, daily_max_map, team_bp_real_load = load_data()
     
-    # ✅ FIX: Define Global Metric first
+    # GLOBAL METRIC
     if df is not None and not df.empty:
         team_avg_per_pick = df['Score'].mean()
     else:
@@ -363,17 +369,12 @@ try:
 
     if df is not None and not df.empty:
         latest_pick = df['Pick'].max()
-        # Copy to avoid SettingWithCopyWarning on filter
         day_df = df[df['Pick'] == latest_pick].sort_values('Score', ascending=False).copy()
         full_stats = compute_stats(df, bp_map, daily_max_map)
         leader = full_stats.sort_values('Total', ascending=False).iloc[0]
         
-        # Use real BP from sheet if found, else fallback
+        # BP Calculation Check
         total_bp_team = team_bp_real_load if team_bp_real_load > 0 else full_stats['BP_Count'].sum()
-        
-        # NEW KPI FOR TEAM HQ (Safe Zone Team)
-        # Count picks > 35 for the whole team history
-        safe_zone_team = len(df[df['Score'] >= 35])
 
         with st.sidebar:
             st.markdown("<div style='text-align:center; margin-bottom: 30px;'>", unsafe_allow_html=True)
@@ -487,6 +488,12 @@ try:
             last_15_team = team_daily_totals[team_daily_totals['Pick'] > (latest_pick - 15)]
             team_season_avg_total = team_daily_totals['Score'].mean()
             
+            if 'Month' in df.columns:
+                best_m_team = df.groupby('Month')['Score'].sum().idxmax()
+                best_m_val_team = df.groupby('Month')['Score'].sum().max()
+            else:
+                best_m_team = "-"; best_m_val_team = 0
+
             k1, k2, k3, k4 = st.columns(4)
             with k1: kpi_card("TOTAL SAISON", int(total_pts_season), "POINTS CUMULÉS", C_GOLD)
             with k2: kpi_card("MOYENNE / PICK", f"{team_avg_per_pick:.1f}", "PAR JOUEUR", "#FFF")
@@ -504,12 +511,13 @@ try:
                 with g1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(latest_pick)}</div><div class='stat-mini-lbl'>MATCHS JOUÉS</div></div>", unsafe_allow_html=True)
                 with g2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_ACCENT}'>{current_rank_disp}</div><div class='stat-mini-lbl'>CLASSEMENT ACTUEL</div></div>", unsafe_allow_html=True)
                 with g3: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_GOLD}'>{best_rank_ever}</div><div class='stat-mini-lbl'>BEST RANK EVER</div></div>", unsafe_allow_html=True)
+                st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
                 
                 g4, g5, g6 = st.columns(3)
-                # REMPLACEMENT KPI ICI : SAFE ZONE TEAM
-                with g4: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{safe_zone_team}</div><div class='stat-mini-lbl'>SAFE ZONE (35+)</div></div>", unsafe_allow_html=True)
+                with g4: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{best_m_team}</div><div class='stat-mini-lbl'>MEILLEUR MOIS ({int(best_m_val_team)})</div></div>", unsafe_allow_html=True)
                 with g5: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_GREEN}'>{total_nukes_team}</div><div class='stat-mini-lbl'>TOTAL NUKES (50+)</div></div>", unsafe_allow_html=True)
                 with g6: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_RED}'>{total_carrots_team}</div><div class='stat-mini-lbl'>TOTAL CAROTTES (<20)</div></div>", unsafe_allow_html=True)
+                st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
                 
                 g7, g8, g9 = st.columns(3)
                 with g7: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_PURPLE}'>{total_bp_team}</div><div class='stat-mini-lbl'>TOTAL BEST PICKS</div></div>", unsafe_allow_html=True)

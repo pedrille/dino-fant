@@ -93,7 +93,6 @@ st.markdown(f"""
         border-radius: 4px; 
         display: flex; align-items: center; justify-content: center; 
         font-family: 'Rajdhani'; font-weight: 700; font-size: 0.8rem;
-        color: #FFF;
         margin: 0 1px;
     }}
     .match-row {{ 
@@ -103,6 +102,22 @@ st.markdown(f"""
         gap: 2px; 
         margin: 15px 0; 
         overflow-x: auto;
+    }}
+
+    /* Boutons Streamlit Fix */
+    .stButton button {{
+        background-color: #1F2937 !important;
+        color: #FFFFFF !important;
+        border: 1px solid #374151 !important;
+        font-weight: 600 !important;
+        font-family: 'Rajdhani', sans-serif !important;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }}
+    .stButton button:hover {{
+        border-color: {C_ACCENT} !important;
+        color: {C_ACCENT} !important;
+        background-color: #111 !important;
     }}
 
     .stPlotlyChart {{ width: 100% !important; }}
@@ -580,14 +595,6 @@ try:
                 fig_h.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, yaxis=dict(autorange="reversed", gridcolor='#222'), xaxis=dict(showgrid=False))
                 st.plotly_chart(fig_h, use_container_width=True)
             
-            st.markdown("### 📈 DYNAMIQUE TEAM (15 DERNIERS MATCHS)")
-            st.markdown("<div class='chart-desc'>Score total de l'équipe jour après jour comparé à la moyenne de la saison.</div>", unsafe_allow_html=True)
-            fig_team_trend = px.line(last_15_team, x='Pick', y='Score', markers=True)
-            fig_team_trend.update_traces(line_color=C_ACCENT, line_width=3, marker_size=8)
-            fig_team_trend.add_hline(y=team_season_avg_total, line_dash="dot", line_color=C_TEXT, annotation_text="Moy. Totaux Saison", annotation_position="bottom right")
-            fig_team_trend.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, yaxis=dict(gridcolor='#222'), xaxis=dict(showgrid=False))
-            st.plotly_chart(fig_team_trend, use_container_width=True)
-
             st.markdown("### 🔥 HEATMAP DE LA SAISON")
             st.markdown(f"<div class='chart-desc'>Rouge < 35 | Gris 35-45 (Neutre) | Vert > 45.</div>", unsafe_allow_html=True)
             heatmap_data = df.pivot_table(index='Player', columns='Pick', values='Score', aggfunc='sum')
@@ -642,7 +649,7 @@ try:
             with c4: kpi_card("CLASSEMENT", f"#{internal_rank}", f"SUR {nb_players}", rank_col)
             with c5: kpi_card("BEST SCORE", int(p_data['Best']), "RECORD", C_GOLD)
 
-            # --- NEW ROW: LAST 30 PICKS VISUALIZER (REVERSE ORDER) ---
+            # --- NEW ROW: LAST 30 PICKS VISUALIZER (REVERSE ORDER + BONUS YELLOW) ---
             st.markdown("<div style='margin-top:20px; margin-bottom:5px; color:#888; font-size:0.8rem; text-transform:uppercase; letter-spacing:1px; text-align:center'>FORME RÉCENTE (30 DERNIERS MATCHS)</div>", unsafe_allow_html=True)
             last_30_picks = p_hist_all.sort_values('Pick', ascending=False).head(30)
             last_30_picks = last_30_picks.sort_values('Pick', ascending=True) # REVERSE ORDER
@@ -651,9 +658,18 @@ try:
                 html_picks = "<div class='match-row' style='width:100%'>"
                 for _, r in last_30_picks.iterrows():
                     sc = r['Score']
-                    bg = C_RED if sc < 20 else (C_GREEN if sc > 40 else "#333")
-                    border = f"2px solid {C_BONUS}" if r['IsBonus'] else "1px solid rgba(255,255,255,0.1)"
-                    html_picks += f"<div class='match-pill' style='background:{bg}; border:{border}' title='Pick #{r['Pick']}'>{int(sc)}</div>"
+                    
+                    # Logic Color Bonus Yellow
+                    if r['IsBonus']:
+                        bg = C_GOLD
+                        txt_col = "#000000"
+                        border = f"2px solid {C_GOLD}"
+                    else:
+                        bg = C_RED if sc < 20 else (C_GREEN if sc > 40 else "#333")
+                        txt_col = "#FFF"
+                        border = "1px solid rgba(255,255,255,0.1)"
+                        
+                    html_picks += f"<div class='match-pill' style='background:{bg}; color:{txt_col}; border:{border}' title='Pick #{r['Pick']}'>{int(sc)}</div>"
                 html_picks += "</div>"
                 st.markdown(html_picks, unsafe_allow_html=True)
             else:
@@ -674,7 +690,6 @@ try:
                 st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
                 
                 r2c1, r2c2, r2c3 = st.columns(3, gap="small")
-                # UPDATE REQUEST: Moyenne Pure & Best Raw (Meilleur Score Sec)
                 with r2c1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{p_data['Moyenne_Raw']:.1f}</div><div class='stat-mini-lbl'>MOYENNE PURE</div></div>", unsafe_allow_html=True)
                 with r2c2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(p_data['Best_Raw'])}</div><div class='stat-mini-lbl'>MEILLEUR SCORE SEC</div></div>", unsafe_allow_html=True)
                 with r2c3: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(p_data['Worst'])}</div><div class='stat-mini-lbl'>PIRE SCORE</div></div>", unsafe_allow_html=True)

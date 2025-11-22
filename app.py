@@ -7,6 +7,7 @@ from streamlit_option_menu import option_menu
 import numpy as np
 import requests
 import streamlit.components.v1 as components
+import statistics
 
 # --- 1. CONFIGURATION & ASSETS ---
 st.set_page_config(
@@ -93,6 +94,7 @@ st.markdown(f"""
         border-radius: 4px; 
         display: flex; align-items: center; justify-content: center; 
         font-family: 'Rajdhani'; font-weight: 700; font-size: 0.8rem;
+        color: #FFF;
         margin: 0 1px;
     }}
     .match-row {{ 
@@ -317,6 +319,37 @@ def compute_stats(df, bp_map, daily_max_map):
         best_with_bonus = scores_with_bonus.max() if len(scores_with_bonus) > 0 else 0
         best_without_bonus = scores_without_bonus.max() if len(scores_without_bonus) > 0 else 0
         
+        # CALCULATION NO CARROT STREAK
+        current_no_carrot_streak = 0
+        for s in reversed(scores):
+            if s >= 20: current_no_carrot_streak += 1
+            else: break
+            
+        # CALCULATION MAX HISTORICAL NO CARROT STREAK
+        max_no_carrot = 0
+        current_count = 0
+        for s in scores:
+            if s >= 20:
+                current_count += 1
+                if current_count > max_no_carrot: max_no_carrot = current_count
+            else:
+                current_count = 0
+        
+        # CALCULATION MODE (MOST FREQUENT SCORE)
+        try:
+            # statistics.mode raises error if no unique mode in old versions, but multimode is better
+            # We manually count to be safe
+            vals, counts = np.unique(scores, return_counts=True)
+            max_count_idx = np.argmax(counts)
+            mode_score = vals[max_count_idx]
+            mode_count = counts[max_count_idx]
+        except:
+            mode_score = 0
+            mode_count = 0
+
+        # CALCULATION SPREAD (ALBATROSS)
+        spread = scores.max() - scores.min()
+
         streak_30 = 0
         for s in reversed(scores):
             if s >= 30: streak_30 += 1
@@ -360,7 +393,8 @@ def compute_stats(df, bp_map, daily_max_map):
             'Bonus_Gained': bonus_points_gained, 'Best_Bonus': best_bonus, 'Worst_Bonus': worst_bonus,
             'Avg_Bonus': avg_bonus_score, 'Momentum': momentum, 'Games': len(scores),
             'ProgressionPct': progression_pct, 'ReliabilityPct': reliability_pct, 'AvgZ': avg_z,
-            'Trend': trend_data.get(p, []), 'AvgWithBonus': avg_with_bonus, 'AvgWithoutBonus': avg_without_bonus, 'BonusPlayed': len(scores_with_bonus)
+            'Trend': trend_data.get(p, []), 'AvgWithBonus': avg_with_bonus, 'AvgWithoutBonus': avg_without_bonus, 'BonusPlayed': len(scores_with_bonus),
+            'CurrentNoCarrot': current_no_carrot_streak, 'MaxNoCarrot': max_no_carrot, 'ModeScore': mode_score, 'ModeCount': mode_count, 'Spread': spread
         })
     return pd.DataFrame(stats)
 
@@ -442,7 +476,7 @@ try:
             st.image("raptors-ttfl-min.png", use_container_width=True) 
             st.markdown("</div>", unsafe_allow_html=True)
             menu = option_menu(menu_title=None, options=["Dashboard", "Team HQ", "Player Lab", "Bonus x2", "Trends", "Hall of Fame", "Admin"], icons=["grid-fill", "people-fill", "person-bounding-box", "lightning-charge-fill", "fire", "trophy-fill", "shield-lock"], default_index=0, styles={"container": {"padding": "0!important", "background-color": "#000000"}, "icon": {"color": "#666", "font-size": "1.1rem"}, "nav-link": {"font-family": "Rajdhani, sans-serif", "font-weight": "700", "font-size": "15px", "text-transform": "uppercase", "color": "#AAA", "text-align": "left", "margin": "5px 0px", "--hover-color": "#111"}, "nav-link-selected": {"background-color": C_ACCENT, "color": "#FFF", "icon-color": "#FFF", "box-shadow": "0px 4px 20px rgba(206, 17, 65, 0.4)"}})
-            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v15.1</div></div>""", unsafe_allow_html=True)
+            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v16.0</div></div>""", unsafe_allow_html=True)
             components.html("""<script>const options = window.parent.document.querySelectorAll('.nav-link'); options.forEach((option) => { option.addEventListener('click', () => { const sidebar = window.parent.document.querySelector('section[data-testid="stSidebar"]'); if (sidebar) {} }); });</script>""", height=0, width=0)
 
         if menu == "Dashboard":
@@ -642,16 +676,17 @@ try:
             diff_form = ((form_15 - p_data['Moyenne']) / p_data['Moyenne']) * 100
             sign = "+" if diff_form > 0 else ""
             color_diff = C_GREEN if diff_form > 0 else "#F87171"
-            z_val = p_data['AvgZ']
-            z_col = C_GREEN if z_val > 0.5 else (C_RED if z_val < -0.5 else "#DDD")
+            z_val = p_data['CurrentNoCarrot']
+            #z_col = C_GREEN if z_val > 0.5 else (C_RED if z_val < -0.5 else "#DDD")
+            z_col = C_GREEN if z_val > 3 else (C_RED if z_val == 0 else "#FFF")
+
             rank_col = C_GOLD if internal_rank == 1 else (C_SILVER if internal_rank == 2 else (C_BRONZE if internal_rank == 3 else "#FFF"))
 
             # --- KPI ROW 1 (ON GARDE) ---
             c1, c2, c3, c4, c5 = st.columns(5)
             with c1: kpi_card("TOTAL POINTS", int(p_data['Total']), "SAISON")
             with c2: kpi_card("MOYENNE", f"{p_data['Moyenne']:.1f}", "PTS / PICK")
-            # CORRECTION ICI (IMPACT SAISON)
-            with c3: kpi_card("CONTRIBUTION", f"{z_val:+.2f}", "IMPACT SAISON", z_col)
+            with c3: kpi_card("SÉRIE NO-CAROTTE", f"{int(z_val)}", "MATCHS (>20 PTS)", z_col)
             with c4: kpi_card("CLASSEMENT", f"#{internal_rank}", f"SUR {nb_players}", rank_col)
             with c5: kpi_card("BEST SCORE", int(p_data['Best']), "RECORD", C_GOLD)
 
@@ -897,6 +932,8 @@ try:
             # Team Stats 15 days
             team_daily_15 = df_15.groupby('Pick')['Score'].sum()
             avg_15_team = team_daily_15.mean()
+            total_pts_15 = df_15['Score'].sum()
+            max_team_15 = team_daily_15.max()
             
             # Season Stats for comparison
             team_daily_season = df.groupby('Pick')['Score'].sum()
@@ -1044,20 +1081,13 @@ try:
             metronome = full_stats.sort_values('StdDev', ascending=True).iloc[0]
             iron_wall = full_stats.sort_values('Worst', ascending=False).iloc[0]
             
-            # New Positive Calculations
-            # The Shield: Best Avg Z-Score
-            the_shield = full_stats.sort_values('AvgZ', ascending=False).iloc[0]
-            # Bonus King: Best Avg With Bonus
-            bonus_king = full_stats.sort_values('AvgWithBonus', ascending=False).iloc[0]
+            maniac = full_stats.sort_values('ModeCount', ascending=False).iloc[0]
+            iron_man = full_stats.sort_values('MaxNoCarrot', ascending=False).iloc[0]
+            albatross = full_stats.sort_values('Spread', ascending=False).iloc[0]
 
-            rollercoaster = full_stats.sort_values('StdDev', ascending=False).iloc[0]
-            traffic_jam = full_stats.sort_values('Count2030', ascending=False).iloc[0]
-            
             bad_business = full_stats.sort_values('Bonus_Gained', ascending=True).iloc[0]
-            
             has_bonus = full_stats[full_stats['Worst_Bonus'] > 0]
             crash_test = has_bonus.sort_values('Worst_Bonus', ascending=True).iloc[0] if not has_bonus.empty else full_stats.iloc[0]
-            
             brick_layer = full_stats.sort_values('Worst_Raw', ascending=True).iloc[0]
             lapin = full_stats.sort_values('Carottes', ascending=False).iloc[0]
 
@@ -1073,21 +1103,20 @@ try:
                 st.markdown(hof_card("THE CEILING", "🏔️", "#A78BFA", peak['Player'], int(peak['Best']), "PTS MAX", "Record absolu sur un match (Bonus inclus)"), unsafe_allow_html=True)
                 st.markdown(hof_card("PURE SCORER", "🏀", "#F472B6", pure_peak['Player'], int(pure_peak['Best_Raw']), "PTS MAX (BRUT)", "Record absolu sur un match (Sans bonus)"), unsafe_allow_html=True)
                 st.markdown(hof_card("THE ALCHEMIST", "⚗️", C_BONUS, alchemist['Player'], int(alchemist['Bonus_Gained']), "PTS BONUS", "Le plus de points gagnés grâce aux bonus"), unsafe_allow_html=True)
-                st.markdown(hof_card("BONUS KING", "👑", "#F59E0B", bonus_king['Player'], f"{bonus_king['AvgWithBonus']:.1f}", "PTS MOYENNE (BONUS)", "Meilleure moyenne quand le bonus est activé"), unsafe_allow_html=True)
                 st.markdown(hof_card("NUCLEAR", "☢️", "#EF4444", nuke['Player'], int(nuke['Nukes']), "BOMBS", "Le plus de scores > 50 pts"), unsafe_allow_html=True)
                 st.markdown(hof_card("HEAVY HITTER", "🥊", "#64B5F6", heavy['Player'], int(heavy['Count40']), "PICKS > 40", "Le plus de scores > 40 pts"), unsafe_allow_html=True)
                 st.markdown(hof_card("THE ROCK", "🛡️", C_GREEN, rock['Player'], int(rock['Count30']), "MATCHS", "Le plus de scores dans la Safe Zone (> 30 pts)"), unsafe_allow_html=True)
-                st.markdown(hof_card("ZEN MASTER", "🧘", "#EAB308", zen_master['Player'], f"{int(zen_master['ReliabilityPct'])}%", "FIABILITÉ", "Plus haut taux de fiabilité (Moins de carottes)"), unsafe_allow_html=True)
-
-            with c2:
                 st.markdown(hof_card("HUMAN TORCH", "🔥", "#FF5252", torche['Player'], f"{torche['Last15']:.1f}", "PTS / 15J", "Meilleure forme actuelle (Moyenne 15j)"), unsafe_allow_html=True)
                 st.markdown(hof_card("RISING STAR", "🚀", C_GREEN, progression['Player'], f"+{progression['ProgressionPct']:.1f}%", "PROGRESSION", "Plus grosse progression (Moyenne 15j vs Saison)"), unsafe_allow_html=True)
+
+            with c2:
+                st.markdown(hof_card("ZEN MASTER", "🧘", "#EAB308", zen_master['Player'], f"{int(zen_master['ReliabilityPct'])}%", "FIABILITÉ", "Plus haut taux de fiabilité (Moins de carottes)"), unsafe_allow_html=True)
                 st.markdown(hof_card("UNSTOPPABLE", "⚡", "#FBBF24", intouch['Player'], int(intouch['Streak30']), "SERIE", "Plus longue série consécutive > 30 pts"), unsafe_allow_html=True)
                 st.markdown(hof_card("THE METRONOME", "⏰", "#A1A1AA", metronome['Player'], f"{metronome['StdDev']:.1f}", "ECART TYPE", "Le joueur le plus régulier (Faible variation)"), unsafe_allow_html=True)
+                st.markdown(hof_card("THE MANIAC", "🤪", "#F472B6", maniac['Player'], f"{maniac['ModeScore']}", f"{maniac['ModeCount']} FOIS", "Le score le plus souvent répété par ce joueur"), unsafe_allow_html=True)
                 st.markdown(hof_card("IRON WALL", "🧱", "#78350F", iron_wall['Player'], int(iron_wall['Worst']), "PIRE SCORE", "Le 'Pire score' le plus élevé (Plancher haut)"), unsafe_allow_html=True)
-                st.markdown(hof_card("THE SHIELD", "🛡️", "#3B82F6", the_shield['Player'], f"+{the_shield['AvgZ']:.2f}", "CONTRIBUTION", "Le joueur qui performe le mieux par rapport au niveau moyen de l'équipe."), unsafe_allow_html=True)
-                st.markdown(hof_card("ROLLERCOASTER", "🎢", "#EC4899", rollercoaster['Player'], f"{rollercoaster['StdDev']:.1f}", "ECART TYPE", "Le joueur le plus instable (Forte variation)"), unsafe_allow_html=True)
-                st.markdown(hof_card("TRAFFIC JAM", "🚦", "#6B7280", traffic_jam['Player'], int(traffic_jam['Count2030']), "MATCHS", "Le plus de scores moyens (entre 20 et 30 pts)"), unsafe_allow_html=True)
+                st.markdown(hof_card("THE ALBATROSS", "🦅", "#14B8A6", albatross['Player'], int(albatross['Spread']), "AMPLITUDE", "Plus grand écart entre le record et le pire score"), unsafe_allow_html=True)
+                st.markdown(hof_card("IRON MAN", "🤖", "#6366F1", iron_man['Player'], int(iron_man['MaxNoCarrot']), "MATCHS", "Plus longue série historique sans carotte (< 20 pts)"), unsafe_allow_html=True)
                 st.markdown(hof_card("CRASH TEST", "💥", C_ORANGE, crash_test['Player'], int(crash_test['Worst_Bonus']), "PTS MIN (X2)", "Le pire score réalisé avec un bonus actif"), unsafe_allow_html=True)
                 st.markdown(hof_card("BAD BUSINESS", "💸", "#666", bad_business['Player'], int(bad_business['Bonus_Gained']), "PTS BONUS", "Le moins de points gagnés grâce aux bonus"), unsafe_allow_html=True)
                 st.markdown(hof_card("THE BRICK", "🏗️", "#4B5563", brick_layer['Player'], int(brick_layer['Worst_Raw']), "PTS MIN (BRUT)", "Le pire score brut enregistré"), unsafe_allow_html=True)

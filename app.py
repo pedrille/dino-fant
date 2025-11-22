@@ -869,31 +869,70 @@ try:
         elif menu == "Trends":
             section_title("TENDANCES", "Analyse de la forme récente (15 derniers jours)")
             
-            # DATA PREP TRENDS
+            # DATA PREP TRENDS (15 DAYS FIXED)
             df_15 = df[df['Pick'] > (latest_pick - 15)]
-            avg_15_team = df_15['Score'].mean()
-            season_avg_team = df['Score'].mean()
+            
+            # Team Stats 15 days
+            team_daily_15 = df_15.groupby('Pick')['Score'].sum()
+            avg_15_team = team_daily_15.mean()
+            total_pts_15 = df_15['Score'].sum()
+            max_team_15 = team_daily_15.max()
+            
+            # Season Stats for comparison
+            team_daily_season = df.groupby('Pick')['Score'].sum()
+            season_avg_team = team_daily_season.mean()
+            
+            # Dynamic Diff
             team_trend_diff = ((avg_15_team - season_avg_team) / season_avg_team) * 100
+            
+            # Best Player 15 days
             best_form_player = df_15.groupby('Player')['Score'].mean().idxmax()
             best_form_val = df_15.groupby('Player')['Score'].mean().max()
 
-            # --- TOP KPI ROW (METEO TEAM) ---
-            c1, c2, c3 = st.columns(3)
-            with c1: kpi_card("MOYENNE TEAM (15J)", f"{avg_15_team:.1f}", "POINTS / PICK", C_BLUE)
+            # --- TOP KPI ROW (5 KPIs) ---
+            k1, k2, k3, k4, k5 = st.columns(5)
+            with k1: kpi_card("MOYENNE TEAM (15J)", f"{avg_15_team:.0f}", "POINTS / SOIR", C_BLUE)
+            
             col_trend = C_GREEN if team_trend_diff > 0 else C_RED
             sign_trend = "+" if team_trend_diff > 0 else ""
-            with c2: kpi_card("DYNAMIQUE TEAM", f"{sign_trend}{team_trend_diff:.1f}%", "VS SAISON", col_trend)
-            with c3: kpi_card("HOMME EN FORME", best_form_player, f"{best_form_val:.1f} PTS MOY.", C_GOLD)
+            with k2: kpi_card("DYNAMIQUE", f"{sign_trend}{team_trend_diff:.1f}%", "VS SAISON", col_trend)
+            
+            with k3: kpi_card("TOTAL PTS (15J)", int(total_pts_15), "CUMULÉ", "#FFF")
+            with k4: kpi_card("PLAFOND TEAM (15J)", int(max_team_15), "MEILLEUR SOIR", C_GOLD)
+            with k5: kpi_card("MVP PÉRIODE", best_form_player, f"{best_form_val:.1f} PTS", C_ACCENT)
 
             st.markdown("<br>", unsafe_allow_html=True)
 
-            # --- HOT VS COLD COLUMNS ---
-            # Calculate Delta for all players
-            player_season_avg = df.groupby('Player')['Score'].mean()
-            player_10_avg = df[df['Pick'] > (latest_pick - 10)].groupby('Player')['Score'].mean()
+            # --- TEAM GRAPH (15 DAYS) ---
+            st.markdown("#### 📉 ÉVOLUTION DU SCORE D'ÉQUIPE (15 DERNIERS JOURS)")
+            st.markdown("<div class='chart-desc'>Comparatif du total journalier vs la moyenne de la saison.</div>", unsafe_allow_html=True)
             
-            delta_df = pd.DataFrame({'Season': player_season_avg, 'Last10': player_10_avg})
-            delta_df['Delta'] = delta_df['Last10'] - delta_df['Season']
+            # Plot
+            fig_team_15 = px.line(team_daily_15, markers=True)
+            fig_team_15.update_traces(line_color=C_ACCENT, line_width=3, marker_size=8)
+            # Add Season Avg Line
+            fig_team_15.add_hline(y=season_avg_team, line_dash="dot", line_color=C_TEXT, annotation_text=f"Moyenne Saison ({int(season_avg_team)})", annotation_position="bottom right")
+            
+            fig_team_15.update_layout(
+                plot_bgcolor='rgba(0,0,0,0)', 
+                paper_bgcolor='rgba(0,0,0,0)', 
+                font={'color': '#AAA'}, 
+                xaxis=dict(showgrid=False, title=None), 
+                yaxis=dict(showgrid=True, gridcolor='#222', title="Points Totaux"), 
+                height=350,
+                showlegend=False
+            )
+            st.plotly_chart(fig_team_15, use_container_width=True)
+
+            st.markdown("<br>", unsafe_allow_html=True)
+
+            # --- HOT VS COLD COLUMNS (15 DAYS LOGIC) ---
+            # Calculate Delta: Avg Last 15 - Avg Season
+            player_season_avg = df.groupby('Player')['Score'].mean()
+            player_15_avg = df[df['Pick'] > (latest_pick - 15)].groupby('Player')['Score'].mean()
+            
+            delta_df = pd.DataFrame({'Season': player_season_avg, 'Last15': player_15_avg})
+            delta_df['Delta'] = delta_df['Last15'] - delta_df['Season']
             delta_df = delta_df.dropna()
 
             hot_players = delta_df[delta_df['Delta'] > 0].sort_values('Delta', ascending=False).head(5)
@@ -902,7 +941,7 @@ try:
             c_hot, c_cold = st.columns(2, gap="large")
             
             with c_hot:
-                st.markdown(f"<div class='trend-box'><div class='hot-header'>🔥 EN FEU (SUR-PERFORMANCE)</div><div style='font-size:0.8rem; color:#888; margin-bottom:10px'>Joueurs au-dessus de leur moyenne saison sur les 10 derniers matchs.</div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='trend-box'><div class='hot-header'>🔥 EN FEU (SUR-PERFORMANCE)</div><div style='font-size:0.8rem; color:#888; margin-bottom:10px'>Joueurs au-dessus de leur moyenne saison sur les 15 derniers matchs.</div>", unsafe_allow_html=True)
                 if hot_players.empty:
                     st.info("Personne n'est en sur-régime actuellement.")
                 else:
@@ -911,7 +950,7 @@ try:
                         <div class='trend-card-row'>
                             <div class='trend-name'>{p}</div>
                             <div style='text-align:right'>
-                                <div class='trend-val' style='color:{C_GREEN}'>{row['Last10']:.1f}</div>
+                                <div class='trend-val' style='color:{C_GREEN}'>{row['Last15']:.1f}</div>
                                 <div class='trend-delta' style='color:{C_GREEN}'>+{row['Delta']:.1f}</div>
                             </div>
                         </div>
@@ -919,7 +958,7 @@ try:
                 st.markdown("</div>", unsafe_allow_html=True)
 
             with c_cold:
-                st.markdown(f"<div class='trend-box'><div class='cold-header'>❄️ DANS LE DUR (SOUS-PERFORMANCE)</div><div style='font-size:0.8rem; color:#888; margin-bottom:10px'>Joueurs en-dessous de leur moyenne saison sur les 10 derniers matchs.</div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='trend-box'><div class='cold-header'>❄️ DANS LE DUR (SOUS-PERFORMANCE)</div><div style='font-size:0.8rem; color:#888; margin-bottom:10px'>Joueurs en-dessous de leur moyenne saison sur les 15 derniers matchs.</div>", unsafe_allow_html=True)
                 if cold_players.empty:
                     st.info("Tout le monde tient son rang !")
                 else:
@@ -928,7 +967,7 @@ try:
                         <div class='trend-card-row'>
                             <div class='trend-name'>{p}</div>
                             <div style='text-align:right'>
-                                <div class='trend-val' style='color:{C_RED}'>{row['Last10']:.1f}</div>
+                                <div class='trend-val' style='color:{C_RED}'>{row['Last15']:.1f}</div>
                                 <div class='trend-delta' style='color:{C_RED}'>{row['Delta']:.1f}</div>
                             </div>
                         </div>
@@ -937,16 +976,24 @@ try:
 
             st.markdown("<br>", unsafe_allow_html=True)
 
-            # --- MOMENTUM CHART ---
-            st.markdown("#### 📈 MOMENTUM LEADERS (TOP 5 FORME)")
-            st.markdown("<div class='chart-desc'>Trajectoire des 5 joueurs les plus en forme du moment (Moyenne 15 jours).</div>", unsafe_allow_html=True)
+            # --- MOMENTUM CHART (ALL PLAYERS 15 DAYS) ---
+            st.markdown("#### 📈 MOMENTUM (15 DERNIERS JOURS)")
+            st.markdown("<div class='chart-desc'>Trajectoire de tous les joueurs actifs sur la période.</div>", unsafe_allow_html=True)
             
-            # Get Top 5 players by Last 15 Avg
-            top_5_names = df_15.groupby('Player')['Score'].mean().sort_values(ascending=False).head(5).index.tolist()
-            momentum_data = df_15[df_15['Player'].isin(top_5_names)].sort_values('Pick')
+            # Filter only players who played in last 15 days
+            active_players = df_15['Player'].unique()
+            momentum_data = df_15[df_15['Player'].isin(active_players)].sort_values('Pick')
             
             fig_mom = px.line(momentum_data, x='Pick', y='Score', color='Player', markers=True)
-            fig_mom.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, xaxis=dict(showgrid=False), yaxis=dict(showgrid=True, gridcolor='#222'), height=400)
+            fig_mom.update_layout(
+                plot_bgcolor='rgba(0,0,0,0)', 
+                paper_bgcolor='rgba(0,0,0,0)', 
+                font={'color': '#AAA'}, 
+                xaxis=dict(showgrid=False), 
+                yaxis=dict(showgrid=True, gridcolor='#222'), 
+                height=500,
+                legend=dict(orientation="h", y=-0.2)
+            )
             st.plotly_chart(fig_mom, use_container_width=True)
 
         elif menu == "Hall of Fame":

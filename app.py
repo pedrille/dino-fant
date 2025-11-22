@@ -888,16 +888,19 @@ try:
             # Best Player 15 days
             best_form_player = df_15.groupby('Player')['Score'].mean().idxmax()
             best_form_val = df_15.groupby('Player')['Score'].mean().max()
+            
+            # Average Individual Score over last 15 days
+            avg_15_indiv = df_15['Score'].mean()
 
             # --- TOP KPI ROW (5 KPIs) ---
             k1, k2, k3, k4, k5 = st.columns(5)
             with k1: kpi_card("MOYENNE TEAM (15J)", f"{avg_15_team:.0f}", "POINTS / SOIR", C_BLUE)
+            with k2: kpi_card("MOYENNE / PICK (15J)", f"{avg_15_indiv:.1f}", "INDIVIDUEL", "#FFF")
             
             col_trend = C_GREEN if team_trend_diff > 0 else C_RED
             sign_trend = "+" if team_trend_diff > 0 else ""
-            with k2: kpi_card("DYNAMIQUE", f"{sign_trend}{team_trend_diff:.1f}%", "VS SAISON", col_trend)
+            with k3: kpi_card("DYNAMIQUE", f"{sign_trend}{team_trend_diff:.1f}%", "VS SAISON", col_trend)
             
-            with k3: kpi_card("TOTAL PTS (15J)", int(total_pts_15), "CUMULÉ", "#FFF")
             with k4: kpi_card("PLAFOND TEAM (15J)", int(max_team_15), "MEILLEUR SOIR", C_GOLD)
             with k5: kpi_card("MVP PÉRIODE", best_form_player, f"{best_form_val:.1f} PTS", C_ACCENT)
 

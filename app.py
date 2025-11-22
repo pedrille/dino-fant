@@ -179,7 +179,7 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # --- 3. DATA ENGINE ---
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=0) # Ne garde rien en mémoire, recharge à chaque visite
 def load_data():
     conn = st.connection("gsheets", type=GSheetsConnection)
     try:

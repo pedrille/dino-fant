@@ -98,7 +98,8 @@ st.markdown(f"""
     h1 {{ font-size: 3rem; font-weight: 800; background: linear-gradient(90deg, #FFF, #888); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }}
     .sub-header {{ font-size: 0.9rem; color: #666; letter-spacing: 1.5px; margin-bottom: 25px; font-weight: 500; }}
     
-    /* --- FIX UI DASHBOARD : HAUTEUR FIXE --- */
+    /* --- FIX UI DASHBOARD : CLASSE GENERIQUE --- */
+    /* On retire la hauteur fixe ici pour que les cartes s'adaptent au contenu */
     .glass-card {{ 
         background: linear-gradient(145deg, rgba(25,25,25,0.6) 0%, rgba(10,10,10,0.8) 100%); 
         backdrop-filter: blur(20px); 
@@ -107,8 +108,11 @@ st.markdown(f"""
         padding: 24px; 
         margin-bottom: 20px; 
         box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
-        
-        /* Modification ici : Hauteur fixe pour alignement parfait */
+    }}
+
+    /* --- NOUVELLE CLASSE SPECIFIQUE POUR LE HAUT DU DASHBOARD --- */
+    /* Celle-ci impose la hauteur fixe de 190px */
+    .kpi-dashboard-fixed {{
         height: 190px; 
         display: flex;
         flex-direction: column;
@@ -143,7 +147,7 @@ st.markdown(f"""
         display:flex; 
         flex-direction:column; 
         justify-content:center; 
-        margin-bottom: 0px; /* Géré par le gap de Streamlit */
+        margin-bottom: 0px; 
     }}
     .stat-mini-val {{ font-family:'Rajdhani'; font-weight:700; font-size:1.8rem; color:#FFF; line-height:1; }}
     .stat-mini-lbl {{ font-size:0.75rem; color:#888; text-transform:uppercase; margin-top:8px; letter-spacing:1px; }}
@@ -151,7 +155,7 @@ st.markdown(f"""
     
     /* Player Lab - Match Pills FULL WIDTH RESPONSIVE SCROLL REVERSE */
     .match-pill {{
-        flex: 0 0 auto; /* Don't shrink/grow freely, keep fixed size logic */
+        flex: 0 0 auto; 
         min-width: 30px;
         height: 40px; 
         border-radius: 4px; 
@@ -162,12 +166,12 @@ st.markdown(f"""
     }}
     .match-row {{ 
         display: flex; 
-        flex-direction: row-reverse; /* Afficher du plus récent au plus ancien (Gauche < Droite) */
+        flex-direction: row-reverse; 
         overflow-x: auto;
         gap: 4px; 
         padding-bottom: 8px;
         width: 100%;
-        justify-content: flex-start; /* Avec row-reverse, le début est à droite */
+        justify-content: flex-start; 
     }}
 
     /* Boutons Streamlit Fix */
@@ -320,7 +324,7 @@ def load_data():
             for r_idx in range(header_row_idx + 1, len(df_stats)):
                 val_name_col = str(df_stats.iloc[r_idx, bp_col_idx - 1]).strip()
                 val_bp_raw = df_stats.iloc[r_idx, bp_col_idx]
-                
+               
                 if "Team Raptors" in val_name_col:
                     try:
                         team_bp_real = int(float(str(val_bp_raw).replace(',', '.')))
@@ -530,9 +534,11 @@ def send_discord_webhook(day_df, pick_num, url_app):
     except Exception as e: return str(e)
 
 # --- 5. UI COMPONENTS ---
-# FIX DASHBOARD MVP: New Line for Badges + FIX UI 2 (Gestion du vide) + FIX UI 1 (Fixed Height)
-def kpi_card(label, value, sub, color="#FFF"):
-    st.markdown(f"""<div class="glass-card" style="text-align:center"><div class="kpi-label">{label}</div><div class="kpi-num" style="color:{color}">{value}</div><div class="kpi-sub" style="color:{C_ACCENT}">{sub}</div></div>""", unsafe_allow_html=True)
+# FIX DASHBOARD MVP: New Line for Badges + FIX UI 2 (Gestion du vide) + FIX UI 3 (Fixe Hauteur uniquement sur Dashboard)
+def kpi_card(label, value, sub, color="#FFF", is_fixed=False):
+    # Si is_fixed est True (pour le haut du dashboard), on ajoute la classe spécifique
+    style_class = "glass-card kpi-dashboard-fixed" if is_fixed else "glass-card"
+    st.markdown(f"""<div class="{style_class}" style="text-align:center"><div class="kpi-label">{label}</div><div class="kpi-num" style="color:{color}">{value}</div><div class="kpi-sub" style="color:{C_ACCENT}">{sub}</div></div>""", unsafe_allow_html=True)
 
 def section_title(title, subtitle):
     st.markdown(f"<h1>{title}</h1><div class='sub-header'>{subtitle}</div>", unsafe_allow_html=True)
@@ -589,7 +595,7 @@ try:
             st.markdown("</div>", unsafe_allow_html=True)
             # MENU CLEAN (NO CARROT EMOJI)
             menu = option_menu(menu_title=None, options=["Dashboard", "Team HQ", "Player Lab", "Bonus x2", "No-Carrot", "Trends", "Hall of Fame", "Admin"], icons=["grid-fill", "people-fill", "person-bounding-box", "lightning-charge-fill", "shield-check", "fire", "trophy-fill", "shield-lock"], default_index=0, styles={"container": {"padding": "0!important", "background-color": "#000000"}, "icon": {"color": "#666", "font-size": "1.1rem"}, "nav-link": {"font-family": "Rajdhani, sans-serif", "font-weight": "700", "font-size": "15px", "text-transform": "uppercase", "color": "#AAA", "text-align": "left", "margin": "5px 0px", "--hover-color": "#111"}, "nav-link-selected": {"background-color": C_ACCENT, "color": "#FFF", "icon-color": "#FFF", "box-shadow": "0px 4px 20px rgba(206, 17, 65, 0.4)"}})
-            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v21.1</div></div>""", unsafe_allow_html=True)
+            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v21.3</div></div>""", unsafe_allow_html=True)
             
         if menu == "Dashboard":
             section_title("RAPTORS <span class='highlight'>DASHBOARD</span>", f"Daily Briefing • Pick #{int(latest_pick)}")
@@ -607,21 +613,24 @@ try:
 
             # 5 COLONNES POUR LE DASHBOARD
             c1, c2, c3, c4, c5 = st.columns(5)
+            
+            # Application de kpi-dashboard-fixed (is_fixed=True) seulement sur ces 5 cartes
             with c1: 
-                # On passe sub_html mais on force l'affichage
-                st.markdown(f"""<div class="glass-card" style="text-align:center"><div class="kpi-label">MVP DU SOIR</div><div class="kpi-num" style="color:{C_GOLD}">{top['Player']}</div><div class="kpi-sub" style="color:{C_ACCENT}">{sub_html}</div></div>""", unsafe_allow_html=True)
+                # On passe sub_html mais on force l'affichage AVEC la classe fixe pour l'alignement
+                st.markdown(f"""<div class="glass-card kpi-dashboard-fixed" style="text-align:center"><div class="kpi-label">MVP DU SOIR</div><div class="kpi-num" style="color:{C_GOLD}">{top['Player']}</div><div class="kpi-sub" style="color:{C_ACCENT}">{sub_html}</div></div>""", unsafe_allow_html=True)
             
             total_day = day_df['Score'].sum()
-            with c2: kpi_card("TOTAL TEAM SOIR", int(total_day), "POINTS")
+            with c2: kpi_card("TOTAL TEAM SOIR", int(total_day), "POINTS", is_fixed=True)
+            
             team_daily_avg = day_df['Score'].mean()
             diff_perf = ((team_daily_avg - team_avg_per_pick) / team_avg_per_pick) * 100
             perf_col = C_GREEN if diff_perf > 0 else "#F87171"
-            with c3: kpi_card("PERF. TEAM SOIR", f"{diff_perf:+.1f}%", "VS MOY. SAISON", perf_col)
+            with c3: kpi_card("PERF. TEAM SOIR", f"{diff_perf:+.1f}%", "VS MOY. SAISON", perf_col, is_fixed=True)
             
             col_streak = C_GREEN if team_streak_nc > 0 else C_RED
-            with c4: kpi_card("SÉRIE TEAM NO-CARROT", f"{team_streak_nc}", "JOURS CONSÉCUTIFS", col_streak)
+            with c4: kpi_card("SÉRIE TEAM NO-CARROT", f"{team_streak_nc}", "JOURS CONSÉCUTIFS", col_streak, is_fixed=True)
             
-            with c5: kpi_card("LEADER SAISON", leader['Player'], f"TOTAL: {int(leader['Total'])}", C_ACCENT)
+            with c5: kpi_card("LEADER SAISON", leader['Player'], f"TOTAL: {int(leader['Total'])}", C_ACCENT, is_fixed=True)
             
             day_merged = pd.merge(day_df, full_stats[['Player', 'Moyenne']], on='Player')
             day_merged['Delta'] = day_merged['Score'] - day_merged['Moyenne']
@@ -653,6 +662,7 @@ try:
                 st.markdown("<h3 style='margin-bottom:10px; margin-top:0; color:#FFF; font-family:Rajdhani; font-weight:700'>⚡ CLUTCH DU SOIR</h3>", unsafe_allow_html=True)
                 st.markdown("<div class='chart-desc'>Joueurs ayant le plus dépassé leur moyenne habituelle ce soir.</div>", unsafe_allow_html=True)
                 for i, row in enumerate(top_clutch.itertuples()):
+                    # Ici on utilise glass-card simple (sans is_fixed), donc elle prendra sa taille naturelle (petite)
                     st.markdown(f"""<div class='glass-card' style='margin-bottom:10px; padding:12px'><div style='display:flex; justify-content:space-between; align-items:center'><div><div style='font-weight:700; color:{C_TEXT}'>{row.Player}</div><div style='font-size:0.75rem; color:#666'>Moy: {row.Moyenne:.1f}</div></div><div style='text-align:right'><div style='font-size:1.2rem; font-weight:800; color:{C_GREEN}'>+{row.Delta:.1f}</div><div style='font-size:0.8rem; color:#888'>{int(row.Score)} pts</div></div></div></div>""", unsafe_allow_html=True)
 
             st.markdown("<div style='margin-bottom:30px'></div>", unsafe_allow_html=True)
@@ -941,7 +951,7 @@ try:
                 r_cats = ['SCORING', 'CEILING', 'FORME', 'RÉGULARITÉ', 'CLUTCH']
                 
                 fig_radar = go.Figure(data=go.Scatterpolar(r=r_vals + [r_vals[0]], theta=r_cats + [r_cats[0]], fill='toself', line_color=C_ACCENT, fillcolor="rgba(206, 17, 65, 0.3)"))
-                fig_radar.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 100], showticklabels=False, linecolor='#333'), bgcolor='rgba(0,0,0,0)'), paper_bgcolor='rgba(0,0,0,0)', font=dict(color='white', size=14, family="Rajdhani"), margin=dict(t=20, b=20, l=40, r=40), height=400)
+                fig_radar.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 100], showticklabels=False, linecolor='#333'), bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font=dict(color='white', size=14, family="Rajdhani"), margin=dict(t=20, b=20, l=40, r=40), height=400)
                 st.plotly_chart(fig_radar, use_container_width=True)
             
             with c_radar_legend:

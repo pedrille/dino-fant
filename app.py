@@ -19,7 +19,7 @@ st.set_page_config(
 # ✅ LIEN DE L'IMAGE DISCORD (RAW)
 DISCORD_AVATAR_URL = "https://raw.githubusercontent.com/pedrille/dino-fant/main/basketball_discord.png"
 
-# Palette de couleurs
+# Palette de couleurs (Globales)
 C_BG = "#050505"
 C_ACCENT = "#CE1141" # Raptors Red
 C_TEXT = "#E5E7EB"
@@ -37,7 +37,7 @@ C_ORANGE = "#F97316"
 C_RED = "#EF4444"
 C_DARK_GREY = "#1F2937"
 C_GREY_BAR = "#374151" 
-C_ALIEN = "#84CC16" # Lime Green pour l'Alien
+C_ALIEN = "#84CC16"
 
 # --- 2. CSS PREMIUM ---
 st.markdown(f"""
@@ -485,7 +485,7 @@ try:
             st.image("raptors-ttfl-min.png", use_container_width=True) 
             st.markdown("</div>", unsafe_allow_html=True)
             menu = option_menu(menu_title=None, options=["Dashboard", "Team HQ", "Player Lab", "Bonus x2", "Trends", "Hall of Fame", "Admin"], icons=["grid-fill", "people-fill", "person-bounding-box", "lightning-charge-fill", "fire", "trophy-fill", "shield-lock"], default_index=0, styles={"container": {"padding": "0!important", "background-color": "#000000"}, "icon": {"color": "#666", "font-size": "1.1rem"}, "nav-link": {"font-family": "Rajdhani, sans-serif", "font-weight": "700", "font-size": "15px", "text-transform": "uppercase", "color": "#AAA", "text-align": "left", "margin": "5px 0px", "--hover-color": "#111"}, "nav-link-selected": {"background-color": C_ACCENT, "color": "#FFF", "icon-color": "#FFF", "box-shadow": "0px 4px 20px rgba(206, 17, 65, 0.4)"}})
-            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v16.0</div></div>""", unsafe_allow_html=True)
+            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v16.1</div></div>""", unsafe_allow_html=True)
             components.html("""<script>const options = window.parent.document.querySelectorAll('.nav-link'); options.forEach((option) => { option.addEventListener('click', () => { const sidebar = window.parent.document.querySelector('section[data-testid="stSidebar"]'); if (sidebar) {} }); });</script>""", height=0, width=0)
 
         if menu == "Dashboard":
@@ -1098,32 +1098,32 @@ try:
             brick_layer = full_stats.sort_values('Worst_Raw', ascending=True).iloc[0]
             lapin = full_stats.sort_values('Carottes', ascending=False).iloc[0]
 
-            # LIST OF 24 CARDS
+            # LIST OF 24 CARDS WITH UNIQUE COLORS
             hof_list = [
                 {"title": "THE GOAT", "icon": "🏆", "color": C_GOLD, "player": sniper['Player'], "val": f"{sniper['Moyenne']:.1f}", "unit": "PTS MOYENNE (TOTAL)", "desc": "Meilleure moyenne générale de la saison (Bonus incl.)"},
                 {"title": "REAL MVP", "icon": "💎", "color": C_PURE, "player": pure_avg['Player'], "val": f"{pure_avg['Moyenne_Raw']:.1f}", "unit": "PTS MOYENNE (BRUT)", "desc": "Meilleure moyenne sans compter les bonus"},
                 {"title": "THE SNIPER", "icon": "🎯", "color": C_PURPLE, "player": sniper_bp['Player'], "val": int(sniper_bp['BP_Count']), "unit": "BEST PICKS", "desc": "Le plus de Best Picks trouvés"},
                 {"title": "ALPHA DOG", "icon": "🐺", "color": C_ALPHA, "player": alpha_dog['Player'], "val": int(alpha_dog['Alpha_Count']), "unit": "TOPS TEAM", "desc": "Le plus souvent meilleur scoreur de l'équipe"},
-                {"title": "THE CEILING", "icon": "🏔️", "color": "#A78BFA", "player": peak['Player'], "val": int(peak['Best']), "unit": "PTS MAX", "desc": "Record absolu sur un match (Bonus inclus)"},
-                {"title": "PURE SCORER", "icon": "🏀", "color": "#F472B6", "player": pure_peak['Player'], "val": int(pure_peak['Best_Raw']), "unit": "PTS MAX (BRUT)", "desc": "Record absolu sur un match (Sans bonus)"},
+                {"title": "THE CEILING", "icon": "🏔️", "color": "#FB7185", "player": peak['Player'], "val": int(peak['Best']), "unit": "PTS MAX", "desc": "Record absolu sur un match (Bonus inclus)"},
+                {"title": "PURE SCORER", "icon": "🏀", "color": "#7C3AED", "player": pure_peak['Player'], "val": int(pure_peak['Best_Raw']), "unit": "PTS MAX (BRUT)", "desc": "Record absolu sur un match (Sans bonus)"},
                 {"title": "THE ALCHEMIST", "icon": "⚗️", "color": C_BONUS, "player": alchemist['Player'], "val": int(alchemist['Bonus_Gained']), "unit": "PTS BONUS", "desc": "Le plus de points gagnés grâce aux bonus"},
-                {"title": "NUCLEAR", "icon": "☢️", "color": "#EF4444", "player": nuke['Player'], "val": int(nuke['Nukes']), "unit": "BOMBS", "desc": "Le plus de scores > 50 pts"},
-                {"title": "HEAVY HITTER", "icon": "🥊", "color": "#64B5F6", "player": heavy['Player'], "val": int(heavy['Count40']), "unit": "PICKS > 40", "desc": "Le plus de scores > 40 pts"},
+                {"title": "NUCLEAR", "icon": "☢️", "color": C_ACCENT, "player": nuke['Player'], "val": int(nuke['Nukes']), "unit": "BOMBS", "desc": "Le plus de scores > 50 pts"},
+                {"title": "HEAVY HITTER", "icon": "🥊", "color": "#DC2626", "player": heavy['Player'], "val": int(heavy['Count40']), "unit": "PICKS > 40", "desc": "Le plus de scores > 40 pts"},
                 {"title": "THE ROCK", "icon": "🛡️", "color": C_GREEN, "player": rock['Player'], "val": int(rock['Count30']), "unit": "MATCHS", "desc": "Le plus de scores dans la Safe Zone (> 30 pts)"},
-                {"title": "HUMAN TORCH", "icon": "🔥", "color": "#FF5252", "player": torche['Player'], "val": f"{torche['Last15']:.1f}", "unit": "PTS / 15J", "desc": "Meilleure forme actuelle (Moyenne 15j)"},
-                {"title": "RISING STAR", "icon": "🚀", "color": C_GREEN, "player": progression['Player'], "val": f"+{progression['ProgressionPct']:.1f}%", "unit": "PROGRESSION", "desc": "Plus grosse progression (Moyenne 15j vs Saison)"},
-                {"title": "ZEN MASTER", "icon": "🧘", "color": "#EAB308", "player": zen_master['Player'], "val": f"{int(zen_master['ReliabilityPct'])}%", "unit": "FIABILITÉ", "desc": "Plus haut taux de fiabilité (Moins de carottes)"},
-                {"title": "UNSTOPPABLE", "icon": "⚡", "color": "#FBBF24", "player": intouch['Player'], "val": int(intouch['Streak30']), "unit": "SERIE", "desc": "Plus longue série consécutive > 30 pts"},
-                {"title": "THE METRONOME", "icon": "⏰", "color": "#A1A1AA", "player": metronome['Player'], "val": f"{metronome['StdDev']:.1f}", "unit": "ECART TYPE", "desc": "Le joueur le plus régulier (Faible variation)"},
-                {"title": "THE MANIAC", "icon": "🤪", "color": "#F472B6", "player": maniac['Player'], "val": f"{maniac['ModeScore']}", "unit": f"{maniac['ModeCount']} FOIS", "desc": "Le score le plus souvent répété par ce joueur"},
+                {"title": "HUMAN TORCH", "icon": "🔥", "color": "#BE123C", "player": torche['Player'], "val": f"{torche['Last15']:.1f}", "unit": "PTS / 15J", "desc": "Meilleure forme actuelle (Moyenne 15j)"},
+                {"title": "RISING STAR", "icon": "🚀", "color": "#34D399", "player": progression['Player'], "val": f"+{progression['ProgressionPct']:.1f}%", "unit": "PROGRESSION", "desc": "Plus grosse progression (Moyenne 15j vs Saison)"},
+                {"title": "ZEN MASTER", "icon": "🧘", "color": "#38BDF8", "player": zen_master['Player'], "val": f"{int(zen_master['ReliabilityPct'])}%", "unit": "FIABILITÉ", "desc": "Plus haut taux de fiabilité (Moins de carottes)"},
+                {"title": "UNSTOPPABLE", "icon": "⚡", "color": "#F59E0B", "player": intouch['Player'], "val": int(intouch['Streak30']), "unit": "SERIE", "desc": "Plus longue série consécutive > 30 pts"},
+                {"title": "THE METRONOME", "icon": "⏰", "color": C_IRON, "player": metronome['Player'], "val": f"{metronome['StdDev']:.1f}", "unit": "ECART TYPE", "desc": "Le joueur le plus régulier (Faible variation)"},
+                {"title": "THE MANIAC", "icon": "🤪", "color": "#D946EF", "player": maniac['Player'], "val": f"{maniac['ModeScore']}", "unit": f"{maniac['ModeCount']} FOIS", "desc": "Le score le plus souvent répété par ce joueur"},
                 {"title": "IRON WALL", "icon": "🧱", "color": "#78350F", "player": iron_wall['Player'], "val": int(iron_wall['Worst']), "unit": "PIRE SCORE", "desc": "Le 'Pire score' le plus élevé (Plancher haut)"},
-                {"title": "THE ALBATROSS", "icon": "🦅", "color": "#14B8A6", "player": albatross['Player'], "val": int(albatross['Spread']), "unit": "AMPLITUDE", "desc": "Plus grand écart entre le record et le pire score"},
-                {"title": "IRON MAN", "icon": "🤖", "color": "#6366F1", "player": iron_man['Player'], "val": int(iron_man['MaxNoCarrot']), "unit": "MATCHS", "desc": "Plus longue série historique sans carotte (< 20 pts)"},
+                {"title": "THE ALBATROSS", "icon": "🦅", "color": "#2DD4BF", "player": albatross['Player'], "val": int(albatross['Spread']), "unit": "AMPLITUDE", "desc": "Plus grand écart entre le record et le pire score"},
+                {"title": "IRON MAN", "icon": "🤖", "color": "#4F46E5", "player": iron_man['Player'], "val": int(iron_man['MaxNoCarrot']), "unit": "MATCHS", "desc": "Plus longue série historique sans carotte (< 20 pts)"},
                 {"title": "THE ALIEN", "icon": "👽", "color": C_ALIEN, "player": alien['Player'], "val": int(alien['MaxAlien']), "unit": "MATCHS", "desc": "Plus longue série de matchs consécutifs à +60 pts"},
-                {"title": "CRASH TEST", "icon": "💥", "color": C_ORANGE, "player": crash_test['Player'], "val": int(crash_test['Worst_Bonus']), "unit": "PTS MIN (X2)", "desc": "Le pire score réalisé avec un bonus actif"},
-                {"title": "BAD BUSINESS", "icon": "💸", "color": "#666", "player": bad_business['Player'], "val": int(bad_business['Bonus_Gained']), "unit": "PTS BONUS", "desc": "Le moins de points gagnés grâce aux bonus"},
-                {"title": "THE BRICK", "icon": "🏗️", "color": "#4B5563", "player": brick_layer['Player'], "val": int(brick_layer['Worst_Raw']), "unit": "PTS MIN (BRUT)", "desc": "Le pire score brut enregistré"},
-                {"title": "THE FARMER", "icon": "🥕", "color": "#F97316", "player": lapin['Player'], "val": int(lapin['Carottes']), "unit": "CAROTTES", "desc": "Le plus grand nombre de carottes (< 20 pts)"}
+                {"title": "CRASH TEST", "icon": "💥", "color": C_RED, "player": crash_test['Player'], "val": int(crash_test['Worst_Bonus']), "unit": "PTS MIN (X2)", "desc": "Le pire score réalisé avec un bonus actif"},
+                {"title": "BAD BUSINESS", "icon": "💸", "color": "#9CA3AF", "player": bad_business['Player'], "val": int(bad_business['Bonus_Gained']), "unit": "PTS BONUS", "desc": "Le moins de points gagnés grâce aux bonus"},
+                {"title": "THE BRICK", "icon": "🏗️", "color": "#6B7280", "player": brick_layer['Player'], "val": int(brick_layer['Worst_Raw']), "unit": "PTS MIN (BRUT)", "desc": "Le pire score brut enregistré"},
+                {"title": "THE FARMER", "icon": "🥕", "color": C_ORANGE, "player": lapin['Player'], "val": int(lapin['Carottes']), "unit": "CAROTTES", "desc": "Le plus grand nombre de carottes (< 20 pts)"}
             ]
 
             # GRID DISPLAY (2 COLUMNS LOGIC)

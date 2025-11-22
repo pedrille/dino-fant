@@ -93,6 +93,7 @@ st.markdown(f"""
         border-radius: 4px; 
         display: flex; align-items: center; justify-content: center; 
         font-family: 'Rajdhani'; font-weight: 700; font-size: 0.8rem;
+        color: #FFF;
         margin: 0 1px;
     }}
     .match-row {{ 
@@ -287,6 +288,8 @@ def load_data():
 
     except: return pd.DataFrame(), 0, {}, [], {}, 0
 
+# OPTIMISATION : CACHING STATS CALCULATION TO SPEED UP NAVIGATION
+@st.cache_data(ttl=300)
 def compute_stats(df, bp_map, daily_max_map):
     stats = []
     latest_pick = df['Pick'].max()
@@ -894,8 +897,6 @@ try:
             # Team Stats 15 days
             team_daily_15 = df_15.groupby('Pick')['Score'].sum()
             avg_15_team = team_daily_15.mean()
-            total_pts_15 = df_15['Score'].sum()
-            max_team_15 = team_daily_15.max()
             
             # Season Stats for comparison
             team_daily_season = df.groupby('Pick')['Score'].sum()
@@ -910,6 +911,9 @@ try:
             
             # Average Individual Score over last 15 days
             avg_15_indiv = df_15['Score'].mean()
+            
+            # Max Team 15d
+            max_team_15 = team_daily_15.max()
 
             # --- TOP KPI ROW (5 KPIs) ---
             k1, k2, k3, k4, k5 = st.columns(5)

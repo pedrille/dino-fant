@@ -21,7 +21,6 @@ st.set_page_config(
 DISCORD_AVATAR_URL = "https://raw.githubusercontent.com/pedrille/dino-fant/main/basketball_discord.png"
 
 # --- CONFIG COULEURS JOUEURS (IDENTITÉ VISUELLE) ---
-# J'ai assigné une couleur unique et fixe à chaque membre de l'équipe
 PLAYER_COLORS = {
     "Pedrille": "#CE1141",     # Raptors Red
     "Tomus06": "#FFD700",      # Gold
@@ -33,7 +32,6 @@ PLAYER_COLORS = {
     "Luoshtgin": "#EC4899",    # Pink
     "Mendosaaaa": "#84CC16",   # Lime
     "Duduge21": "#6366F1",     # Indigo
-    # Fallback pour les invités ou fautes de frappe
     "Inconnu": "#9CA3AF"
 }
 
@@ -227,11 +225,11 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # --- 3. DATA ENGINE ---
-@st.cache_data(ttl=0, show_spinner=False) # HIDE DEFAULT SPINNER
+@st.cache_data(ttl=0, show_spinner=False) 
 def load_data():
     conn = st.connection("gsheets", type=GSheetsConnection)
     try:
-        if "SPREADSHEET_URL" not in st.secrets: return None, None, None, None, [], 0
+        if "SPREADSHEET_URL" not in st.secrets: return None, None, None, None, [], 0, {}
 
         # A. VALEURS
         df_valeurs = conn.read(spreadsheet=st.secrets["SPREADSHEET_URL"], worksheet="Valeurs", header=None, ttl=0).astype(str)
@@ -283,6 +281,9 @@ def load_data():
         team_current_rank = 0
         team_bp_real = 0
         
+        # NOUVEAU : MAP BP MANUELLE PAR JOUEUR
+        player_real_bp_map = {} 
+
         # 1. Recherche de la colonne "BP" dans les 20 premières lignes (headers)
         bp_col_idx = -1
         header_row_idx = -1
@@ -295,18 +296,26 @@ def load_data():
                     break
             if bp_col_idx != -1: break
         
-        # 2. Si colonne trouvée, on cherche "Team Raptors" dans la colonne 0 ou 1
+        # 2. Scan pour trouver Team Raptors ET les Joueurs individuels
         if bp_col_idx != -1:
             for r_idx in range(header_row_idx + 1, len(df_stats)):
-                val_col0 = str(df_stats.iloc[r_idx, 0]).strip()
-                val_col1 = str(df_stats.iloc[r_idx, 1]).strip()
-                if "Team Raptors" in val_col0 or "Team Raptors" in val_col1:
+                # Colonne Nom est juste à gauche de BP (index - 1) selon le screen
+                val_name_col = str(df_stats.iloc[r_idx, bp_col_idx - 1]).strip()
+                val_bp_raw = df_stats.iloc[r_idx, bp_col_idx]
+                
+                # Si c'est Team Raptors
+                if "Team Raptors" in val_name_col:
                     try:
-                        raw_bp = df_stats.iloc[r_idx, bp_col_idx]
-                        team_bp_real = int(float(str(raw_bp).replace(',', '.')))
-                    except: 
-                        team_bp_real = 0
-                    break
+                        team_bp_real = int(float(str(val_bp_raw).replace(',', '.')))
+                    except: team_bp_real = 0
+                    # On ne break pas ici pour continuer si jamais les joueurs sont en dessous, mais souvent ils sont au dessus
+                
+                # Si c'est un joueur (Nom non vide, pas "Nom", pas "Team Raptors")
+                elif val_name_col and val_name_col != "nan" and val_name_col != "Nom":
+                    try:
+                        p_bp = int(float(str(val_bp_raw).replace(',', '.')))
+                        player_real_bp_map[val_name_col] = p_bp
+                    except: pass
 
         # 3. Récupération Historique Rang
         start_row_rank = -1
@@ -333,13 +342,14 @@ def load_data():
                         team_current_rank = valid_history[-1]
                         team_rank_history = valid_history
                     break
-        return final_df, team_current_rank, bp_map, team_rank_history, daily_max_map, team_bp_real
+                    
+        return final_df, team_current_rank, bp_map, team_rank_history, daily_max_map, team_bp_real, player_real_bp_map
 
-    except: return pd.DataFrame(), 0, {}, [], {}, 0
+    except: return pd.DataFrame(), 0, {}, [], {}, 0, {}
 
-# OPTIMISATION : CACHING STATS CALCULATION TO SPEED UP NAVIGATION
-@st.cache_data(ttl=300, show_spinner=False) # HIDE DEFAULT SPINNER
-def compute_stats(df, bp_map, daily_max_map):
+# OPTIMISATION : CACHING STATS CALCULATION
+@st.cache_data(ttl=300, show_spinner=False) 
+def compute_stats(df, bp_map, daily_max_map, player_real_bp_map): # Ajout argument
     stats = []
     latest_pick = df['Pick'].max()
     season_avgs = df.groupby('Player')['Score'].mean()
@@ -413,10 +423,15 @@ def compute_stats(df, bp_map, daily_max_map):
         last_5 = scores[-5:]
         last5_avg = last_5.mean() if len(scores) >= 5 else scores.mean()
         momentum = last5_avg - scores.mean()
-        bp_count = 0; alpha_count = 0; bonus_points_gained = 0; bonus_scores_list = []
+        
+        # --- FIX BP COUNT : Utilisation de la map manuelle ---
+        # On prend la valeur du sheet si elle existe, sinon 0 (ou calcul théorique si tu préférais)
+        bp_count = player_real_bp_map.get(p, 0)
+        
+        alpha_count = 0; bonus_points_gained = 0; bonus_scores_list = []
         
         for i, (pick_num, score) in enumerate(zip(picks, scores)):
-            if pick_num in bp_map and score >= bp_map[pick_num] and score > 0: bp_count += 1
+            # On garde alpha_count calculé car c'est interne à l'équipe
             if pick_num in daily_max_map and score >= daily_max_map[pick_num] and score > 0: alpha_count += 1
             if bonuses[i]: 
                 gain = score - scores_raw[i]
@@ -542,7 +557,8 @@ try:
 
     # CHARGEMENT DES DONNÉES AVEC SPINNER
     with st.spinner('🦖 Analyse des données en cours...'):
-        df, team_rank, bp_map, team_history, daily_max_map, team_bp_real_load = load_data()
+        # Update Unpack
+        df, team_rank, bp_map, team_history, daily_max_map, team_bp_real_load, player_real_bp_map = load_data()
     
     # GLOBAL METRIC
     if df is not None and not df.empty:
@@ -553,7 +569,8 @@ try:
     if df is not None and not df.empty:
         latest_pick = df['Pick'].max()
         day_df = df[df['Pick'] == latest_pick].sort_values('Score', ascending=False).copy()
-        full_stats = compute_stats(df, bp_map, daily_max_map)
+        # Update Call
+        full_stats = compute_stats(df, bp_map, daily_max_map, player_real_bp_map)
         leader = full_stats.sort_values('Total', ascending=False).iloc[0]
         
         # BP Calculation Check
@@ -564,7 +581,7 @@ try:
             st.image("raptors-ttfl-min.png", use_container_width=True) 
             st.markdown("</div>", unsafe_allow_html=True)
             menu = option_menu(menu_title=None, options=["Dashboard", "Team HQ", "Player Lab", "Bonus x2", "Trends", "Hall of Fame", "Admin"], icons=["grid-fill", "people-fill", "person-bounding-box", "lightning-charge-fill", "fire", "trophy-fill", "shield-lock"], default_index=0, styles={"container": {"padding": "0!important", "background-color": "#000000"}, "icon": {"color": "#666", "font-size": "1.1rem"}, "nav-link": {"font-family": "Rajdhani, sans-serif", "font-weight": "700", "font-size": "15px", "text-transform": "uppercase", "color": "#AAA", "text-align": "left", "margin": "5px 0px", "--hover-color": "#111"}, "nav-link-selected": {"background-color": C_ACCENT, "color": "#FFF", "icon-color": "#FFF", "box-shadow": "0px 4px 20px rgba(206, 17, 65, 0.4)"}})
-            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v17.0</div></div>""", unsafe_allow_html=True)
+            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v17.1</div></div>""", unsafe_allow_html=True)
             
         if menu == "Dashboard":
             section_title("RAPTORS <span class='highlight'>DASHBOARD</span>", f"Daily Briefing • Pick #{int(latest_pick)}")

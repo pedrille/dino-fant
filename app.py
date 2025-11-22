@@ -600,7 +600,7 @@ try:
             st.markdown("</div>", unsafe_allow_html=True)
             # MENU CLEAN (NO CARROT EMOJI)
             menu = option_menu(menu_title=None, options=["Dashboard", "Team HQ", "Player Lab", "Bonus x2", "No-Carrot", "Trends", "Hall of Fame", "Admin"], icons=["grid-fill", "people-fill", "person-bounding-box", "lightning-charge-fill", "shield-check", "fire", "trophy-fill", "shield-lock"], default_index=0, styles={"container": {"padding": "0!important", "background-color": "#000000"}, "icon": {"color": "#666", "font-size": "1.1rem"}, "nav-link": {"font-family": "Rajdhani, sans-serif", "font-weight": "700", "font-size": "15px", "text-transform": "uppercase", "color": "#AAA", "text-align": "left", "margin": "5px 0px", "--hover-color": "#111"}, "nav-link-selected": {"background-color": C_ACCENT, "color": "#FFF", "icon-color": "#FFF", "box-shadow": "0px 4px 20px rgba(206, 17, 65, 0.4)"}})
-            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v21.6</div></div>""", unsafe_allow_html=True)
+            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v21.7</div></div>""", unsafe_allow_html=True)
             
         if menu == "Dashboard":
             section_title("RAPTORS <span class='highlight'>DASHBOARD</span>", f"Daily Briefing • Pick #{int(latest_pick)}")
@@ -932,16 +932,9 @@ try:
                     if r.get('IsBP', False): tags.append("🎯 BP")
                     tags_html = f"<div class='tp-tags'>{' '.join(tags)}</div>" if tags else ""
                     
-                    st.markdown(f"""
-                    <div class="top-pick-card" style="border-left: 4px solid {border_col}">
-                        <div class="tp-rank-badge" style="border-color:{border_col}; color:{border_col}">{rank_num}</div>
-                        <div class="tp-content">
-                            <div class="tp-date">Pick #{r['Pick']}</div>
-                            {tags_html}
-                        </div>
-                        <div class="tp-score-big">{int(r['Score'])}</div>
-                    </div>
-                    """, unsafe_allow_html=True)
+                    # --- CORRECTION V21.7 : FLATTEN HTML STRING TO PREVENT MARKDOWN PARSING ISSUES ---
+                    html_card = f"""<div class="top-pick-card" style="border-left: 4px solid {border_col}"><div class="tp-rank-badge" style="border-color:{border_col}; color:{border_col}">{rank_num}</div><div class="tp-content"><div class="tp-date">Pick #{r['Pick']}</div>{tags_html}</div><div class="tp-score-big">{int(r['Score'])}</div></div>"""
+                    st.markdown(html_card, unsafe_allow_html=True)
 
             st.markdown("<br>", unsafe_allow_html=True)
             st.markdown("<h3 style='margin-bottom:10px'>📡 PROFIL ATHLÉTIQUE</h3>", unsafe_allow_html=True)

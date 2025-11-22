@@ -513,8 +513,11 @@ def send_discord_webhook(day_df, pick_num, url_app):
     except Exception as e: return str(e)
 
 # --- 5. UI COMPONENTS ---
+# FIX DASHBOARD MVP: New Line for Badges
 def kpi_card(label, value, sub, color="#FFF"):
+    # If sub contains <br>, don't escape it
     st.markdown(f"""<div class="glass-card" style="text-align:center"><div class="kpi-label">{label}</div><div class="kpi-num" style="color:{color}">{value}</div><div class="kpi-sub" style="color:{C_ACCENT}">{sub}</div></div>""", unsafe_allow_html=True)
+
 def section_title(title, subtitle):
     st.markdown(f"<h1>{title}</h1><div class='sub-header'>{subtitle}</div>", unsafe_allow_html=True)
 
@@ -537,7 +540,7 @@ try:
     """, height=0, width=0)
 
     with st.spinner('🦖 Analyse des données en cours...'):
-        # LOAD DATA AVEC NOUVEAU PARSING
+        # LOAD DATA
         df, team_rank, bp_map, team_history, daily_max_map, team_bp_real_load, player_real_bp_map = load_data()
     
     # GLOBAL METRIC
@@ -549,7 +552,7 @@ try:
     if df is not None and not df.empty:
         latest_pick = df['Pick'].max()
         day_df = df[df['Pick'] == latest_pick].sort_values('Score', ascending=False).copy()
-        # COMPUTE AVEC BP MAP MANUELLE
+        # COMPUTE
         full_stats = compute_stats(df, bp_map, daily_max_map, player_real_bp_map)
         leader = full_stats.sort_values('Total', ascending=False).iloc[0]
         
@@ -568,21 +571,28 @@ try:
             st.markdown("<div style='text-align:center; margin-bottom: 30px;'>", unsafe_allow_html=True)
             st.image("raptors-ttfl-min.png", use_container_width=True) 
             st.markdown("</div>", unsafe_allow_html=True)
+            # MENU CLEAN (NO CARROT EMOJI)
             menu = option_menu(menu_title=None, options=["Dashboard", "Team HQ", "Player Lab", "Bonus x2", "No-Carrot", "Trends", "Hall of Fame", "Admin"], icons=["grid-fill", "people-fill", "person-bounding-box", "lightning-charge-fill", "shield-check", "fire", "trophy-fill", "shield-lock"], default_index=0, styles={"container": {"padding": "0!important", "background-color": "#000000"}, "icon": {"color": "#666", "font-size": "1.1rem"}, "nav-link": {"font-family": "Rajdhani, sans-serif", "font-weight": "700", "font-size": "15px", "text-transform": "uppercase", "color": "#AAA", "text-align": "left", "margin": "5px 0px", "--hover-color": "#111"}, "nav-link-selected": {"background-color": C_ACCENT, "color": "#FFF", "icon-color": "#FFF", "box-shadow": "0px 4px 20px rgba(206, 17, 65, 0.4)"}})
-            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v19.0</div></div>""", unsafe_allow_html=True)
+            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v19.1</div></div>""", unsafe_allow_html=True)
             
         if menu == "Dashboard":
             section_title("RAPTORS <span class='highlight'>DASHBOARD</span>", f"Daily Briefing • Pick #{int(latest_pick)}")
             top = day_df.iloc[0]
             
-            # LOGIQUE MVP & BP & BONUS
+            # LOGIQUE MVP & BP & BONUS (TASK 1)
             val_suffix = ""
             if 'IsBonus' in top and top['IsBonus']: val_suffix += " 🌟x2"
             if 'IsBP' in top and top['IsBP']: val_suffix += " 🎯BP"
 
-            # 5 COLONNES POUR LE DASHBOARD (ORDRE MODIFIÉ TASK 2)
+            # HTML Construction for MVP Card Subtext (New Line)
+            sub_html = f"<div style='line-height:1.2; margin-top:-5px'>{int(top['Score'])} PTS<br><span style='font-size:0.8em; color:#AAA'>{val_suffix}</span></div>"
+
+            # 5 COLONNES POUR LE DASHBOARD
             c1, c2, c3, c4, c5 = st.columns(5)
-            with c1: kpi_card("MVP DU SOIR", top['Player'], f"{int(top['Score'])} PTS{val_suffix}", C_GOLD)
+            # Use Custom HTML Sub for MVP
+            with c1: 
+                st.markdown(f"""<div class="glass-card" style="text-align:center"><div class="kpi-label">MVP DU SOIR</div><div class="kpi-num" style="color:{C_GOLD}">{top['Player']}</div><div class="kpi-sub" style="color:{C_ACCENT}">{sub_html}</div></div>""", unsafe_allow_html=True)
+            
             total_day = day_df['Score'].sum()
             with c2: kpi_card("TOTAL TEAM SOIR", int(total_day), "POINTS")
             team_daily_avg = day_df['Score'].mean()
@@ -590,11 +600,9 @@ try:
             perf_col = C_GREEN if diff_perf > 0 else "#F87171"
             with c3: kpi_card("PERF. TEAM SOIR", f"{diff_perf:+.1f}%", "VS MOY. SAISON", perf_col)
             
-            # KPI 4 : NO CARROT
             col_streak = C_GREEN if team_streak_nc > 0 else C_RED
             with c4: kpi_card("SÉRIE TEAM NO-CARROT", f"{team_streak_nc}", "JOURS CONSÉCUTIFS", col_streak)
             
-            # KPI 5 : LEADER (Déplacé en fin)
             with c5: kpi_card("LEADER SAISON", leader['Player'], f"TOTAL: {int(leader['Total'])}", C_ACCENT)
             
             day_merged = pd.merge(day_df, full_stats[['Player', 'Moyenne']], on='Player')
@@ -877,6 +885,7 @@ try:
                 r4c1, r4c2, r4c3 = st.columns(3, gap="small")
                 with r4c1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_PURPLE}'>{int(p_data['BP_Count'])}</div><div class='stat-mini-lbl'>TOTAL BEST PICKS 🎯BP</div></div>", unsafe_allow_html=True)
                 with r4c2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_GOLD}'>{int(p_data['Alpha_Count'])}</div><div class='stat-mini-lbl'>MVP DU SOIR</div></div>", unsafe_allow_html=True)
+                # TASK 2 : AJOUT EMOJI 🌟 DANS LA DESCRIPTION
                 with r4c3: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_BONUS}'>{p_data['Avg_Bonus']:.1f}</div><div class='stat-mini-lbl'>MOYENNE SOUS BONUS 🌟</div></div>", unsafe_allow_html=True)
 
 
@@ -886,7 +895,7 @@ try:
                 top_5 = p_hist_all.sort_values('Score', ascending=False).head(5)
                 for i, r in top_5.reset_index().iterrows():
                     rank_num = i + 1
-                    # NEW : Icones explicites
+                    # TASK 2: FORCING STRING CONSTRUCTION
                     icons_str = ""
                     if r['IsBonus']: icons_str += " 🌟x2"
                     if r.get('IsBP', False): icons_str += " 🎯BP"

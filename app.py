@@ -98,7 +98,7 @@ st.markdown(f"""
     h1 {{ font-size: 3rem; font-weight: 800; background: linear-gradient(90deg, #FFF, #888); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }}
     .sub-header {{ font-size: 0.9rem; color: #666; letter-spacing: 1.5px; margin-bottom: 25px; font-weight: 500; }}
     
-    /* --- FIX UI 1: Uniformiser la hauteur des cartes --- */
+    /* --- FIX UI DASHBOARD : HAUTEUR FIXE --- */
     .glass-card {{ 
         background: linear-gradient(145deg, rgba(25,25,25,0.6) 0%, rgba(10,10,10,0.8) 100%); 
         backdrop-filter: blur(20px); 
@@ -108,11 +108,11 @@ st.markdown(f"""
         margin-bottom: 20px; 
         box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
         
-        /* AJOUTS POUR ALIGNEMENT PARFAIT */
-        min-height: 165px; /* Force une hauteur mini égale pour tous */
+        /* Modification ici : Hauteur fixe pour alignement parfait */
+        height: 190px; 
         display: flex;
         flex-direction: column;
-        justify-content: center; /* Centre verticalement le contenu */
+        justify-content: center; 
     }}
     
     .trend-section-title {{ font-family: 'Rajdhani'; font-size: 1.2rem; font-weight: 700; color: #FFF; margin-bottom: 5px; border-left: 4px solid #555; padding-left: 10px; }}
@@ -151,7 +151,7 @@ st.markdown(f"""
     
     /* Player Lab - Match Pills FULL WIDTH RESPONSIVE SCROLL REVERSE */
     .match-pill {{
-        flex: 0 0 auto; 
+        flex: 0 0 auto; /* Don't shrink/grow freely, keep fixed size logic */
         min-width: 30px;
         height: 40px; 
         border-radius: 4px; 
@@ -162,12 +162,12 @@ st.markdown(f"""
     }}
     .match-row {{ 
         display: flex; 
-        flex-direction: row-reverse; 
+        flex-direction: row-reverse; /* Afficher du plus récent au plus ancien (Gauche < Droite) */
         overflow-x: auto;
         gap: 4px; 
         padding-bottom: 8px;
         width: 100%;
-        justify-content: flex-start; 
+        justify-content: flex-start; /* Avec row-reverse, le début est à droite */
     }}
 
     /* Boutons Streamlit Fix */
@@ -530,7 +530,7 @@ def send_discord_webhook(day_df, pick_num, url_app):
     except Exception as e: return str(e)
 
 # --- 5. UI COMPONENTS ---
-# FIX DASHBOARD MVP: New Line for Badges + FIX UI 2 (Gestion du vide)
+# FIX DASHBOARD MVP: New Line for Badges + FIX UI 2 (Gestion du vide) + FIX UI 1 (Fixed Height)
 def kpi_card(label, value, sub, color="#FFF"):
     st.markdown(f"""<div class="glass-card" style="text-align:center"><div class="kpi-label">{label}</div><div class="kpi-num" style="color:{color}">{value}</div><div class="kpi-sub" style="color:{C_ACCENT}">{sub}</div></div>""", unsafe_allow_html=True)
 
@@ -589,7 +589,7 @@ try:
             st.markdown("</div>", unsafe_allow_html=True)
             # MENU CLEAN (NO CARROT EMOJI)
             menu = option_menu(menu_title=None, options=["Dashboard", "Team HQ", "Player Lab", "Bonus x2", "No-Carrot", "Trends", "Hall of Fame", "Admin"], icons=["grid-fill", "people-fill", "person-bounding-box", "lightning-charge-fill", "shield-check", "fire", "trophy-fill", "shield-lock"], default_index=0, styles={"container": {"padding": "0!important", "background-color": "#000000"}, "icon": {"color": "#666", "font-size": "1.1rem"}, "nav-link": {"font-family": "Rajdhani, sans-serif", "font-weight": "700", "font-size": "15px", "text-transform": "uppercase", "color": "#AAA", "text-align": "left", "margin": "5px 0px", "--hover-color": "#111"}, "nav-link-selected": {"background-color": C_ACCENT, "color": "#FFF", "icon-color": "#FFF", "box-shadow": "0px 4px 20px rgba(206, 17, 65, 0.4)"}})
-            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v21.0</div></div>""", unsafe_allow_html=True)
+            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v21.1</div></div>""", unsafe_allow_html=True)
             
         if menu == "Dashboard":
             section_title("RAPTORS <span class='highlight'>DASHBOARD</span>", f"Daily Briefing • Pick #{int(latest_pick)}")

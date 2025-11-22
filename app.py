@@ -281,7 +281,6 @@ def load_data():
         team_current_rank = 0
         team_bp_real = 0
         
-        # NOUVEAU : MAP BP MANUELLE PAR JOUEUR
         player_real_bp_map = {} 
 
         # 1. Recherche de la colonne "BP" dans les 20 premières lignes (headers)
@@ -299,18 +298,13 @@ def load_data():
         # 2. Scan pour trouver Team Raptors ET les Joueurs individuels
         if bp_col_idx != -1:
             for r_idx in range(header_row_idx + 1, len(df_stats)):
-                # Colonne Nom est juste à gauche de BP (index - 1) selon le screen
                 val_name_col = str(df_stats.iloc[r_idx, bp_col_idx - 1]).strip()
                 val_bp_raw = df_stats.iloc[r_idx, bp_col_idx]
                 
-                # Si c'est Team Raptors
                 if "Team Raptors" in val_name_col:
                     try:
                         team_bp_real = int(float(str(val_bp_raw).replace(',', '.')))
                     except: team_bp_real = 0
-                    # On ne break pas ici pour continuer si jamais les joueurs sont en dessous, mais souvent ils sont au dessus
-                
-                # Si c'est un joueur (Nom non vide, pas "Nom", pas "Team Raptors")
                 elif val_name_col and val_name_col != "nan" and val_name_col != "Nom":
                     try:
                         p_bp = int(float(str(val_bp_raw).replace(',', '.')))
@@ -349,7 +343,7 @@ def load_data():
 
 # OPTIMISATION : CACHING STATS CALCULATION
 @st.cache_data(ttl=300, show_spinner=False) 
-def compute_stats(df, bp_map, daily_max_map, player_real_bp_map): # Ajout argument
+def compute_stats(df, bp_map, daily_max_map, player_real_bp_map):
     stats = []
     latest_pick = df['Pick'].max()
     season_avgs = df.groupby('Player')['Score'].mean()
@@ -425,13 +419,11 @@ def compute_stats(df, bp_map, daily_max_map, player_real_bp_map): # Ajout argume
         momentum = last5_avg - scores.mean()
         
         # --- FIX BP COUNT : Utilisation de la map manuelle ---
-        # On prend la valeur du sheet si elle existe, sinon 0 (ou calcul théorique si tu préférais)
         bp_count = player_real_bp_map.get(p, 0)
         
         alpha_count = 0; bonus_points_gained = 0; bonus_scores_list = []
         
         for i, (pick_num, score) in enumerate(zip(picks, scores)):
-            # On garde alpha_count calculé car c'est interne à l'équipe
             if pick_num in daily_max_map and score >= daily_max_map[pick_num] and score > 0: alpha_count += 1
             if bonuses[i]: 
                 gain = score - scores_raw[i]
@@ -505,8 +497,6 @@ def send_discord_webhook(day_df, pick_num, url_app):
         podium_text += f"{medals[i]} **{row['Player']}** • {int(row['Score'])} pts{bonus_mark}\n"
     
     avg_score = int(day_df['Score'].mean())
-    
-    # SELECTION DU PUNCHLINE (IDENTIQUE A GSHEET)
     random_quote = random.choice(PACERS_PUNCHLINES)
     footer_text = "Pensée du jour • " + random_quote
 
@@ -532,32 +522,24 @@ def section_title(title, subtitle):
 
 # --- 6. MAIN APP ---
 try:
-    # UX BOOSTER: SCRIPT JS POUR SCROLL TOP + FERMETURE SIDEBAR MOBILE
+    # UX BOOSTER
     components.html("""
     <script>
-        // Fonction pour scroller en haut (simule un chargement page neuve)
         window.parent.document.querySelector('.main').scrollTo(0, 0);
-
-        // Fonction pour fermer la sidebar sur mobile après un clic
         const navLinks = window.parent.document.querySelectorAll('.nav-link');
         navLinks.forEach((link) => {
             link.addEventListener('click', () => {
-                // On attend un peu que Streamlit réagisse
                 setTimeout(() => {
                     const closeBtn = window.parent.document.querySelector('button[data-testid="baseButton-header"]');
-                    // Si on est sur un écran petit (mobile) et que le bouton existe
-                    if (window.parent.innerWidth <= 768 && closeBtn) {
-                        closeBtn.click();
-                    }
+                    if (window.parent.innerWidth <= 768 && closeBtn) { closeBtn.click(); }
                 }, 200);
             });
         });
     </script>
     """, height=0, width=0)
 
-    # CHARGEMENT DES DONNÉES AVEC SPINNER
     with st.spinner('🦖 Analyse des données en cours...'):
-        # Update Unpack
+        # LOAD DATA AVEC BP MAP MANUELLE
         df, team_rank, bp_map, team_history, daily_max_map, team_bp_real_load, player_real_bp_map = load_data()
     
     # GLOBAL METRIC
@@ -569,26 +551,43 @@ try:
     if df is not None and not df.empty:
         latest_pick = df['Pick'].max()
         day_df = df[df['Pick'] == latest_pick].sort_values('Score', ascending=False).copy()
-        # Update Call
+        # COMPUTE AVEC BP MAP MANUELLE
         full_stats = compute_stats(df, bp_map, daily_max_map, player_real_bp_map)
         leader = full_stats.sort_values('Total', ascending=False).iloc[0]
         
         # BP Calculation Check
         total_bp_team = team_bp_real_load if team_bp_real_load > 0 else full_stats['BP_Count'].sum()
 
+        # --- CALCUL TEAM NO CARROT STREAK (TASK 4) ---
+        team_streak_nc = 0
+        sorted_picks = sorted(df['Pick'].unique(), reverse=True)
+        for p_id in sorted_picks:
+            daily_min = df[df['Pick'] == p_id]['Score'].min()
+            if daily_min >= 20: team_streak_nc += 1
+            else: break
+
         with st.sidebar:
             st.markdown("<div style='text-align:center; margin-bottom: 30px;'>", unsafe_allow_html=True)
             st.image("raptors-ttfl-min.png", use_container_width=True) 
             st.markdown("</div>", unsafe_allow_html=True)
-            menu = option_menu(menu_title=None, options=["Dashboard", "Team HQ", "Player Lab", "Bonus x2", "Trends", "Hall of Fame", "Admin"], icons=["grid-fill", "people-fill", "person-bounding-box", "lightning-charge-fill", "fire", "trophy-fill", "shield-lock"], default_index=0, styles={"container": {"padding": "0!important", "background-color": "#000000"}, "icon": {"color": "#666", "font-size": "1.1rem"}, "nav-link": {"font-family": "Rajdhani, sans-serif", "font-weight": "700", "font-size": "15px", "text-transform": "uppercase", "color": "#AAA", "text-align": "left", "margin": "5px 0px", "--hover-color": "#111"}, "nav-link-selected": {"background-color": C_ACCENT, "color": "#FFF", "icon-color": "#FFF", "box-shadow": "0px 4px 20px rgba(206, 17, 65, 0.4)"}})
-            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v17.1</div></div>""", unsafe_allow_html=True)
+            menu = option_menu(menu_title=None, options=["Dashboard", "Team HQ", "Player Lab", "Bonus x2", "🥕 No-Carrot", "Trends", "Hall of Fame", "Admin"], icons=["grid-fill", "people-fill", "person-bounding-box", "lightning-charge-fill", "shield-check", "fire", "trophy-fill", "shield-lock"], default_index=0, styles={"container": {"padding": "0!important", "background-color": "#000000"}, "icon": {"color": "#666", "font-size": "1.1rem"}, "nav-link": {"font-family": "Rajdhani, sans-serif", "font-weight": "700", "font-size": "15px", "text-transform": "uppercase", "color": "#AAA", "text-align": "left", "margin": "5px 0px", "--hover-color": "#111"}, "nav-link-selected": {"background-color": C_ACCENT, "color": "#FFF", "icon-color": "#FFF", "box-shadow": "0px 4px 20px rgba(206, 17, 65, 0.4)"}})
+            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v18.0</div></div>""", unsafe_allow_html=True)
             
         if menu == "Dashboard":
             section_title("RAPTORS <span class='highlight'>DASHBOARD</span>", f"Daily Briefing • Pick #{int(latest_pick)}")
             top = day_df.iloc[0]
             
-            c1, c2, c3, c4 = st.columns(4)
-            with c1: kpi_card("MVP DU SOIR", top['Player'], f"{int(top['Score'])} PTS", C_GOLD)
+            # LOGIQUE MVP & BP (TASK 3)
+            mvp_bp_icon = ""
+            # On récupère le BP de la nuit depuis le GSheet
+            bp_score_night = bp_map.get(latest_pick, 999) # 999 si pas encore rempli
+            # Si le score du MVP >= au score BP saisi dans le sheet
+            if top['Score'] >= bp_score_night and bp_score_night > 0:
+                mvp_bp_icon = " 🎯"
+
+            # 5 COLONNES POUR LE DASHBOARD
+            c1, c2, c3, c4, c5 = st.columns(5)
+            with c1: kpi_card("MVP DU SOIR", top['Player'], f"{int(top['Score'])} PTS{mvp_bp_icon}", C_GOLD)
             total_day = day_df['Score'].sum()
             with c2: kpi_card("TOTAL TEAM SOIR", int(total_day), "POINTS")
             team_daily_avg = day_df['Score'].mean()
@@ -596,6 +595,9 @@ try:
             perf_col = C_GREEN if diff_perf > 0 else "#F87171"
             with c3: kpi_card("PERF. TEAM SOIR", f"{diff_perf:+.1f}%", "VS MOY. SAISON", perf_col)
             with c4: kpi_card("LEADER SAISON", leader['Player'], f"TOTAL: {int(leader['Total'])}", C_ACCENT)
+            # NOUVEAU KPI 5
+            col_streak = C_GREEN if team_streak_nc > 0 else C_RED
+            with c5: kpi_card("SÉRIE TEAM NO-CARROT", f"{team_streak_nc}", "JOURS CONSÉCUTIFS", col_streak)
             
             day_merged = pd.merge(day_df, full_stats[['Player', 'Moyenne']], on='Player')
             day_merged['Delta'] = day_merged['Score'] - day_merged['Moyenne']
@@ -618,7 +620,6 @@ try:
                 
                 day_df['BarColor'] = day_df['Score'].apply(get_bar_color)
                 
-                # NOTE: BarChart ici est simple et unicolore/conditionnelle, on laisse tel quel car c'est lisible.
                 fig = px.bar(day_df, x='Player', y='Score', text='Score', color='BarColor', color_discrete_map="identity")
                 fig.update_traces(textposition='outside', marker_line_width=0, textfont_size=14, textfont_family="Rajdhani", cliponaxis=False)
                 fig.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA', 'family': 'Inter'}, yaxis=dict(showgrid=False, visible=False), xaxis=dict(title=None, tickfont=dict(size=14, family='Rajdhani', weight=600)), height=350, showlegend=False, coloraxis_showscale=False, margin=dict(l=0, r=0, t=0, b=0))
@@ -723,7 +724,8 @@ try:
                 st.markdown("<div style='height:15px'></div>", unsafe_allow_html=True)
 
                 g7, g8, g9 = st.columns(3, gap="medium")
-                with g7: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_PURPLE}'>{total_bp_team}</div><div class='stat-mini-lbl'>TOTAL BEST PICKS</div></div>", unsafe_allow_html=True)
+                # UPDATE ICON BP HERE AS WELL (TASK 3)
+                with g7: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_PURPLE}'>{total_bp_team} 🎯</div><div class='stat-mini-lbl'>TOTAL BEST PICKS</div></div>", unsafe_allow_html=True)
                 with g8: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_BONUS}'>{total_bonus_played}</div><div class='stat-mini-lbl'>BONUS JOUÉS</div></div>", unsafe_allow_html=True)
                 with g9: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{avg_bonus_team:.1f}</div><div class='stat-mini-lbl'>MOYENNE SOUS BONUS</div></div>", unsafe_allow_html=True)
 
@@ -742,7 +744,7 @@ try:
             st.markdown("### 🔥 HEATMAP DE LA SAISON")
             st.markdown(f"<div class='chart-desc'>Rouge < 35 | Gris 35-45 (Neutre) | Vert > 45.</div>", unsafe_allow_html=True)
             
-            # --- FILTRE HEATMAP (Zoom Mobile) ---
+            # --- FILTRE HEATMAP ---
             heat_filter = st.selectbox("📅 Filtrer la Heatmap", ["VUE GLOBALE"] + list(df['Month'].unique()), key='heat_filter')
             
             if heat_filter == "VUE GLOBALE":
@@ -761,8 +763,6 @@ try:
             st.plotly_chart(fig_heat, use_container_width=True)
 
             st.markdown("### 📊 DATA ROOM")
-            # NOTE: Streamlit ne permet pas de colorer la barre de progression native 'Total Pts' avec une couleur différente par ligne.
-            # On garde donc la barre unifiée (rouge par défaut) pour la propreté du tableau.
             st.dataframe(full_stats[['Player', 'Trend', 'Total', 'Moyenne', 'BP_Count', 'Nukes', 'Carottes', 'Bonus_Gained']].sort_values('Total', ascending=False), hide_index=True, use_container_width=True, column_config={
                 "Player": st.column_config.TextColumn("Joueur", width="medium"),
                 "Trend": st.column_config.LineChartColumn("Forme (20j)", width="medium", y_min=0, y_max=80),
@@ -872,7 +872,8 @@ try:
                 st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
 
                 r4c1, r4c2, r4c3 = st.columns(3, gap="small")
-                with r4c1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_PURPLE}'>{int(p_data['BP_Count'])}</div><div class='stat-mini-lbl'>TOTAL BEST PICKS</div></div>", unsafe_allow_html=True)
+                # UPDATE ICON BP HERE AS WELL (TASK 3)
+                with r4c1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_PURPLE}'>{int(p_data['BP_Count'])} 🎯</div><div class='stat-mini-lbl'>TOTAL BEST PICKS</div></div>", unsafe_allow_html=True)
                 with r4c2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_GOLD}'>{int(p_data['Alpha_Count'])}</div><div class='stat-mini-lbl'>MVP DU SOIR</div></div>", unsafe_allow_html=True)
                 with r4c3: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_BONUS}'>{p_data['Avg_Bonus']:.1f}</div><div class='stat-mini-lbl'>MOYENNE SOUS BONUS</div></div>", unsafe_allow_html=True)
 
@@ -1004,14 +1005,15 @@ try:
                 nb_bonus = len(df_bonus_disp)
                 avg_bonus = df_bonus_disp['Score'].mean()
                 total_gain = df_bonus_disp['RealGain'].sum()
-                success_rate = (len(df_bonus_disp[df_bonus_disp['Score'] >= 40]) / nb_bonus * 100) if nb_bonus > 0 else 0
+                # MODIF QUESTION 2 : Seuil à 50 au lieu de 40
+                success_rate = (len(df_bonus_disp[df_bonus_disp['Score'] >= 50]) / nb_bonus * 100) if nb_bonus > 0 else 0
                 best_bonus = df_bonus_disp['Score'].max()
 
                 k1, k2, k3, k4, k5 = st.columns(5)
                 with k1: kpi_card("BONUS JOUÉS", nb_bonus, "VOLUME", C_BONUS)
                 with k2: kpi_card("MOYENNE", f"{avg_bonus:.1f}", "PTS / BONUS", "#FFF")
                 with k3: kpi_card("GAIN RÉEL", f"+{int(total_gain)}", "PTS AJOUTÉS", C_GREEN)
-                with k4: kpi_card("RENTABILITÉ", f"{int(success_rate)}%", "SCORES > 40 PTS", C_PURPLE)
+                with k4: kpi_card("RENTABILITÉ", f"{int(success_rate)}%", "SCORES > 50 PTS", C_PURPLE)
                 with k5: kpi_card("RECORD", int(best_bonus), "MAX SCORE", C_GOLD)
                 
                 st.markdown("<br>", unsafe_allow_html=True)
@@ -1037,7 +1039,7 @@ try:
                     
                     fig_strip.update_traces(marker=dict(size=12, line=dict(width=1, color='White'), opacity=0.9))
                     
-                    fig_strip.add_hline(y=40, line_dash="dash", line_color="#666", annotation_text="Seuil (40)", annotation_position="bottom right")
+                    fig_strip.add_hline(y=50, line_dash="dash", line_color="#666", annotation_text="Seuil (50)", annotation_position="bottom right")
                     fig_strip.update_layout(
                         plot_bgcolor='rgba(0,0,0,0)', 
                         paper_bgcolor='rgba(0,0,0,0)', 
@@ -1061,6 +1063,79 @@ try:
                         "RealGain": st.column_config.NumberColumn("Gain Net", format="+%d pts")
                     }
                 )
+
+        elif menu == "🥕 No-Carrot":
+            section_title("ANTI <span class='highlight'>CARROTE</span>", "Objectif Fiabilité & Constance")
+            
+            # KPIS
+            # Série Team calculée plus haut (team_streak_nc)
+            # Record Team Streak
+            max_streak_team = 0
+            curr_str = 0
+            sorted_picks_asc = sorted(df['Pick'].unique())
+            for p_id in sorted_picks_asc:
+                d_min = df[df['Pick'] == p_id]['Score'].min()
+                if d_min >= 20: curr_str += 1
+                else:
+                    if curr_str > max_streak_team: max_streak_team = curr_str
+                    curr_str = 0
+            if curr_str > max_streak_team: max_streak_team = curr_str
+
+            # Joueur Iron Man (Série en cours)
+            iron_man_curr = full_stats.sort_values('CurrentNoCarrot', ascending=False).iloc[0]
+            
+            k1, k2, k3 = st.columns(3)
+            with k1: kpi_card("SÉRIE TEAM EN COURS", f"{team_streak_nc}", "JOURS SANS CAROTTE", C_GREEN if team_streak_nc > 0 else C_RED)
+            with k2: kpi_card("RECORD SAISON TEAM", f"{max_streak_team}", "JOURS CONSÉCUTIFS", C_GOLD)
+            with k3: kpi_card("IRON MAN (ACTUEL)", iron_man_curr['Player'], f"{int(iron_man_curr['CurrentNoCarrot'])} MATCHS SUITE", C_BLUE)
+
+            st.markdown("<br>", unsafe_allow_html=True)
+
+            c_graph, c_list = st.columns([2, 1], gap="large")
+            
+            with c_graph:
+                st.markdown("#### 📉 ZONE DE DANGER (CAROTTES PAR SOIR)")
+                st.markdown("<div class='chart-desc'>Nombre de scores < 20 par soirée. L'objectif est de rester à zéro.</div>", unsafe_allow_html=True)
+                
+                carrot_counts = df[df['Score'] < 20].groupby('Pick').size().reset_index(name='Carottes')
+                # Fill missing picks with 0
+                all_picks = pd.DataFrame({'Pick': sorted(df['Pick'].unique())})
+                carrot_chart = pd.merge(all_picks, carrot_counts, on='Pick', how='left').fillna(0)
+                
+                fig_car = px.bar(carrot_chart, x='Pick', y='Carottes', color='Carottes', color_continuous_scale=['#10B981', '#EF4444'])
+                fig_car.update_layout(
+                    plot_bgcolor='rgba(0,0,0,0)', 
+                    paper_bgcolor='rgba(0,0,0,0)', 
+                    font={'color': '#AAA'},
+                    xaxis=dict(showgrid=False),
+                    yaxis=dict(showgrid=True, gridcolor='#222'),
+                    coloraxis_showscale=False,
+                    height=350
+                )
+                st.plotly_chart(fig_car, use_container_width=True)
+
+            with c_list:
+                st.markdown("#### 🛡️ SÉRIES EN COURS (JOUEURS)")
+                st.markdown("<div class='chart-desc'>Qui est le plus fiable actuellement ?</div>", unsafe_allow_html=True)
+                
+                sorted_reliability = full_stats.sort_values('CurrentNoCarrot', ascending=False)[['Player', 'CurrentNoCarrot']]
+                
+                for i, r in sorted_reliability.iterrows():
+                    val = int(r['CurrentNoCarrot'])
+                    col_bar = C_GREEN if val >= 10 else (C_BLUE if val >= 5 else C_TEXT)
+                    # Simple bar visualization using markdown
+                    width = min(100, val * 2) # Scale bar
+                    st.markdown(f"""
+                    <div style="margin-bottom:8px;">
+                        <div style="display:flex; justify-content:space-between; font-size:0.9rem; font-weight:600; color:{C_TEXT}">
+                            <span>{r['Player']}</span>
+                            <span style="color:{col_bar}">{val}</span>
+                        </div>
+                        <div style="width:100%; background:#222; height:6px; border-radius:3px; margin-top:2px;">
+                            <div style="width:{width}%; background:{col_bar}; height:100%; border-radius:3px;"></div>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
 
         elif menu == "Trends":
             section_title("TENDANCES", "Analyse de la forme récente (15 derniers jours)")

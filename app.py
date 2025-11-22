@@ -513,11 +513,8 @@ def send_discord_webhook(day_df, pick_num, url_app):
     except Exception as e: return str(e)
 
 # --- 5. UI COMPONENTS ---
-# FIX DASHBOARD MVP: New Line for Badges
 def kpi_card(label, value, sub, color="#FFF"):
-    # If sub contains <br>, don't escape it
     st.markdown(f"""<div class="glass-card" style="text-align:center"><div class="kpi-label">{label}</div><div class="kpi-num" style="color:{color}">{value}</div><div class="kpi-sub" style="color:{C_ACCENT}">{sub}</div></div>""", unsafe_allow_html=True)
-
 def section_title(title, subtitle):
     st.markdown(f"<h1>{title}</h1><div class='sub-header'>{subtitle}</div>", unsafe_allow_html=True)
 
@@ -540,7 +537,7 @@ try:
     """, height=0, width=0)
 
     with st.spinner('🦖 Analyse des données en cours...'):
-        # LOAD DATA
+        # LOAD DATA AVEC NOUVEAU PARSING
         df, team_rank, bp_map, team_history, daily_max_map, team_bp_real_load, player_real_bp_map = load_data()
     
     # GLOBAL METRIC
@@ -552,7 +549,7 @@ try:
     if df is not None and not df.empty:
         latest_pick = df['Pick'].max()
         day_df = df[df['Pick'] == latest_pick].sort_values('Score', ascending=False).copy()
-        # COMPUTE
+        # COMPUTE AVEC BP MAP MANUELLE
         full_stats = compute_stats(df, bp_map, daily_max_map, player_real_bp_map)
         leader = full_stats.sort_values('Total', ascending=False).iloc[0]
         
@@ -571,26 +568,27 @@ try:
             st.markdown("<div style='text-align:center; margin-bottom: 30px;'>", unsafe_allow_html=True)
             st.image("raptors-ttfl-min.png", use_container_width=True) 
             st.markdown("</div>", unsafe_allow_html=True)
-            # MENU CLEAN (NO CARROT EMOJI)
             menu = option_menu(menu_title=None, options=["Dashboard", "Team HQ", "Player Lab", "Bonus x2", "No-Carrot", "Trends", "Hall of Fame", "Admin"], icons=["grid-fill", "people-fill", "person-bounding-box", "lightning-charge-fill", "shield-check", "fire", "trophy-fill", "shield-lock"], default_index=0, styles={"container": {"padding": "0!important", "background-color": "#000000"}, "icon": {"color": "#666", "font-size": "1.1rem"}, "nav-link": {"font-family": "Rajdhani, sans-serif", "font-weight": "700", "font-size": "15px", "text-transform": "uppercase", "color": "#AAA", "text-align": "left", "margin": "5px 0px", "--hover-color": "#111"}, "nav-link-selected": {"background-color": C_ACCENT, "color": "#FFF", "icon-color": "#FFF", "box-shadow": "0px 4px 20px rgba(206, 17, 65, 0.4)"}})
-            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v19.1</div></div>""", unsafe_allow_html=True)
+            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v20.0</div></div>""", unsafe_allow_html=True)
             
         if menu == "Dashboard":
             section_title("RAPTORS <span class='highlight'>DASHBOARD</span>", f"Daily Briefing • Pick #{int(latest_pick)}")
             top = day_df.iloc[0]
             
-            # LOGIQUE MVP & BP & BONUS (TASK 1)
+            # LOGIQUE MVP & BP & BONUS
             val_suffix = ""
             if 'IsBonus' in top and top['IsBonus']: val_suffix += " 🌟x2"
             if 'IsBP' in top and top['IsBP']: val_suffix += " 🎯BP"
 
             # HTML Construction for MVP Card Subtext (New Line)
-            sub_html = f"<div style='line-height:1.2; margin-top:-5px'>{int(top['Score'])} PTS<br><span style='font-size:0.8em; color:#AAA'>{val_suffix}</span></div>"
+            # On met le score en gros, et les badges en dessous en plus petit
+            # La couleur du score est gérée par kpi-sub (rouge), donc on force le gris pour les badges
+            sub_html = f"<div><div style='font-size:1.4rem; font-weight:800'>{int(top['Score'])} PTS</div><div style='font-size:0.9rem; color:#999; font-weight:600; margin-top:4px'>{val_suffix}</div></div>"
 
             # 5 COLONNES POUR LE DASHBOARD
             c1, c2, c3, c4, c5 = st.columns(5)
-            # Use Custom HTML Sub for MVP
             with c1: 
+                # On passe sub_html mais on force l'affichage
                 st.markdown(f"""<div class="glass-card" style="text-align:center"><div class="kpi-label">MVP DU SOIR</div><div class="kpi-num" style="color:{C_GOLD}">{top['Player']}</div><div class="kpi-sub" style="color:{C_ACCENT}">{sub_html}</div></div>""", unsafe_allow_html=True)
             
             total_day = day_df['Score'].sum()
@@ -730,9 +728,9 @@ try:
                 st.markdown("<div style='height:15px'></div>", unsafe_allow_html=True)
 
                 g7, g8, g9 = st.columns(3, gap="medium")
-                # UPDATED DESCRIPTIONS FOR EMOJI CONSISTENCY
-                with g7: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_PURPLE}'>{total_bp_team}</div><div class='stat-mini-lbl'>TOTAL BEST PICKS 🎯BP</div></div>", unsafe_allow_html=True)
-                with g8: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_BONUS}'>{total_bonus_played}</div><div class='stat-mini-lbl'>BONUS JOUÉS 🌟x2</div></div>", unsafe_allow_html=True)
+                # CLEAN EMOJIS ONLY
+                with g7: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_PURPLE}'>{total_bp_team}</div><div class='stat-mini-lbl'>TOTAL BEST PICKS 🎯</div></div>", unsafe_allow_html=True)
+                with g8: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_BONUS}'>{total_bonus_played}</div><div class='stat-mini-lbl'>BONUS JOUÉS 🌟</div></div>", unsafe_allow_html=True)
                 with g9: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{avg_bonus_team:.1f}</div><div class='stat-mini-lbl'>MOYENNE SOUS BONUS</div></div>", unsafe_allow_html=True)
 
             with c_rec:
@@ -787,7 +785,7 @@ try:
             st.markdown("<div class='widget-title'>👤 SÉLECTION DU JOUEUR</div>", unsafe_allow_html=True)
             sel_player = st.selectbox("Recherche", sorted(df['Player'].unique()), label_visibility="collapsed")
             
-            # --- ZOOM BANDEAU HEROIQUE (COULEUR JOUEUR) ---
+            # --- ZOOM BANDEAU HEROIQUE ---
             p_color = PLAYER_COLORS.get(sel_player, "#333")
             st.markdown(f"""
             <div style="background-color: {p_color}; padding: 15px; border-radius: 12px; margin-bottom: 25px; text-align: center; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 4px 15px rgba(0,0,0,0.3);">
@@ -822,32 +820,24 @@ try:
             with c4: kpi_card("CLASSEMENT", f"#{internal_rank}", f"SUR {nb_players}", rank_col)
             with c5: kpi_card("BEST SCORE", int(p_data['Best']), "RECORD", C_GOLD)
 
-            # --- NEW ROW: SEASON HISTORY VISUALIZER (SCROLLABLE, ALIGNED RIGHT) ---
+            # --- NEW ROW: SEASON HISTORY VISUALIZER ---
             st.markdown("<div style='margin-top:20px; margin-bottom:5px; color:#888; font-size:0.8rem; text-transform:uppercase; letter-spacing:1px; text-align:center'>HISTORIQUE SAISON</div>", unsafe_allow_html=True)
-            # Get ALL picks for player, sorted ascending (Pick 1 to Pick 32)
             all_season_picks = p_hist_all.sort_values('Pick', ascending=True)
             
             if not all_season_picks.empty:
                 html_picks = "<div class='match-row' style='width:100%'>"
-                
-                # Re-sorting DESCENDING for the loop (so latest pick is first processed for row-reverse)
+                # Sort Descending for row-reverse logic (Newest on Right)
                 desc_picks = p_hist_all.sort_values('Pick', ascending=False)
                 
                 for _, r in desc_picks.iterrows():
                     sc = r['Score']
-                    
-                    # Logic Color Bonus Yellow
                     if r['IsBonus']:
-                        bg = C_GOLD
-                        txt_col = "#000000"
-                        border = f"2px solid {C_GOLD}"
+                        bg = C_GOLD; txt_col = "#000000"; border = f"2px solid {C_GOLD}"
                     else:
                         bg = C_RED if sc < 20 else (C_GREEN if sc > 40 else "#333")
-                        txt_col = "#FFF"
-                        border = "1px solid rgba(255,255,255,0.1)"
+                        txt_col = "#FFF"; border = "1px solid rgba(255,255,255,0.1)"
                     
                     bp_marker = " 🎯" if r.get('IsBP', False) else ""
-                        
                     html_picks += f"<div class='match-pill' style='background:{bg}; color:{txt_col}; border:{border}' title='Pick #{r['Pick']}'>{int(sc)}{bp_marker}</div>"
                 html_picks += "</div>"
                 st.markdown(html_picks, unsafe_allow_html=True)
@@ -860,7 +850,7 @@ try:
             col_grid, col_top5 = st.columns([3, 1], gap="medium")
 
             with col_grid:
-                # CUSTOM GRID 3x4 (12 KPIs) - UNIFORMISÉ
+                # CUSTOM GRID 3x4 (12 KPIs)
                 r1c1, r1c2, r1c3 = st.columns(3, gap="small")
                 with r1c1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(p_data['ReliabilityPct'])}%</div><div class='stat-mini-lbl'>FIABILITÉ (> 20 PTS)</div></div>", unsafe_allow_html=True)
                 with r1c2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{p_data['Last15']:.1f}</div><div class='stat-mini-lbl'>MOYENNE 15 JOURS</div></div>", unsafe_allow_html=True)
@@ -883,9 +873,9 @@ try:
                 st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
 
                 r4c1, r4c2, r4c3 = st.columns(3, gap="small")
-                with r4c1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_PURPLE}'>{int(p_data['BP_Count'])}</div><div class='stat-mini-lbl'>TOTAL BEST PICKS 🎯BP</div></div>", unsafe_allow_html=True)
+                # CLEAN EMOJIS ONLY
+                with r4c1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_PURPLE}'>{int(p_data['BP_Count'])}</div><div class='stat-mini-lbl'>TOTAL BEST PICKS 🎯</div></div>", unsafe_allow_html=True)
                 with r4c2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_GOLD}'>{int(p_data['Alpha_Count'])}</div><div class='stat-mini-lbl'>MVP DU SOIR</div></div>", unsafe_allow_html=True)
-                # TASK 2 : AJOUT EMOJI 🌟 DANS LA DESCRIPTION
                 with r4c3: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_BONUS}'>{p_data['Avg_Bonus']:.1f}</div><div class='stat-mini-lbl'>MOYENNE SOUS BONUS 🌟</div></div>", unsafe_allow_html=True)
 
 
@@ -895,7 +885,7 @@ try:
                 top_5 = p_hist_all.sort_values('Score', ascending=False).head(5)
                 for i, r in top_5.reset_index().iterrows():
                     rank_num = i + 1
-                    # TASK 2: FORCING STRING CONSTRUCTION
+                    # FORCED ICONS DISPLAY
                     icons_str = ""
                     if r['IsBonus']: icons_str += " 🌟x2"
                     if r.get('IsBP', False): icons_str += " 🎯BP"
@@ -914,7 +904,7 @@ try:
             st.markdown("<br>", unsafe_allow_html=True)
             st.markdown("<h3 style='margin-bottom:10px'>📡 PROFIL ATHLÉTIQUE</h3>", unsafe_allow_html=True)
 
-            # --- ROW 4 : RADAR PROFILE FULL WIDTH (2/3 + 1/3) ---
+            # --- ROW 4 : RADAR PROFILE ---
             c_radar_graph, c_radar_legend = st.columns([2, 1], gap="large")
             
             with c_radar_graph:
@@ -1026,7 +1016,7 @@ try:
 
                 k1, k2, k3, k4, k5 = st.columns(5)
                 # UPDATE: Label TOTAL, Desc BONUS JOUES ⭐️
-                with k1: kpi_card("TOTAL", nb_bonus, "BONUS JOUÉS 🌟x2", C_BONUS)
+                with k1: kpi_card("TOTAL", nb_bonus, "BONUS JOUÉS 🌟", C_BONUS)
                 with k2: kpi_card("MOYENNE", f"{avg_bonus:.1f}", "PTS / BONUS", "#FFF")
                 with k3: kpi_card("GAIN RÉEL", f"+{int(total_gain)}", "PTS AJOUTÉS", C_GREEN)
                 with k4: kpi_card("RENTABILITÉ", f"{int(success_rate)}%", "SCORES > 50 PTS", C_PURPLE)

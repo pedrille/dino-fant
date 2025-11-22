@@ -157,11 +157,11 @@ st.markdown(f"""
     /* Player Lab - Match Pills FIXED CENTERING WITH TARGET BELOW */
     .match-pill {{
         flex: 0 0 auto; 
-        min-width: 40px; /* Slightly wider to accommodate */
-        height: 48px; /* Slightly taller */
+        min-width: 40px; 
+        height: 48px; 
         border-radius: 6px; 
         display: flex; 
-        flex-direction: column; /* Stack vertical */
+        flex-direction: column; 
         align-items: center; 
         justify-content: center; 
         font-family: 'Rajdhani'; 
@@ -216,7 +216,7 @@ st.markdown(f"""
     .gauge-fill {{ height: 10px; border-radius: 10px; transition: width 1s ease-in-out; }}
     .gauge-label {{ display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 4px; color: #DDD; }}
     
-    /* TOP 5 PICKS STYLING - NEW V2 DESIGN */
+    /* TOP 5 PICKS STYLING - NEW V2 DESIGN FIXED */
     .top-pick-card {{
         display: flex; 
         align-items: center;
@@ -236,13 +236,25 @@ st.markdown(f"""
         border-radius: 50%; 
         background: #222; border: 2px solid #444; color: #FFF;
         margin-right: 12px;
+        flex-shrink: 0;
     }}
-    /* Dynamic border colors for ranks handled inline or via distinct classes if needed, keeping simple for now */
     
-    .tp-content {{ flex-grow: 1; }}
+    .tp-content {{ flex-grow: 1; overflow: hidden; }}
     .tp-date {{ font-size: 0.75rem; color: #888; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 2px; }}
     .tp-tags {{ font-size: 0.7rem; color: {C_BONUS}; font-weight: 600; }}
-    .tp-score-big {{ font-family: 'Rajdhani'; font-weight: 800; font-size: 1.8rem; color: #FFF; line-height: 1; }}
+    
+    /* Correction ici : flex-shrink: 0 et margin-left pour forcer l'affichage */
+    .tp-score-big {{ 
+        font-family: 'Rajdhani'; 
+        font-weight: 800; 
+        font-size: 1.8rem; 
+        color: #FFF; 
+        line-height: 1; 
+        margin-left: 15px;
+        flex-shrink: 0;
+        min-width: 60px;
+        text-align: right;
+    }}
 
     /* RADAR LEGEND CUSTOM */
     .legend-box {{
@@ -588,7 +600,7 @@ try:
             st.markdown("</div>", unsafe_allow_html=True)
             # MENU CLEAN (NO CARROT EMOJI)
             menu = option_menu(menu_title=None, options=["Dashboard", "Team HQ", "Player Lab", "Bonus x2", "No-Carrot", "Trends", "Hall of Fame", "Admin"], icons=["grid-fill", "people-fill", "person-bounding-box", "lightning-charge-fill", "shield-check", "fire", "trophy-fill", "shield-lock"], default_index=0, styles={"container": {"padding": "0!important", "background-color": "#000000"}, "icon": {"color": "#666", "font-size": "1.1rem"}, "nav-link": {"font-family": "Rajdhani, sans-serif", "font-weight": "700", "font-size": "15px", "text-transform": "uppercase", "color": "#AAA", "text-align": "left", "margin": "5px 0px", "--hover-color": "#111"}, "nav-link-selected": {"background-color": C_ACCENT, "color": "#FFF", "icon-color": "#FFF", "box-shadow": "0px 4px 20px rgba(206, 17, 65, 0.4)"}})
-            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v21.5</div></div>""", unsafe_allow_html=True)
+            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v21.6</div></div>""", unsafe_allow_html=True)
             
         if menu == "Dashboard":
             section_title("RAPTORS <span class='highlight'>DASHBOARD</span>", f"Daily Briefing • Pick #{int(latest_pick)}")
@@ -1023,7 +1035,18 @@ try:
                 fig_evol.update_traces(line_color=C_BLUE, line_width=2, marker_size=4)
                 fig_evol.add_hline(y=p_data['Moyenne'], line_dash="dot", line_color=C_TEXT, annotation_text="Moy. Joueur", annotation_position="top left")
                 fig_evol.add_hline(y=team_season_avg, line_dash="dash", line_color=C_ORANGE, annotation_text="Moy. Team", annotation_position="bottom right", annotation_font_color=C_ORANGE)
-                fig_evol.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, margin=dict(l=0, r=0, t=30, b=0), height=300, xaxis_title="Pick #", yaxis_title="Points TTFL")
+                
+                # FIX UI: LEGEND COLOR TOO DARK
+                fig_evol.update_layout(
+                    plot_bgcolor='rgba(0,0,0,0)', 
+                    paper_bgcolor='rgba(0,0,0,0)', 
+                    font={'color': '#AAA'}, 
+                    margin=dict(l=0, r=0, t=30, b=0), 
+                    height=300, 
+                    xaxis_title="Pick #", 
+                    yaxis_title="Points TTFL",
+                    legend=dict(font=dict(color="#E5E7EB"))
+                )
                 st.plotly_chart(fig_evol, use_container_width=True)
 
         elif menu == "Bonus x2":
@@ -1064,8 +1087,8 @@ try:
                 st.markdown("<br>", unsafe_allow_html=True)
                 
                 # CHARTS: IMPACT & SCATTER (NOUVEAU STRIP PLOT)
-                # FIX UI REQUEST: 1/3 - 2/3 RATIO
-                c_chart1, c_chart2 = st.columns([1, 2], gap="medium")
+                # FIX UI REQUEST: 2/5 - 3/5 RATIO ([2, 3])
+                c_chart1, c_chart2 = st.columns([2, 3], gap="medium")
                 
                 with c_chart1:
                     st.markdown("#### 💰 IMPACT MENSUEL (GAINS RÉELS)")

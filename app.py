@@ -20,7 +20,24 @@ st.set_page_config(
 # ✅ LIEN DE L'IMAGE DISCORD (RAW)
 DISCORD_AVATAR_URL = "https://raw.githubusercontent.com/pedrille/dino-fant/main/basketball_discord.png"
 
-# --- 1.5 CONFIG PUNCHLINES (ANTI-PACERS MIXÉES) ---
+# --- CONFIG COULEURS JOUEURS (IDENTITÉ VISUELLE) ---
+# J'ai assigné une couleur unique et fixe à chaque membre de l'équipe
+PLAYER_COLORS = {
+    "Pedrille": "#CE1141",     # Raptors Red
+    "Tomus06": "#FFD700",      # Gold
+    "Mims22": "#10B981",       # Emerald Green
+    "MadDawgs": "#3B82F6",     # Royal Blue
+    "Gabeur": "#8B5CF6",       # Violet
+    "HoodieRigone": "#F97316", # Orange
+    "iAmDjuu25": "#06B6D4",    # Cyan
+    "Luoshtgin": "#EC4899",    # Pink
+    "Mendosaaaa": "#84CC16",   # Lime
+    "Duduge21": "#6366F1",     # Indigo
+    # Fallback pour les invités ou fautes de frappe
+    "Inconnu": "#9CA3AF"
+}
+
+# --- CONFIG PUNCHLINES (ANTI-PACERS) ---
 PACERS_PUNCHLINES = [
     "Un bon Pacer est un Pacer sous carotte 🥕",
     "PACERS : Petit Animal Chétif Et Rarement Stylé 🐁",
@@ -50,7 +67,7 @@ PACERS_PUNCHLINES = [
     "Si on retourne le classement, les Pacers sont enfin à leur vraie place 🙃"
 ]
 
-# Palette de couleurs (Globales)
+# Palette de couleurs (Globales UI)
 C_BG = "#050505"
 C_ACCENT = "#CE1141" # Raptors Red
 C_TEXT = "#E5E7EB"
@@ -547,7 +564,7 @@ try:
             st.image("raptors-ttfl-min.png", use_container_width=True) 
             st.markdown("</div>", unsafe_allow_html=True)
             menu = option_menu(menu_title=None, options=["Dashboard", "Team HQ", "Player Lab", "Bonus x2", "Trends", "Hall of Fame", "Admin"], icons=["grid-fill", "people-fill", "person-bounding-box", "lightning-charge-fill", "fire", "trophy-fill", "shield-lock"], default_index=0, styles={"container": {"padding": "0!important", "background-color": "#000000"}, "icon": {"color": "#666", "font-size": "1.1rem"}, "nav-link": {"font-family": "Rajdhani, sans-serif", "font-weight": "700", "font-size": "15px", "text-transform": "uppercase", "color": "#AAA", "text-align": "left", "margin": "5px 0px", "--hover-color": "#111"}, "nav-link-selected": {"background-color": C_ACCENT, "color": "#FFF", "icon-color": "#FFF", "box-shadow": "0px 4px 20px rgba(206, 17, 65, 0.4)"}})
-            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v16.1</div></div>""", unsafe_allow_html=True)
+            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v17.0</div></div>""", unsafe_allow_html=True)
             
         if menu == "Dashboard":
             section_title("RAPTORS <span class='highlight'>DASHBOARD</span>", f"Daily Briefing • Pick #{int(latest_pick)}")
@@ -584,6 +601,7 @@ try:
                 
                 day_df['BarColor'] = day_df['Score'].apply(get_bar_color)
                 
+                # NOTE: BarChart ici est simple et unicolore/conditionnelle, on laisse tel quel car c'est lisible.
                 fig = px.bar(day_df, x='Player', y='Score', text='Score', color='BarColor', color_discrete_map="identity")
                 fig.update_traces(textposition='outside', marker_line_width=0, textfont_size=14, textfont_family="Rajdhani", cliponaxis=False)
                 fig.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA', 'family': 'Inter'}, yaxis=dict(showgrid=False, visible=False), xaxis=dict(title=None, tickfont=dict(size=14, family='Rajdhani', weight=600)), height=350, showlegend=False, coloraxis_showscale=False, margin=dict(l=0, r=0, t=0, b=0))
@@ -707,7 +725,7 @@ try:
             st.markdown("### 🔥 HEATMAP DE LA SAISON")
             st.markdown(f"<div class='chart-desc'>Rouge < 35 | Gris 35-45 (Neutre) | Vert > 45.</div>", unsafe_allow_html=True)
             
-            # --- NOUVEAU : FILTRE HEATMAP ---
+            # --- FILTRE HEATMAP (Zoom Mobile) ---
             heat_filter = st.selectbox("📅 Filtrer la Heatmap", ["VUE GLOBALE"] + list(df['Month'].unique()), key='heat_filter')
             
             if heat_filter == "VUE GLOBALE":
@@ -718,7 +736,6 @@ try:
             heatmap_data = df_heat.pivot_table(index='Player', columns='Pick', values='Score', aggfunc='sum')
             custom_colors = [[0.0, '#EF4444'], [0.43, '#1F2937'], [0.56, '#1F2937'], [1.0, '#10B981']]
             
-            # Ajustement taille auto selon le nombre de colonnes pour rester lisible
             fig_height = 500
             
             fig_heat = px.imshow(heatmap_data, labels=dict(x="Pick", y="Player", color="Score"), x=heatmap_data.columns, y=heatmap_data.index, color_continuous_scale=custom_colors, zmin=0, zmax=80, aspect="auto")
@@ -727,6 +744,8 @@ try:
             st.plotly_chart(fig_heat, use_container_width=True)
 
             st.markdown("### 📊 DATA ROOM")
+            # NOTE: Streamlit ne permet pas de colorer la barre de progression native 'Total Pts' avec une couleur différente par ligne.
+            # On garde donc la barre unifiée (rouge par défaut) pour la propreté du tableau.
             st.dataframe(full_stats[['Player', 'Trend', 'Total', 'Moyenne', 'BP_Count', 'Nukes', 'Carottes', 'Bonus_Gained']].sort_values('Total', ascending=False), hide_index=True, use_container_width=True, column_config={
                 "Player": st.column_config.TextColumn("Joueur", width="medium"),
                 "Trend": st.column_config.LineChartColumn("Forme (20j)", width="medium", y_min=0, y_max=80),
@@ -744,6 +763,14 @@ try:
             # UI SELECTOR HEADER
             st.markdown("<div class='widget-title'>👤 SÉLECTION DU JOUEUR</div>", unsafe_allow_html=True)
             sel_player = st.selectbox("Recherche", sorted(df['Player'].unique()), label_visibility="collapsed")
+            
+            # --- ZOOM BANDEAU HEROIQUE (COULEUR JOUEUR) ---
+            p_color = PLAYER_COLORS.get(sel_player, "#333")
+            st.markdown(f"""
+            <div style="background-color: {p_color}; padding: 15px; border-radius: 12px; margin-bottom: 25px; text-align: center; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 4px 15px rgba(0,0,0,0.3);">
+                <h2 style="color: white; margin:0; font-family:'Rajdhani'; font-weight:800; font-size:2rem; text-shadow: 0 2px 4px rgba(0,0,0,0.5); text-transform:uppercase; letter-spacing:2px;">🔭 ZOOM SUR {sel_player}</h2>
+            </div>
+            """, unsafe_allow_html=True)
             
             p_data = full_stats[full_stats['Player'] == sel_player].iloc[0]
             p_hist_all = df[df['Player'] == sel_player]
@@ -972,7 +999,7 @@ try:
                 
                 st.markdown("<br>", unsafe_allow_html=True)
                 
-                # CHARTS: IMPACT & SCATTER
+                # CHARTS: IMPACT & SCATTER (NOUVEAU STRIP PLOT)
                 c_chart1, c_chart2 = st.columns(2, gap="medium")
                 
                 with c_chart1:
@@ -985,12 +1012,25 @@ try:
                     st.plotly_chart(fig_m, use_container_width=True)
                 
                 with c_chart2:
-                    st.markdown("#### 🎯 MATRICE DE RENTABILITÉ")
-                    st.markdown("<div class='chart-desc'>Distribution des scores bonus. Cible : Coin supérieur droit.</div>", unsafe_allow_html=True)
-                    fig_scat = px.scatter(df_bonus_disp, x="Pick", y="Score", color="Score", size="Score", hover_data=['Player'], color_continuous_scale='RdYlGn')
-                    fig_scat.add_hline(y=40, line_dash="dash", line_color="#666", annotation_text="Seuil Rentabilité (40)", annotation_position="bottom right")
-                    fig_scat.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, height=300, xaxis_title="Pick #", yaxis_title="Score Total", coloraxis_showscale=False)
-                    st.plotly_chart(fig_scat, use_container_width=True)
+                    st.markdown("#### 🎯 SCORES BONUS PAR JOUEUR")
+                    st.markdown("<div class='chart-desc'>Distribution des scores doublés. Points multiples visibles côte à côte.</div>", unsafe_allow_html=True)
+                    # UTILISATION DU STRIP PLOT + COULEURS FIXES
+                    fig_strip = px.strip(df_bonus_disp, x="Player", y="Score", color="Player", 
+                                         color_discrete_map=PLAYER_COLORS, stripmode='overlay')
+                    
+                    fig_strip.update_traces(marker=dict(size=12, line=dict(width=1, color='White'), opacity=0.9))
+                    
+                    fig_strip.add_hline(y=40, line_dash="dash", line_color="#666", annotation_text="Seuil (40)", annotation_position="bottom right")
+                    fig_strip.update_layout(
+                        plot_bgcolor='rgba(0,0,0,0)', 
+                        paper_bgcolor='rgba(0,0,0,0)', 
+                        font={'color': '#AAA'}, 
+                        height=300, 
+                        xaxis=dict(title=None), 
+                        yaxis=dict(title="Score Total", range=[0, df_bonus_disp['Score'].max() + 10]),
+                        showlegend=False
+                    )
+                    st.plotly_chart(fig_strip, use_container_width=True)
 
                 st.markdown("### 📜 HISTORIQUE DÉTAILLÉ")
                 st.dataframe(
@@ -1127,7 +1167,8 @@ try:
             active_players = df_15['Player'].unique()
             momentum_data = df_15[df_15['Player'].isin(active_players)].sort_values('Pick')
             
-            fig_mom = px.line(momentum_data, x='Pick', y='Score', color='Player', markers=True)
+            # COLORER LA LIGNE PAR JOUEUR
+            fig_mom = px.line(momentum_data, x='Pick', y='Score', color='Player', markers=True, color_discrete_map=PLAYER_COLORS)
             fig_mom.update_layout(
                 plot_bgcolor='rgba(0,0,0,0)', 
                 paper_bgcolor='rgba(0,0,0,0)', 

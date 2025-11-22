@@ -98,6 +98,9 @@ st.markdown(f"""
     h1 {{ font-size: 3rem; font-weight: 800; background: linear-gradient(90deg, #FFF, #888); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }}
     .sub-header {{ font-size: 0.9rem; color: #666; letter-spacing: 1.5px; margin-bottom: 25px; font-weight: 500; }}
     
+    /* --- FIX SELECTBOX LABEL COLOR --- */
+    .stSelectbox label {{ color: #E5E7EB !important; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; font-size: 0.8rem; }}
+
     /* --- FIX UI DASHBOARD : CLASSE GENERIQUE --- */
     .glass-card {{ 
         background: linear-gradient(145deg, rgba(25,25,25,0.6) 0%, rgba(10,10,10,0.8) 100%); 
@@ -151,17 +154,27 @@ st.markdown(f"""
     .stat-mini-lbl {{ font-size:0.75rem; color:#888; text-transform:uppercase; margin-top:8px; letter-spacing:1px; }}
     .stat-mini-sub {{ font-size:0.7rem; font-weight:600; margin-top:4px; color:#555; }}
     
-    /* Player Lab - Match Pills FULL WIDTH RESPONSIVE SCROLL REVERSE */
+    /* Player Lab - Match Pills FIXED CENTERING WITH TARGET BELOW */
     .match-pill {{
         flex: 0 0 auto; 
-        min-width: 30px;
-        height: 40px; 
-        border-radius: 4px; 
-        display: flex; align-items: center; justify-content: center; 
-        font-family: 'Rajdhani'; font-weight: 700; font-size: 0.85rem;
+        min-width: 40px; /* Slightly wider to accommodate */
+        height: 48px; /* Slightly taller */
+        border-radius: 6px; 
+        display: flex; 
+        flex-direction: column; /* Stack vertical */
+        align-items: center; 
+        justify-content: center; 
+        font-family: 'Rajdhani'; 
+        font-weight: 700; 
+        font-size: 0.9rem;
         color: #FFF;
         margin: 0 2px;
+        line-height: 1;
+        padding-top: 2px;
     }}
+    .mp-score {{ font-size: 1rem; }}
+    .mp-icon {{ font-size: 0.6rem; margin-top: 2px; opacity: 0.9; }}
+
     .match-row {{ 
         display: flex; 
         flex-direction: row-reverse; 
@@ -203,22 +216,33 @@ st.markdown(f"""
     .gauge-fill {{ height: 10px; border-radius: 10px; transition: width 1s ease-in-out; }}
     .gauge-label {{ display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 4px; color: #DDD; }}
     
-    /* TOP 5 PICKS STYLING */
-    .top-pick-row {{
-        display: flex; justify-content: space-between; align-items: center;
-        background: rgba(255,255,255,0.03);
-        border-left: 4px solid {C_ACCENT};
-        padding: 12px 15px;
+    /* TOP 5 PICKS STYLING - NEW V2 DESIGN */
+    .top-pick-card {{
+        display: flex; 
+        align-items: center;
+        background: linear-gradient(90deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.01) 100%);
+        border: 1px solid rgba(255,255,255,0.05);
+        padding: 10px 15px;
         margin-bottom: 8px;
-        border-radius: 4px;
-        transition: background 0.2s;
+        border-radius: 8px;
+        transition: all 0.2s;
     }}
-    .top-pick-row:hover {{ background: rgba(255,255,255,0.08); }}
-    .tp-rank {{ font-family: 'Rajdhani'; font-weight: 800; font-size: 1.2rem; color: #666; width: 25px; }}
-    .tp-info {{ flex-grow: 1; padding-left: 10px; }}
-    .tp-pick {{ color: #888; font-size: 0.75rem; text-transform: uppercase; }}
-    .tp-score {{ font-family: 'Rajdhani'; font-weight: 700; font-size: 1.5rem; color: #FFF; }}
-    .tp-bonus {{ font-size: 0.9rem; color: {C_BONUS}; margin-left: 5px; }}
+    .top-pick-card:hover {{ background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.1); transform: translateX(5px); }}
+    
+    .tp-rank-badge {{ 
+        font-family: 'Rajdhani'; font-weight: 800; font-size: 1rem; 
+        width: 30px; height: 30px; 
+        display: flex; align-items: center; justify-content: center;
+        border-radius: 50%; 
+        background: #222; border: 2px solid #444; color: #FFF;
+        margin-right: 12px;
+    }}
+    /* Dynamic border colors for ranks handled inline or via distinct classes if needed, keeping simple for now */
+    
+    .tp-content {{ flex-grow: 1; }}
+    .tp-date {{ font-size: 0.75rem; color: #888; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 2px; }}
+    .tp-tags {{ font-size: 0.7rem; color: {C_BONUS}; font-weight: 600; }}
+    .tp-score-big {{ font-family: 'Rajdhani'; font-weight: 800; font-size: 1.8rem; color: #FFF; line-height: 1; }}
 
     /* RADAR LEGEND CUSTOM */
     .legend-box {{
@@ -564,7 +588,7 @@ try:
             st.markdown("</div>", unsafe_allow_html=True)
             # MENU CLEAN (NO CARROT EMOJI)
             menu = option_menu(menu_title=None, options=["Dashboard", "Team HQ", "Player Lab", "Bonus x2", "No-Carrot", "Trends", "Hall of Fame", "Admin"], icons=["grid-fill", "people-fill", "person-bounding-box", "lightning-charge-fill", "shield-check", "fire", "trophy-fill", "shield-lock"], default_index=0, styles={"container": {"padding": "0!important", "background-color": "#000000"}, "icon": {"color": "#666", "font-size": "1.1rem"}, "nav-link": {"font-family": "Rajdhani, sans-serif", "font-weight": "700", "font-size": "15px", "text-transform": "uppercase", "color": "#AAA", "text-align": "left", "margin": "5px 0px", "--hover-color": "#111"}, "nav-link-selected": {"background-color": C_ACCENT, "color": "#FFF", "icon-color": "#FFF", "box-shadow": "0px 4px 20px rgba(206, 17, 65, 0.4)"}})
-            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v21.4</div></div>""", unsafe_allow_html=True)
+            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v21.5</div></div>""", unsafe_allow_html=True)
             
         if menu == "Dashboard":
             section_title("RAPTORS <span class='highlight'>DASHBOARD</span>", f"Daily Briefing • Pick #{int(latest_pick)}")
@@ -836,8 +860,12 @@ try:
                         bg = C_RED if sc < 20 else (C_GREEN if sc > 40 else "#333")
                         txt_col = "#FFF"; border = "1px solid rgba(255,255,255,0.1)"
                     
-                    bp_marker = " 🎯" if r.get('IsBP', False) else ""
-                    html_picks += f"<div class='match-pill' style='background:{bg}; color:{txt_col}; border:{border}' title='Pick #{r['Pick']}'>{int(sc)}{bp_marker}</div>"
+                    # V21.5 : New Logic for centered pill with optional target
+                    pill_content = f"<div class='mp-score'>{int(sc)}</div>"
+                    if r.get('IsBP', False):
+                        pill_content += "<div class='mp-icon'>🎯</div>"
+                    
+                    html_picks += f"<div class='match-pill' style='background:{bg}; color:{txt_col}; border:{border}' title='Pick #{r['Pick']}'>{pill_content}</div>"
                 html_picks += "</div>"
                 st.markdown(html_picks, unsafe_allow_html=True)
             else:
@@ -884,19 +912,22 @@ try:
                 top_5 = p_hist_all.sort_values('Score', ascending=False).head(5)
                 for i, r in top_5.reset_index().iterrows():
                     rank_num = i + 1
-                    # FORCED ICONS DISPLAY
-                    icons_str = ""
-                    if r['IsBonus']: icons_str += " 🌟x2"
-                    if r.get('IsBP', False): icons_str += " 🎯BP"
+                    # Rank color logic
+                    border_col = C_GOLD if rank_num == 1 else (C_SILVER if rank_num == 2 else (C_BRONZE if rank_num == 3 else "#444"))
+                    
+                    tags = []
+                    if r['IsBonus']: tags.append("🌟 x2")
+                    if r.get('IsBP', False): tags.append("🎯 BP")
+                    tags_html = f"<div class='tp-tags'>{' '.join(tags)}</div>" if tags else ""
                     
                     st.markdown(f"""
-                    <div class="top-pick-row">
-                        <div class="tp-rank">#{rank_num}</div>
-                        <div class="tp-info">
-                            <div class="tp-pick">Pick #{r['Pick']}</div>
-                            <span class="tp-bonus">{icons_str}</span>
+                    <div class="top-pick-card" style="border-left: 4px solid {border_col}">
+                        <div class="tp-rank-badge" style="border-color:{border_col}; color:{border_col}">{rank_num}</div>
+                        <div class="tp-content">
+                            <div class="tp-date">Pick #{r['Pick']}</div>
+                            {tags_html}
                         </div>
-                        <div class="tp-score">{int(r['Score'])}</div>
+                        <div class="tp-score-big">{int(r['Score'])}</div>
                     </div>
                     """, unsafe_allow_html=True)
 
@@ -1033,7 +1064,8 @@ try:
                 st.markdown("<br>", unsafe_allow_html=True)
                 
                 # CHARTS: IMPACT & SCATTER (NOUVEAU STRIP PLOT)
-                c_chart1, c_chart2 = st.columns(2, gap="medium")
+                # FIX UI REQUEST: 1/3 - 2/3 RATIO
+                c_chart1, c_chart2 = st.columns([1, 2], gap="medium")
                 
                 with c_chart1:
                     st.markdown("#### 💰 IMPACT MENSUEL (GAINS RÉELS)")
@@ -1275,6 +1307,8 @@ try:
             
             # COLORER LA LIGNE PAR JOUEUR
             fig_mom = px.line(momentum_data, x='Pick', y='Score', color='Player', markers=True, color_discrete_map=PLAYER_COLORS)
+            
+            # FIX UI: LEGEND COLOR TOO DARK
             fig_mom.update_layout(
                 plot_bgcolor='rgba(0,0,0,0)', 
                 paper_bgcolor='rgba(0,0,0,0)', 
@@ -1282,7 +1316,7 @@ try:
                 xaxis=dict(showgrid=False), 
                 yaxis=dict(showgrid=True, gridcolor='#222'), 
                 height=500,
-                legend=dict(orientation="h", y=-0.2)
+                legend=dict(orientation="h", y=-0.2, font=dict(color="#E5E7EB"))
             )
             st.plotly_chart(fig_mom, use_container_width=True)
 

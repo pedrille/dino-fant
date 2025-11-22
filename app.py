@@ -132,28 +132,25 @@ st.markdown(f"""
     .stat-mini-lbl {{ font-size:0.75rem; color:#888; text-transform:uppercase; margin-top:8px; letter-spacing:1px; }}
     .stat-mini-sub {{ font-size:0.7rem; font-weight:600; margin-top:4px; color:#555; }}
     
-    /* Player Lab - Match Pills FULL WIDTH RESPONSIVE SCROLL REVERSE */
+    /* Player Lab - Match Pills FULL WIDTH RESPONSIVE */
     .match-pill {{
-        flex: 0 0 auto; /* Don't shrink/grow freely, keep fixed size logic */
-        min-width: 30px;
-        height: 40px; 
+        flex: 1 0 auto; /* Grow to fill space */
+        min-width: 25px;
+        height: 35px; 
         border-radius: 4px; 
         display: flex; align-items: center; justify-content: center; 
-        font-family: 'Rajdhani'; font-weight: 700; font-size: 0.85rem;
+        font-family: 'Rajdhani'; font-weight: 700; font-size: 0.8rem;
         color: #FFF;
-        margin: 0 2px;
+        margin: 0 1px;
     }}
     .match-row {{ 
         display: flex; 
-        flex-direction: row-reverse; /* L'élément le plus récent (dernier du tableau) sera à gauche, on veut l'inverse ? Non, on veut le plus récent à droite.
-                                        Si le tableau est [Pick1, Pick2... Pick32]
-                                        row-reverse affiche : Pick32 | Pick31 ... | Pick1
-                                        Cela aligne le tout à droite par défaut. */
+        justify-content: space-between; 
+        width: 100%; 
+        gap: 2px; 
+        margin: 15px 0; 
         overflow-x: auto;
-        gap: 4px; 
-        padding-bottom: 8px;
-        width: 100%;
-        justify-content: flex-start; /* Avec row-reverse, start est à droite */
+        flex-direction: row-reverse; /* Alignement droite et ordre inversé pour scroll */
     }}
 
     /* Boutons Streamlit Fix */
@@ -202,7 +199,7 @@ st.markdown(f"""
     .tp-info {{ flex-grow: 1; padding-left: 10px; }}
     .tp-pick {{ color: #888; font-size: 0.75rem; text-transform: uppercase; }}
     .tp-score {{ font-family: 'Rajdhani'; font-weight: 700; font-size: 1.5rem; color: #FFF; }}
-    .tp-bonus {{ font-size: 0.9rem; color: {C_BONUS}; margin-left: 5px; }}
+    .tp-bonus {{ font-size: 0.8rem; color: {C_BONUS}; margin-left: 5px; font-weight: 600; }}
 
     /* RADAR LEGEND CUSTOM */
     .legend-box {{
@@ -494,7 +491,7 @@ def send_discord_webhook(day_df, pick_num, url_app):
     medals = ["🥇", "🥈", "🥉"]
     for i, row in top_3.iterrows():
         bonus_icon = " ⭐️" if row['IsBonus'] else ""
-        bp_icon = " 🎯" if row.get('IsBP', False) else "" # Nouvelle logique icônes
+        bp_icon = " 🎯" if row.get('IsBP', False) else "" 
         podium_text += f"{medals[i]} **{row['Player']}** • {int(row['Score'])} pts{bonus_icon}{bp_icon}\n"
     
     avg_score = int(day_df['Score'].mean())
@@ -571,17 +568,18 @@ try:
             st.markdown("<div style='text-align:center; margin-bottom: 30px;'>", unsafe_allow_html=True)
             st.image("raptors-ttfl-min.png", use_container_width=True) 
             st.markdown("</div>", unsafe_allow_html=True)
+            # MENU UPDATE (TASK 2)
             menu = option_menu(menu_title=None, options=["Dashboard", "Team HQ", "Player Lab", "Bonus x2", "No-Carrot", "Trends", "Hall of Fame", "Admin"], icons=["grid-fill", "people-fill", "person-bounding-box", "lightning-charge-fill", "shield-check", "fire", "trophy-fill", "shield-lock"], default_index=0, styles={"container": {"padding": "0!important", "background-color": "#000000"}, "icon": {"color": "#666", "font-size": "1.1rem"}, "nav-link": {"font-family": "Rajdhani, sans-serif", "font-weight": "700", "font-size": "15px", "text-transform": "uppercase", "color": "#AAA", "text-align": "left", "margin": "5px 0px", "--hover-color": "#111"}, "nav-link-selected": {"background-color": C_ACCENT, "color": "#FFF", "icon-color": "#FFF", "box-shadow": "0px 4px 20px rgba(206, 17, 65, 0.4)"}})
-            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v19.0</div></div>""", unsafe_allow_html=True)
+            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v20.0</div></div>""", unsafe_allow_html=True)
             
         if menu == "Dashboard":
             section_title("RAPTORS <span class='highlight'>DASHBOARD</span>", f"Daily Briefing • Pick #{int(latest_pick)}")
             top = day_df.iloc[0]
             
-            # LOGIQUE MVP & BP & BONUS
+            # LOGIQUE MVP & BP & BONUS (TASK 4)
             val_suffix = ""
-            if 'IsBP' in top and top['IsBP']: val_suffix += " 🎯"
             if 'IsBonus' in top and top['IsBonus']: val_suffix += " ⭐️"
+            if 'IsBP' in top and top['IsBP']: val_suffix += " 🎯"
 
             # 5 COLONNES POUR LE DASHBOARD (ORDRE MODIFIÉ TASK 2)
             c1, c2, c3, c4, c5 = st.columns(5)
@@ -725,7 +723,7 @@ try:
                 st.markdown("<div style='height:15px'></div>", unsafe_allow_html=True)
 
                 g7, g8, g9 = st.columns(3, gap="medium")
-                # UPDATED DESCRIPTIONS FOR EMOJI CONSISTENCY
+                # UPDATED DESCRIPTIONS FOR EMOJI CONSISTENCY (TASK 4)
                 with g7: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_PURPLE}'>{total_bp_team}</div><div class='stat-mini-lbl'>TOTAL BEST PICKS 🎯</div></div>", unsafe_allow_html=True)
                 with g8: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_BONUS}'>{total_bonus_played}</div><div class='stat-mini-lbl'>BONUS JOUÉS ⭐️</div></div>", unsafe_allow_html=True)
                 with g9: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{avg_bonus_team:.1f}</div><div class='stat-mini-lbl'>MOYENNE SOUS BONUS</div></div>", unsafe_allow_html=True)
@@ -819,24 +817,11 @@ try:
 
             # --- NEW ROW: SEASON HISTORY VISUALIZER (SCROLLABLE, ALIGNED RIGHT) ---
             st.markdown("<div style='margin-top:20px; margin-bottom:5px; color:#888; font-size:0.8rem; text-transform:uppercase; letter-spacing:1px; text-align:center'>HISTORIQUE SAISON</div>", unsafe_allow_html=True)
-            # Get ALL picks for player, sorted ascending (Pick 1 to Pick 32)
-            all_season_picks = p_hist_all.sort_values('Pick', ascending=True)
+            # SORTED DESCENDING FOR REVERSE DISPLAY
+            desc_picks = p_hist_all.sort_values('Pick', ascending=False)
             
-            if not all_season_picks.empty:
+            if not desc_picks.empty:
                 html_picks = "<div class='match-row' style='width:100%'>"
-                # Iterating normally (1 -> 32). CSS row-reverse will display 32 on the left? NO.
-                # CSS row-reverse will put the last element (32) on the Left of the container if direction is LTR? 
-                # Actually standard Flex behavior: 
-                # row-reverse: Main axis runs Right to Left.
-                # Items are laid out: Item 1 (Rightmost), Item 2, ... Item N (Leftmost).
-                # So if we iterate 1->32, 1 is Rightmost. 32 is Leftmost.
-                # USER WANTS: Latest pick (32) on the Right. 
-                # So we should iterate 32 -> 1? 
-                # If we iterate 32->1 (Desc) and use row-reverse: 32 is Rightmost. 1 is Leftmost. BINGO.
-                
-                # Re-sorting DESCENDING for the loop
-                desc_picks = p_hist_all.sort_values('Pick', ascending=False)
-                
                 for _, r in desc_picks.iterrows():
                     sc = r['Score']
                     
@@ -850,6 +835,7 @@ try:
                         txt_col = "#FFF"
                         border = "1px solid rgba(255,255,255,0.1)"
                     
+                    # BP Marker if applicable
                     bp_marker = " 🎯" if r.get('IsBP', False) else ""
                         
                     html_picks += f"<div class='match-pill' style='background:{bg}; color:{txt_col}; border:{border}' title='Pick #{r['Pick']}'>{int(sc)}{bp_marker}</div>"
@@ -873,6 +859,7 @@ try:
                 st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
                 
                 r2c1, r2c2, r2c3 = st.columns(3, gap="small")
+                # UPDATE REQUEST: Moyenne Pure & Best Raw (Meilleur Score Sec)
                 with r2c1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{p_data['Moyenne_Raw']:.1f}</div><div class='stat-mini-lbl'>MOYENNE PURE</div></div>", unsafe_allow_html=True)
                 with r2c2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(p_data['Best_Raw'])}</div><div class='stat-mini-lbl'>MEILLEUR SCORE SEC</div></div>", unsafe_allow_html=True)
                 with r2c3: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(p_data['Worst'])}</div><div class='stat-mini-lbl'>PIRE SCORE</div></div>", unsafe_allow_html=True)
@@ -887,9 +874,10 @@ try:
                 st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
 
                 r4c1, r4c2, r4c3 = st.columns(3, gap="small")
+                # UPDATED DESCRIPTIONS FOR EMOJI CONSISTENCY (TASK 4)
                 with r4c1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_PURPLE}'>{int(p_data['BP_Count'])}</div><div class='stat-mini-lbl'>TOTAL BEST PICKS 🎯</div></div>", unsafe_allow_html=True)
                 with r4c2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_GOLD}'>{int(p_data['Alpha_Count'])}</div><div class='stat-mini-lbl'>MVP DU SOIR</div></div>", unsafe_allow_html=True)
-                with r4c3: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_BONUS}'>{p_data['Avg_Bonus']:.1f}</div><div class='stat-mini-lbl'>MOYENNE SOUS BONUS</div></div>", unsafe_allow_html=True)
+                with r4c3: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_BONUS}'>{p_data['Avg_Bonus']:.1f}</div><div class='stat-mini-lbl'>MOYENNE SOUS BONUS ⭐️</div></div>", unsafe_allow_html=True)
 
 
             with col_top5:
@@ -898,15 +886,19 @@ try:
                 top_5 = p_hist_all.sort_values('Score', ascending=False).head(5)
                 for i, r in top_5.reset_index().iterrows():
                     rank_num = i + 1
-                    b_icon = "⚡ x2" if r['IsBonus'] else ""
-                    bp_icon_list = " 🎯" if r.get('IsBP', False) else ""
+                    # LOGIC TOP 5 (TASK 1)
+                    tags = []
+                    if r['IsBonus']: tags.append("⭐️ x2")
+                    if r.get('IsBP', False): tags.append("🎯 BP")
+                    
+                    tag_html = " ".join(tags)
                     
                     st.markdown(f"""
                     <div class="top-pick-row">
                         <div class="tp-rank">#{rank_num}</div>
                         <div class="tp-info">
                             <div class="tp-pick">Pick #{r['Pick']}</div>
-                            <span class="tp-bonus">{b_icon} {bp_icon_list}</span>
+                            <span class="tp-bonus">{tag_html}</span>
                         </div>
                         <div class="tp-score">{int(r['Score'])}</div>
                     </div>
@@ -1026,7 +1018,7 @@ try:
                 best_bonus = df_bonus_disp['Score'].max()
 
                 k1, k2, k3, k4, k5 = st.columns(5)
-                # UPDATE: Label TOTAL, Desc BONUS JOUES ⭐️
+                # UPDATED (TASK 4)
                 with k1: kpi_card("TOTAL", nb_bonus, "BONUS JOUÉS ⭐️", C_BONUS)
                 with k2: kpi_card("MOYENNE", f"{avg_bonus:.1f}", "PTS / BONUS", "#FFF")
                 with k3: kpi_card("GAIN RÉEL", f"+{int(total_gain)}", "PTS AJOUTÉS", C_GREEN)

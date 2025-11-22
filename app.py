@@ -258,8 +258,14 @@ def load_data():
         df_clean = df_players[cols].copy().rename(columns=valid_map)
         df_long = df_clean.melt(id_vars=['Player'], var_name='Pick', value_name='ScoreRaw')
         
+        # --- NOUVELLE LOGIQUE DE PARSING SCORE AVEC '!' ---
+        # 1. Detect BP Marker
+        df_long['IsBP'] = df_long['ScoreRaw'].str.contains('!', na=False)
+        # 2. Detect Bonus Marker
         df_long['IsBonus'] = df_long['ScoreRaw'].str.contains(r'\*', na=False)
-        df_long['ScoreClean'] = df_long['ScoreRaw'].str.replace(r'\*', '', regex=True)
+        # 3. Clean string: enlever '!' ET '*'
+        df_long['ScoreClean'] = df_long['ScoreRaw'].str.replace(r'[\*!]', '', regex=True)
+        
         df_long['ScoreVal'] = pd.to_numeric(df_long['ScoreClean'], errors='coerce')
         df_long['Score'] = np.where(df_long['IsBonus'], df_long['ScoreVal'] * 2, df_long['ScoreVal'])
         df_long['Pick'] = pd.to_numeric(df_long['Pick'], errors='coerce')
@@ -275,7 +281,7 @@ def load_data():
         final_df = pd.merge(final_df, daily_stats, on='Pick', how='left')
         final_df['ZScore'] = np.where(final_df['DailyStd'] > 0, (final_df['Score'] - final_df['DailyMean']) / final_df['DailyStd'], 0)
 
-        # B. STATS & RECUP BP
+        # B. STATS & RECUP BP (TABLEAU MANUEL LIGNE 16 & COLONNE BP)
         df_stats = conn.read(spreadsheet=st.secrets["SPREADSHEET_URL"], worksheet="Stats_Raptors_FR", header=None, ttl=0)
         team_rank_history = []
         team_current_rank = 0
@@ -283,7 +289,7 @@ def load_data():
         
         player_real_bp_map = {} 
 
-        # 1. Recherche de la colonne "BP" dans les 20 premières lignes (headers)
+        # 1. Recherche de la colonne "BP"
         bp_col_idx = -1
         header_row_idx = -1
         for r in range(20):
@@ -371,13 +377,11 @@ def compute_stats(df, bp_map, daily_max_map, player_real_bp_map):
         best_with_bonus = scores_with_bonus.max() if len(scores_with_bonus) > 0 else 0
         best_without_bonus = scores_without_bonus.max() if len(scores_without_bonus) > 0 else 0
         
-        # CALCULATION NO CARROT STREAK
         current_no_carrot_streak = 0
         for s in reversed(scores):
             if s >= 20: current_no_carrot_streak += 1
             else: break
             
-        # CALCULATION MAX HISTORICAL NO CARROT STREAK
         max_no_carrot = 0
         current_count = 0
         for s in scores:
@@ -387,7 +391,6 @@ def compute_stats(df, bp_map, daily_max_map, player_real_bp_map):
             else:
                 current_count = 0
         
-        # CALCULATION ALIEN STREAK (>60)
         max_alien_streak = 0
         current_alien = 0
         for s in scores:
@@ -397,7 +400,6 @@ def compute_stats(df, bp_map, daily_max_map, player_real_bp_map):
             else:
                 current_alien = 0
         
-        # CALCULATION MODE (MOST FREQUENT SCORE)
         try:
             vals, counts = np.unique(scores, return_counts=True)
             max_count_idx = np.argmax(counts)
@@ -407,7 +409,6 @@ def compute_stats(df, bp_map, daily_max_map, player_real_bp_map):
             mode_score = 0
             mode_count = 0
 
-        # CALCULATION SPREAD (ALBATROSS)
         spread = scores.max() - scores.min()
 
         streak_30 = 0
@@ -418,7 +419,7 @@ def compute_stats(df, bp_map, daily_max_map, player_real_bp_map):
         last5_avg = last_5.mean() if len(scores) >= 5 else scores.mean()
         momentum = last5_avg - scores.mean()
         
-        # --- FIX BP COUNT : Utilisation de la map manuelle ---
+        # BP COUNT : Manuel du GSheet
         bp_count = player_real_bp_map.get(p, 0)
         
         alpha_count = 0; bonus_points_gained = 0; bonus_scores_list = []
@@ -441,7 +442,6 @@ def compute_stats(df, bp_map, daily_max_map, player_real_bp_map):
         reliability_pct = ((len(scores) - len(scores[scores < 20])) / len(scores)) * 100
         avg_z = np.mean(z_scores) if len(z_scores) > 0 else 0
         
-        # Custom Stats for Hall of Fame
         count_20_30 = len(scores[(scores >= 20) & (scores <= 30)])
 
         stats.append({
@@ -539,7 +539,7 @@ try:
     """, height=0, width=0)
 
     with st.spinner('🦖 Analyse des données en cours...'):
-        # LOAD DATA AVEC BP MAP MANUELLE
+        # LOAD DATA AVEC NOUVEAU PARSING
         df, team_rank, bp_map, team_history, daily_max_map, team_bp_real_load, player_real_bp_map = load_data()
     
     # GLOBAL METRIC
@@ -571,21 +571,18 @@ try:
             st.image("raptors-ttfl-min.png", use_container_width=True) 
             st.markdown("</div>", unsafe_allow_html=True)
             menu = option_menu(menu_title=None, options=["Dashboard", "Team HQ", "Player Lab", "Bonus x2", "🥕 No-Carrot", "Trends", "Hall of Fame", "Admin"], icons=["grid-fill", "people-fill", "person-bounding-box", "lightning-charge-fill", "shield-check", "fire", "trophy-fill", "shield-lock"], default_index=0, styles={"container": {"padding": "0!important", "background-color": "#000000"}, "icon": {"color": "#666", "font-size": "1.1rem"}, "nav-link": {"font-family": "Rajdhani, sans-serif", "font-weight": "700", "font-size": "15px", "text-transform": "uppercase", "color": "#AAA", "text-align": "left", "margin": "5px 0px", "--hover-color": "#111"}, "nav-link-selected": {"background-color": C_ACCENT, "color": "#FFF", "icon-color": "#FFF", "box-shadow": "0px 4px 20px rgba(206, 17, 65, 0.4)"}})
-            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v18.0</div></div>""", unsafe_allow_html=True)
+            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v18.2</div></div>""", unsafe_allow_html=True)
             
         if menu == "Dashboard":
             section_title("RAPTORS <span class='highlight'>DASHBOARD</span>", f"Daily Briefing • Pick #{int(latest_pick)}")
             top = day_df.iloc[0]
             
-            # LOGIQUE MVP & BP (TASK 3)
+            # LOGIQUE MVP & BP (Avec le marqueur '!' dans le Sheet)
             mvp_bp_icon = ""
-            # On récupère le BP de la nuit depuis le GSheet
-            bp_score_night = bp_map.get(latest_pick, 999) # 999 si pas encore rempli
-            # Si le score du MVP >= au score BP saisi dans le sheet
-            if top['Score'] >= bp_score_night and bp_score_night > 0:
+            if 'IsBP' in top and top['IsBP']: # Vérifie si la colonne existe et est True
                 mvp_bp_icon = " 🎯"
 
-            # 5 COLONNES POUR LE DASHBOARD
+            # 5 COLONNES POUR LE DASHBOARD (ORDRE MODIFIÉ TASK 2)
             c1, c2, c3, c4, c5 = st.columns(5)
             with c1: kpi_card("MVP DU SOIR", top['Player'], f"{int(top['Score'])} PTS{mvp_bp_icon}", C_GOLD)
             total_day = day_df['Score'].sum()
@@ -594,10 +591,13 @@ try:
             diff_perf = ((team_daily_avg - team_avg_per_pick) / team_avg_per_pick) * 100
             perf_col = C_GREEN if diff_perf > 0 else "#F87171"
             with c3: kpi_card("PERF. TEAM SOIR", f"{diff_perf:+.1f}%", "VS MOY. SAISON", perf_col)
-            with c4: kpi_card("LEADER SAISON", leader['Player'], f"TOTAL: {int(leader['Total'])}", C_ACCENT)
-            # NOUVEAU KPI 5
+            
+            # KPI 4 : NO CARROT
             col_streak = C_GREEN if team_streak_nc > 0 else C_RED
-            with c5: kpi_card("SÉRIE TEAM NO-CARROT", f"{team_streak_nc}", "JOURS CONSÉCUTIFS", col_streak)
+            with c4: kpi_card("SÉRIE TEAM NO-CARROT", f"{team_streak_nc}", "JOURS CONSÉCUTIFS", col_streak)
+            
+            # KPI 5 : LEADER (Déplacé en fin)
+            with c5: kpi_card("LEADER SAISON", leader['Player'], f"TOTAL: {int(leader['Total'])}", C_ACCENT)
             
             day_merged = pd.merge(day_df, full_stats[['Player', 'Moyenne']], on='Player')
             day_merged['Delta'] = day_merged['Score'] - day_merged['Moyenne']
@@ -835,8 +835,12 @@ try:
                         bg = C_RED if sc < 20 else (C_GREEN if sc > 40 else "#333")
                         txt_col = "#FFF"
                         border = "1px solid rgba(255,255,255,0.1)"
+                    
+                    # LOGIQUE BP MARKER : Si IsBP est True, on ajoute un petit point ou bordure spéciale ?
+                    # Pour l'instant on garde simple, mais on pourrait ajouter un symbole
+                    bp_marker = "🎯" if r.get('IsBP', False) else ""
                         
-                    html_picks += f"<div class='match-pill' style='background:{bg}; color:{txt_col}; border:{border}' title='Pick #{r['Pick']}'>{int(sc)}</div>"
+                    html_picks += f"<div class='match-pill' style='background:{bg}; color:{txt_col}; border:{border}' title='Pick #{r['Pick']}'>{int(sc)}{bp_marker}</div>"
                 html_picks += "</div>"
                 st.markdown(html_picks, unsafe_allow_html=True)
             else:
@@ -872,8 +876,7 @@ try:
                 st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
 
                 r4c1, r4c2, r4c3 = st.columns(3, gap="small")
-                # UPDATE ICON BP HERE AS WELL (TASK 3)
-                with r4c1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_PURPLE}'>{int(p_data['BP_Count'])} 🎯</div><div class='stat-mini-lbl'>TOTAL BEST PICKS</div></div>", unsafe_allow_html=True)
+                with r4c1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_PURPLE}'>{int(p_data['BP_Count'])}</div><div class='stat-mini-lbl'>TOTAL BEST PICKS</div></div>", unsafe_allow_html=True)
                 with r4c2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_GOLD}'>{int(p_data['Alpha_Count'])}</div><div class='stat-mini-lbl'>MVP DU SOIR</div></div>", unsafe_allow_html=True)
                 with r4c3: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_BONUS}'>{p_data['Avg_Bonus']:.1f}</div><div class='stat-mini-lbl'>MOYENNE SOUS BONUS</div></div>", unsafe_allow_html=True)
 
@@ -885,12 +888,15 @@ try:
                 for i, r in top_5.reset_index().iterrows():
                     rank_num = i + 1
                     b_icon = "⚡ x2" if r['IsBonus'] else ""
+                    # NEW : Icone BP ici aussi
+                    bp_icon_list = " 🎯" if r.get('IsBP', False) else ""
+                    
                     st.markdown(f"""
                     <div class="top-pick-row">
                         <div class="tp-rank">#{rank_num}</div>
                         <div class="tp-info">
                             <div class="tp-pick">Pick #{r['Pick']}</div>
-                            <span class="tp-bonus">{b_icon}</span>
+                            <span class="tp-bonus">{b_icon} {bp_icon_list}</span>
                         </div>
                         <div class="tp-score">{int(r['Score'])}</div>
                     </div>

@@ -93,7 +93,6 @@ st.markdown(f"""
         border-radius: 4px; 
         display: flex; align-items: center; justify-content: center; 
         font-family: 'Rajdhani'; font-weight: 700; font-size: 0.8rem;
-        color: #FFF;
         margin: 0 1px;
     }}
     .match-row {{ 
@@ -649,7 +648,7 @@ try:
             c1, c2, c3, c4, c5 = st.columns(5)
             with c1: kpi_card("TOTAL POINTS", int(p_data['Total']), "SAISON")
             with c2: kpi_card("MOYENNE", f"{p_data['Moyenne']:.1f}", "PTS / PICK")
-            with c3: kpi_card("IMPACT (Z)", f"{z_val:+.2f}", "VS TEAM", z_col)
+            with c3: kpi_card("CONTRIBUTION", f"{z_val:+.2f}", "VS MOY. DU SOIR", z_col)
             with c4: kpi_card("CLASSEMENT", f"#{internal_rank}", f"SUR {nb_players}", rank_col)
             with c5: kpi_card("BEST SCORE", int(p_data['Best']), "RECORD", C_GOLD)
 
@@ -895,6 +894,8 @@ try:
             # Team Stats 15 days
             team_daily_15 = df_15.groupby('Pick')['Score'].sum()
             avg_15_team = team_daily_15.mean()
+            total_pts_15 = df_15['Score'].sum()
+            max_team_15 = team_daily_15.max()
             
             # Season Stats for comparison
             team_daily_season = df.groupby('Pick')['Score'].sum()
@@ -909,9 +910,6 @@ try:
             
             # Average Individual Score over last 15 days
             avg_15_indiv = df_15['Score'].mean()
-            
-            # Max Team 15d
-            max_team_15 = team_daily_15.max()
 
             # --- TOP KPI ROW (5 KPIs) ---
             k1, k2, k3, k4, k5 = st.columns(5)
@@ -1083,7 +1081,7 @@ try:
                 st.markdown(hof_card("UNSTOPPABLE", "⚡", "#FBBF24", intouch['Player'], int(intouch['Streak30']), "SERIE", "Plus longue série consécutive > 30 pts"), unsafe_allow_html=True)
                 st.markdown(hof_card("THE METRONOME", "⏰", "#A1A1AA", metronome['Player'], f"{metronome['StdDev']:.1f}", "ECART TYPE", "Le joueur le plus régulier (Faible variation)"), unsafe_allow_html=True)
                 st.markdown(hof_card("IRON WALL", "🧱", "#78350F", iron_wall['Player'], int(iron_wall['Worst']), "PIRE SCORE", "Le 'Pire score' le plus élevé (Plancher haut)"), unsafe_allow_html=True)
-                st.markdown(hof_card("THE SHIELD", "🛡️", "#3B82F6", the_shield['Player'], f"{the_shield['AvgZ']:.2f}", "IMPACT Z", "Meilleure performance relative (Porte l'équipe)"), unsafe_allow_html=True)
+                st.markdown(hof_card("THE SHIELD", "🛡️", "#3B82F6", the_shield['Player'], f"+{the_shield['AvgZ']:.2f}", "CONTRIBUTION", "Le joueur qui performe le mieux par rapport au niveau moyen de l'équipe."), unsafe_allow_html=True)
                 st.markdown(hof_card("ROLLERCOASTER", "🎢", "#EC4899", rollercoaster['Player'], f"{rollercoaster['StdDev']:.1f}", "ECART TYPE", "Le joueur le plus instable (Forte variation)"), unsafe_allow_html=True)
                 st.markdown(hof_card("TRAFFIC JAM", "🚦", "#6B7280", traffic_jam['Player'], int(traffic_jam['Count2030']), "MATCHS", "Le plus de scores moyens (entre 20 et 30 pts)"), unsafe_allow_html=True)
                 st.markdown(hof_card("CRASH TEST", "💥", C_ORANGE, crash_test['Player'], int(crash_test['Worst_Bonus']), "PTS MIN (X2)", "Le pire score réalisé avec un bonus actif"), unsafe_allow_html=True)

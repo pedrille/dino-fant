@@ -93,6 +93,7 @@ st.markdown(f"""
         border-radius: 4px; 
         display: flex; align-items: center; justify-content: center; 
         font-family: 'Rajdhani'; font-weight: 700; font-size: 0.8rem;
+        color: #FFF;
         margin: 0 1px;
     }}
     .match-row {{ 
@@ -598,14 +599,6 @@ try:
                 fig_h.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, yaxis=dict(autorange="reversed", gridcolor='#222'), xaxis=dict(showgrid=False))
                 st.plotly_chart(fig_h, use_container_width=True)
             
-            st.markdown("### 📈 DYNAMIQUE TEAM (15 DERNIERS MATCHS)")
-            st.markdown("<div class='chart-desc'>Score total de l'équipe jour après jour comparé à la moyenne de la saison.</div>", unsafe_allow_html=True)
-            fig_team_trend = px.line(last_15_team, x='Pick', y='Score', markers=True)
-            fig_team_trend.update_traces(line_color=C_ACCENT, line_width=3, marker_size=8)
-            fig_team_trend.add_hline(y=team_season_avg_total, line_dash="dot", line_color=C_TEXT, annotation_text="Moy. Totaux Saison", annotation_position="bottom right")
-            fig_team_trend.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, yaxis=dict(gridcolor='#222'), xaxis=dict(showgrid=False))
-            st.plotly_chart(fig_team_trend, use_container_width=True)
-
             st.markdown("### 🔥 HEATMAP DE LA SAISON")
             st.markdown(f"<div class='chart-desc'>Rouge < 35 | Gris 35-45 (Neutre) | Vert > 45.</div>", unsafe_allow_html=True)
             heatmap_data = df.pivot_table(index='Player', columns='Pick', values='Score', aggfunc='sum')
@@ -1048,11 +1041,16 @@ try:
             
             metronome = full_stats.sort_values('StdDev', ascending=True).iloc[0]
             iron_wall = full_stats.sort_values('Worst', ascending=False).iloc[0]
+            
+            # New Positive Calculations
+            # The Shield: Best Avg Z-Score
+            the_shield = full_stats.sort_values('AvgZ', ascending=False).iloc[0]
+            # Bonus King: Best Avg With Bonus
+            bonus_king = full_stats.sort_values('AvgWithBonus', ascending=False).iloc[0]
+
             rollercoaster = full_stats.sort_values('StdDev', ascending=False).iloc[0]
             traffic_jam = full_stats.sort_values('Count2030', ascending=False).iloc[0]
             
-            ice_cube = full_stats.sort_values('Last15', ascending=True).iloc[0]
-            low_ceiling = full_stats.sort_values('Best', ascending=True).iloc[0]
             bad_business = full_stats.sort_values('Bonus_Gained', ascending=True).iloc[0]
             
             has_bonus = full_stats[full_stats['Worst_Bonus'] > 0]
@@ -1066,30 +1064,30 @@ try:
 
             c1, c2 = st.columns(2)
             with c1:
-                st.markdown(hof_card("THE GOAT", "🏆", C_GOLD, sniper['Player'], f"{sniper['Moyenne']:.1f}", "PTS MOY", "Meilleure moyenne générale de la saison"), unsafe_allow_html=True)
-                st.markdown(hof_card("REAL MVP", "💎", C_PURE, pure_avg['Player'], f"{pure_avg['Moyenne_Raw']:.1f}", "PTS MOY (BRUT)", "Meilleure moyenne sans compter les bonus"), unsafe_allow_html=True)
+                st.markdown(hof_card("THE GOAT", "🏆", C_GOLD, sniper['Player'], f"{sniper['Moyenne']:.1f}", "PTS MOYENNE (TOTAL)", "Meilleure moyenne générale de la saison (Bonus incl.)"), unsafe_allow_html=True)
+                st.markdown(hof_card("REAL MVP", "💎", C_PURE, pure_avg['Player'], f"{pure_avg['Moyenne_Raw']:.1f}", "PTS MOYENNE (BRUT)", "Meilleure moyenne sans compter les bonus"), unsafe_allow_html=True)
                 st.markdown(hof_card("THE SNIPER", "🎯", C_PURPLE, sniper_bp['Player'], int(sniper_bp['BP_Count']), "BEST PICKS", "Le plus de Best Picks trouvés"), unsafe_allow_html=True)
                 st.markdown(hof_card("ALPHA DOG", "🐺", C_ALPHA, alpha_dog['Player'], int(alpha_dog['Alpha_Count']), "TOPS TEAM", "Le plus souvent meilleur scoreur de l'équipe"), unsafe_allow_html=True)
                 st.markdown(hof_card("THE CEILING", "🏔️", "#A78BFA", peak['Player'], int(peak['Best']), "PTS MAX", "Record absolu sur un match (Bonus inclus)"), unsafe_allow_html=True)
                 st.markdown(hof_card("PURE SCORER", "🏀", "#F472B6", pure_peak['Player'], int(pure_peak['Best_Raw']), "PTS MAX (BRUT)", "Record absolu sur un match (Sans bonus)"), unsafe_allow_html=True)
                 st.markdown(hof_card("THE ALCHEMIST", "⚗️", C_BONUS, alchemist['Player'], int(alchemist['Bonus_Gained']), "PTS BONUS", "Le plus de points gagnés grâce aux bonus"), unsafe_allow_html=True)
+                st.markdown(hof_card("BONUS KING", "👑", "#F59E0B", bonus_king['Player'], f"{bonus_king['AvgWithBonus']:.1f}", "PTS MOYENNE (BONUS)", "Meilleure moyenne quand le bonus est activé"), unsafe_allow_html=True)
                 st.markdown(hof_card("NUCLEAR", "☢️", "#EF4444", nuke['Player'], int(nuke['Nukes']), "BOMBS", "Le plus de scores > 50 pts"), unsafe_allow_html=True)
-                st.markdown(hof_card("HEAVY HITTER", "🥊", "#64B5F6", heavy['Player'], int(heavy['Count40']), "PICKS >40", "Le plus de scores > 40 pts"), unsafe_allow_html=True)
+                st.markdown(hof_card("HEAVY HITTER", "🥊", "#64B5F6", heavy['Player'], int(heavy['Count40']), "PICKS > 40", "Le plus de scores > 40 pts"), unsafe_allow_html=True)
                 st.markdown(hof_card("THE ROCK", "🛡️", C_GREEN, rock['Player'], int(rock['Count30']), "MATCHS", "Le plus de scores dans la Safe Zone (> 30 pts)"), unsafe_allow_html=True)
-                st.markdown(hof_card("HUMAN TORCH", "🔥", "#FF5252", torche['Player'], f"{torche['Last15']:.1f}", "PTS / 15J", "Meilleure forme actuelle (Moyenne 15j)"), unsafe_allow_html=True)
-                st.markdown(hof_card("RISING STAR", "🚀", C_GREEN, progression['Player'], f"+{progression['ProgressionPct']:.1f}%", "PROGRESSION", "Plus grosse progression (Moyenne 15j vs Saison)"), unsafe_allow_html=True)
+                st.markdown(hof_card("ZEN MASTER", "🧘", "#EAB308", zen_master['Player'], f"{int(zen_master['ReliabilityPct'])}%", "FIABILITÉ", "Plus haut taux de fiabilité (Moins de carottes)"), unsafe_allow_html=True)
 
             with c2:
-                st.markdown(hof_card("ZEN MASTER", "🧘", "#EAB308", zen_master['Player'], f"{int(zen_master['ReliabilityPct'])}%", "FIABILITÉ", "Plus haut taux de fiabilité (Moins de carottes)"), unsafe_allow_html=True)
+                st.markdown(hof_card("HUMAN TORCH", "🔥", "#FF5252", torche['Player'], f"{torche['Last15']:.1f}", "PTS / 15J", "Meilleure forme actuelle (Moyenne 15j)"), unsafe_allow_html=True)
+                st.markdown(hof_card("RISING STAR", "🚀", C_GREEN, progression['Player'], f"+{progression['ProgressionPct']:.1f}%", "PROGRESSION", "Plus grosse progression (Moyenne 15j vs Saison)"), unsafe_allow_html=True)
                 st.markdown(hof_card("UNSTOPPABLE", "⚡", "#FBBF24", intouch['Player'], int(intouch['Streak30']), "SERIE", "Plus longue série consécutive > 30 pts"), unsafe_allow_html=True)
                 st.markdown(hof_card("THE METRONOME", "⏰", "#A1A1AA", metronome['Player'], f"{metronome['StdDev']:.1f}", "ECART TYPE", "Le joueur le plus régulier (Faible variation)"), unsafe_allow_html=True)
                 st.markdown(hof_card("IRON WALL", "🧱", "#78350F", iron_wall['Player'], int(iron_wall['Worst']), "PIRE SCORE", "Le 'Pire score' le plus élevé (Plancher haut)"), unsafe_allow_html=True)
+                st.markdown(hof_card("THE SHIELD", "🛡️", "#3B82F6", the_shield['Player'], f"{the_shield['AvgZ']:.2f}", "IMPACT Z", "Meilleure performance relative (Porte l'équipe)"), unsafe_allow_html=True)
                 st.markdown(hof_card("ROLLERCOASTER", "🎢", "#EC4899", rollercoaster['Player'], f"{rollercoaster['StdDev']:.1f}", "ECART TYPE", "Le joueur le plus instable (Forte variation)"), unsafe_allow_html=True)
                 st.markdown(hof_card("TRAFFIC JAM", "🚦", "#6B7280", traffic_jam['Player'], int(traffic_jam['Count2030']), "MATCHS", "Le plus de scores moyens (entre 20 et 30 pts)"), unsafe_allow_html=True)
-                st.markdown(hof_card("ICE CUBE", "🧊", "#93C5FD", ice_cube['Player'], f"{ice_cube['Last15']:.1f}", "PTS / 15J", "Pire forme actuelle (Moyenne 15j)"), unsafe_allow_html=True)
-                st.markdown(hof_card("LOW CEILING", "🏠", "#57534E", low_ceiling['Player'], int(low_ceiling['Best']), "PTS MAX", "Le record personnel le plus bas de l'équipe"), unsafe_allow_html=True)
-                st.markdown(hof_card("BAD BUSINESS", "💸", "#666", bad_business['Player'], int(bad_business['Bonus_Gained']), "PTS BONUS", "Le moins de points gagnés grâce aux bonus"), unsafe_allow_html=True)
                 st.markdown(hof_card("CRASH TEST", "💥", C_ORANGE, crash_test['Player'], int(crash_test['Worst_Bonus']), "PTS MIN (X2)", "Le pire score réalisé avec un bonus actif"), unsafe_allow_html=True)
+                st.markdown(hof_card("BAD BUSINESS", "💸", "#666", bad_business['Player'], int(bad_business['Bonus_Gained']), "PTS BONUS", "Le moins de points gagnés grâce aux bonus"), unsafe_allow_html=True)
                 st.markdown(hof_card("THE BRICK", "🏗️", "#4B5563", brick_layer['Player'], int(brick_layer['Worst_Raw']), "PTS MIN (BRUT)", "Le pire score brut enregistré"), unsafe_allow_html=True)
                 st.markdown(hof_card("THE FARMER", "🥕", "#F97316", lapin['Player'], int(lapin['Carottes']), "CAROTTES", "Le plus grand nombre de carottes (< 20 pts)"), unsafe_allow_html=True)
 

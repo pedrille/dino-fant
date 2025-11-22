@@ -7,7 +7,6 @@ from streamlit_option_menu import option_menu
 import numpy as np
 import requests
 import streamlit.components.v1 as components
-import statistics
 
 # --- 1. CONFIGURATION & ASSETS ---
 st.set_page_config(
@@ -38,6 +37,7 @@ C_ORANGE = "#F97316"
 C_RED = "#EF4444"
 C_DARK_GREY = "#1F2937"
 C_GREY_BAR = "#374151" 
+C_ALIEN = "#84CC16" # Lime Green pour l'Alien
 
 # --- 2. CSS PREMIUM ---
 st.markdown(f"""
@@ -335,10 +335,18 @@ def compute_stats(df, bp_map, daily_max_map):
             else:
                 current_count = 0
         
+        # CALCULATION ALIEN STREAK (>60)
+        max_alien_streak = 0
+        current_alien = 0
+        for s in scores:
+            if s >= 60:
+                current_alien += 1
+                if current_alien > max_alien_streak: max_alien_streak = current_alien
+            else:
+                current_alien = 0
+        
         # CALCULATION MODE (MOST FREQUENT SCORE)
         try:
-            # statistics.mode raises error if no unique mode in old versions, but multimode is better
-            # We manually count to be safe
             vals, counts = np.unique(scores, return_counts=True)
             max_count_idx = np.argmax(counts)
             mode_score = vals[max_count_idx]
@@ -394,7 +402,8 @@ def compute_stats(df, bp_map, daily_max_map):
             'Avg_Bonus': avg_bonus_score, 'Momentum': momentum, 'Games': len(scores),
             'ProgressionPct': progression_pct, 'ReliabilityPct': reliability_pct, 'AvgZ': avg_z,
             'Trend': trend_data.get(p, []), 'AvgWithBonus': avg_with_bonus, 'AvgWithoutBonus': avg_without_bonus, 'BonusPlayed': len(scores_with_bonus),
-            'CurrentNoCarrot': current_no_carrot_streak, 'MaxNoCarrot': max_no_carrot, 'ModeScore': mode_score, 'ModeCount': mode_count, 'Spread': spread
+            'CurrentNoCarrot': current_no_carrot_streak, 'MaxNoCarrot': max_no_carrot, 'ModeScore': mode_score, 'ModeCount': mode_count, 'Spread': spread,
+            'MaxAlien': max_alien_streak
         })
     return pd.DataFrame(stats)
 
@@ -633,7 +642,7 @@ try:
                 fig_h.update_traces(line_color=C_ACCENT, line_width=3, marker_size=8)
                 fig_h.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, yaxis=dict(autorange="reversed", gridcolor='#222'), xaxis=dict(showgrid=False))
                 st.plotly_chart(fig_h, use_container_width=True)
-            
+
             st.markdown("### 🔥 HEATMAP DE LA SAISON")
             st.markdown(f"<div class='chart-desc'>Rouge < 35 | Gris 35-45 (Neutre) | Vert > 45.</div>", unsafe_allow_html=True)
             heatmap_data = df.pivot_table(index='Player', columns='Pick', values='Score', aggfunc='sum')
@@ -677,7 +686,6 @@ try:
             sign = "+" if diff_form > 0 else ""
             color_diff = C_GREEN if diff_form > 0 else "#F87171"
             z_val = p_data['CurrentNoCarrot']
-            #z_col = C_GREEN if z_val > 0.5 else (C_RED if z_val < -0.5 else "#DDD")
             z_col = C_GREEN if z_val > 3 else (C_RED if z_val == 0 else "#FFF")
 
             rank_col = C_GOLD if internal_rank == 1 else (C_SILVER if internal_rank == 2 else (C_BRONZE if internal_rank == 3 else "#FFF"))
@@ -932,8 +940,6 @@ try:
             # Team Stats 15 days
             team_daily_15 = df_15.groupby('Pick')['Score'].sum()
             avg_15_team = team_daily_15.mean()
-            total_pts_15 = df_15['Score'].sum()
-            max_team_15 = team_daily_15.max()
             
             # Season Stats for comparison
             team_daily_season = df.groupby('Pick')['Score'].sum()
@@ -1084,6 +1090,7 @@ try:
             maniac = full_stats.sort_values('ModeCount', ascending=False).iloc[0]
             iron_man = full_stats.sort_values('MaxNoCarrot', ascending=False).iloc[0]
             albatross = full_stats.sort_values('Spread', ascending=False).iloc[0]
+            alien = full_stats.sort_values('MaxAlien', ascending=False).iloc[0]
 
             bad_business = full_stats.sort_values('Bonus_Gained', ascending=True).iloc[0]
             has_bonus = full_stats[full_stats['Worst_Bonus'] > 0]
@@ -1091,36 +1098,56 @@ try:
             brick_layer = full_stats.sort_values('Worst_Raw', ascending=True).iloc[0]
             lapin = full_stats.sort_values('Carottes', ascending=False).iloc[0]
 
-            def hof_card(title, icon, color, p_name, val, unit, desc):
-                return f"""<div class="glass-card" style="position:relative; overflow:hidden"><div style="position:absolute; right:-10px; top:-10px; font-size:5rem; opacity:0.05; pointer-events:none">{icon}</div><div class="hof-badge" style="color:{color}; border:1px solid {color}">{icon} {title}</div><div style="display:flex; justify-content:space-between; align-items:flex-end;"><div><div class="hof-player">{p_name}</div><div style="font-size:0.8rem; color:#888; margin-top:4px">{desc}</div></div><div><div class="hof-stat" style="color:{color}">{val}</div><div class="hof-unit">{unit}</div></div></div></div>"""
+            # LIST OF 24 CARDS
+            hof_list = [
+                {"title": "THE GOAT", "icon": "🏆", "color": C_GOLD, "player": sniper['Player'], "val": f"{sniper['Moyenne']:.1f}", "unit": "PTS MOYENNE (TOTAL)", "desc": "Meilleure moyenne générale de la saison (Bonus incl.)"},
+                {"title": "REAL MVP", "icon": "💎", "color": C_PURE, "player": pure_avg['Player'], "val": f"{pure_avg['Moyenne_Raw']:.1f}", "unit": "PTS MOYENNE (BRUT)", "desc": "Meilleure moyenne sans compter les bonus"},
+                {"title": "THE SNIPER", "icon": "🎯", "color": C_PURPLE, "player": sniper_bp['Player'], "val": int(sniper_bp['BP_Count']), "unit": "BEST PICKS", "desc": "Le plus de Best Picks trouvés"},
+                {"title": "ALPHA DOG", "icon": "🐺", "color": C_ALPHA, "player": alpha_dog['Player'], "val": int(alpha_dog['Alpha_Count']), "unit": "TOPS TEAM", "desc": "Le plus souvent meilleur scoreur de l'équipe"},
+                {"title": "THE CEILING", "icon": "🏔️", "color": "#A78BFA", "player": peak['Player'], "val": int(peak['Best']), "unit": "PTS MAX", "desc": "Record absolu sur un match (Bonus inclus)"},
+                {"title": "PURE SCORER", "icon": "🏀", "color": "#F472B6", "player": pure_peak['Player'], "val": int(pure_peak['Best_Raw']), "unit": "PTS MAX (BRUT)", "desc": "Record absolu sur un match (Sans bonus)"},
+                {"title": "THE ALCHEMIST", "icon": "⚗️", "color": C_BONUS, "player": alchemist['Player'], "val": int(alchemist['Bonus_Gained']), "unit": "PTS BONUS", "desc": "Le plus de points gagnés grâce aux bonus"},
+                {"title": "NUCLEAR", "icon": "☢️", "color": "#EF4444", "player": nuke['Player'], "val": int(nuke['Nukes']), "unit": "BOMBS", "desc": "Le plus de scores > 50 pts"},
+                {"title": "HEAVY HITTER", "icon": "🥊", "color": "#64B5F6", "player": heavy['Player'], "val": int(heavy['Count40']), "unit": "PICKS > 40", "desc": "Le plus de scores > 40 pts"},
+                {"title": "THE ROCK", "icon": "🛡️", "color": C_GREEN, "player": rock['Player'], "val": int(rock['Count30']), "unit": "MATCHS", "desc": "Le plus de scores dans la Safe Zone (> 30 pts)"},
+                {"title": "HUMAN TORCH", "icon": "🔥", "color": "#FF5252", "player": torche['Player'], "val": f"{torche['Last15']:.1f}", "unit": "PTS / 15J", "desc": "Meilleure forme actuelle (Moyenne 15j)"},
+                {"title": "RISING STAR", "icon": "🚀", "color": C_GREEN, "player": progression['Player'], "val": f"+{progression['ProgressionPct']:.1f}%", "unit": "PROGRESSION", "desc": "Plus grosse progression (Moyenne 15j vs Saison)"},
+                {"title": "ZEN MASTER", "icon": "🧘", "color": "#EAB308", "player": zen_master['Player'], "val": f"{int(zen_master['ReliabilityPct'])}%", "unit": "FIABILITÉ", "desc": "Plus haut taux de fiabilité (Moins de carottes)"},
+                {"title": "UNSTOPPABLE", "icon": "⚡", "color": "#FBBF24", "player": intouch['Player'], "val": int(intouch['Streak30']), "unit": "SERIE", "desc": "Plus longue série consécutive > 30 pts"},
+                {"title": "THE METRONOME", "icon": "⏰", "color": "#A1A1AA", "player": metronome['Player'], "val": f"{metronome['StdDev']:.1f}", "unit": "ECART TYPE", "desc": "Le joueur le plus régulier (Faible variation)"},
+                {"title": "THE MANIAC", "icon": "🤪", "color": "#F472B6", "player": maniac['Player'], "val": f"{maniac['ModeScore']}", "unit": f"{maniac['ModeCount']} FOIS", "desc": "Le score le plus souvent répété par ce joueur"},
+                {"title": "IRON WALL", "icon": "🧱", "color": "#78350F", "player": iron_wall['Player'], "val": int(iron_wall['Worst']), "unit": "PIRE SCORE", "desc": "Le 'Pire score' le plus élevé (Plancher haut)"},
+                {"title": "THE ALBATROSS", "icon": "🦅", "color": "#14B8A6", "player": albatross['Player'], "val": int(albatross['Spread']), "unit": "AMPLITUDE", "desc": "Plus grand écart entre le record et le pire score"},
+                {"title": "IRON MAN", "icon": "🤖", "color": "#6366F1", "player": iron_man['Player'], "val": int(iron_man['MaxNoCarrot']), "unit": "MATCHS", "desc": "Plus longue série historique sans carotte (< 20 pts)"},
+                {"title": "THE ALIEN", "icon": "👽", "color": C_ALIEN, "player": alien['Player'], "val": int(alien['MaxAlien']), "unit": "MATCHS", "desc": "Plus longue série de matchs consécutifs à +60 pts"},
+                {"title": "CRASH TEST", "icon": "💥", "color": C_ORANGE, "player": crash_test['Player'], "val": int(crash_test['Worst_Bonus']), "unit": "PTS MIN (X2)", "desc": "Le pire score réalisé avec un bonus actif"},
+                {"title": "BAD BUSINESS", "icon": "💸", "color": "#666", "player": bad_business['Player'], "val": int(bad_business['Bonus_Gained']), "unit": "PTS BONUS", "desc": "Le moins de points gagnés grâce aux bonus"},
+                {"title": "THE BRICK", "icon": "🏗️", "color": "#4B5563", "player": brick_layer['Player'], "val": int(brick_layer['Worst_Raw']), "unit": "PTS MIN (BRUT)", "desc": "Le pire score brut enregistré"},
+                {"title": "THE FARMER", "icon": "🥕", "color": "#F97316", "player": lapin['Player'], "val": int(lapin['Carottes']), "unit": "CAROTTES", "desc": "Le plus grand nombre de carottes (< 20 pts)"}
+            ]
 
-            c1, c2 = st.columns(2)
-            with c1:
-                st.markdown(hof_card("THE GOAT", "🏆", C_GOLD, sniper['Player'], f"{sniper['Moyenne']:.1f}", "PTS MOYENNE (TOTAL)", "Meilleure moyenne générale de la saison (Bonus incl.)"), unsafe_allow_html=True)
-                st.markdown(hof_card("REAL MVP", "💎", C_PURE, pure_avg['Player'], f"{pure_avg['Moyenne_Raw']:.1f}", "PTS MOYENNE (BRUT)", "Meilleure moyenne sans compter les bonus"), unsafe_allow_html=True)
-                st.markdown(hof_card("THE SNIPER", "🎯", C_PURPLE, sniper_bp['Player'], int(sniper_bp['BP_Count']), "BEST PICKS", "Le plus de Best Picks trouvés"), unsafe_allow_html=True)
-                st.markdown(hof_card("ALPHA DOG", "🐺", C_ALPHA, alpha_dog['Player'], int(alpha_dog['Alpha_Count']), "TOPS TEAM", "Le plus souvent meilleur scoreur de l'équipe"), unsafe_allow_html=True)
-                st.markdown(hof_card("THE CEILING", "🏔️", "#A78BFA", peak['Player'], int(peak['Best']), "PTS MAX", "Record absolu sur un match (Bonus inclus)"), unsafe_allow_html=True)
-                st.markdown(hof_card("PURE SCORER", "🏀", "#F472B6", pure_peak['Player'], int(pure_peak['Best_Raw']), "PTS MAX (BRUT)", "Record absolu sur un match (Sans bonus)"), unsafe_allow_html=True)
-                st.markdown(hof_card("THE ALCHEMIST", "⚗️", C_BONUS, alchemist['Player'], int(alchemist['Bonus_Gained']), "PTS BONUS", "Le plus de points gagnés grâce aux bonus"), unsafe_allow_html=True)
-                st.markdown(hof_card("NUCLEAR", "☢️", "#EF4444", nuke['Player'], int(nuke['Nukes']), "BOMBS", "Le plus de scores > 50 pts"), unsafe_allow_html=True)
-                st.markdown(hof_card("HEAVY HITTER", "🥊", "#64B5F6", heavy['Player'], int(heavy['Count40']), "PICKS > 40", "Le plus de scores > 40 pts"), unsafe_allow_html=True)
-                st.markdown(hof_card("THE ROCK", "🛡️", C_GREEN, rock['Player'], int(rock['Count30']), "MATCHS", "Le plus de scores dans la Safe Zone (> 30 pts)"), unsafe_allow_html=True)
-                st.markdown(hof_card("HUMAN TORCH", "🔥", "#FF5252", torche['Player'], f"{torche['Last15']:.1f}", "PTS / 15J", "Meilleure forme actuelle (Moyenne 15j)"), unsafe_allow_html=True)
-                st.markdown(hof_card("RISING STAR", "🚀", C_GREEN, progression['Player'], f"+{progression['ProgressionPct']:.1f}%", "PROGRESSION", "Plus grosse progression (Moyenne 15j vs Saison)"), unsafe_allow_html=True)
-
-            with c2:
-                st.markdown(hof_card("ZEN MASTER", "🧘", "#EAB308", zen_master['Player'], f"{int(zen_master['ReliabilityPct'])}%", "FIABILITÉ", "Plus haut taux de fiabilité (Moins de carottes)"), unsafe_allow_html=True)
-                st.markdown(hof_card("UNSTOPPABLE", "⚡", "#FBBF24", intouch['Player'], int(intouch['Streak30']), "SERIE", "Plus longue série consécutive > 30 pts"), unsafe_allow_html=True)
-                st.markdown(hof_card("THE METRONOME", "⏰", "#A1A1AA", metronome['Player'], f"{metronome['StdDev']:.1f}", "ECART TYPE", "Le joueur le plus régulier (Faible variation)"), unsafe_allow_html=True)
-                st.markdown(hof_card("THE MANIAC", "🤪", "#F472B6", maniac['Player'], f"{maniac['ModeScore']}", f"{maniac['ModeCount']} FOIS", "Le score le plus souvent répété par ce joueur"), unsafe_allow_html=True)
-                st.markdown(hof_card("IRON WALL", "🧱", "#78350F", iron_wall['Player'], int(iron_wall['Worst']), "PIRE SCORE", "Le 'Pire score' le plus élevé (Plancher haut)"), unsafe_allow_html=True)
-                st.markdown(hof_card("THE ALBATROSS", "🦅", "#14B8A6", albatross['Player'], int(albatross['Spread']), "AMPLITUDE", "Plus grand écart entre le record et le pire score"), unsafe_allow_html=True)
-                st.markdown(hof_card("IRON MAN", "🤖", "#6366F1", iron_man['Player'], int(iron_man['MaxNoCarrot']), "MATCHS", "Plus longue série historique sans carotte (< 20 pts)"), unsafe_allow_html=True)
-                st.markdown(hof_card("CRASH TEST", "💥", C_ORANGE, crash_test['Player'], int(crash_test['Worst_Bonus']), "PTS MIN (X2)", "Le pire score réalisé avec un bonus actif"), unsafe_allow_html=True)
-                st.markdown(hof_card("BAD BUSINESS", "💸", "#666", bad_business['Player'], int(bad_business['Bonus_Gained']), "PTS BONUS", "Le moins de points gagnés grâce aux bonus"), unsafe_allow_html=True)
-                st.markdown(hof_card("THE BRICK", "🏗️", "#4B5563", brick_layer['Player'], int(brick_layer['Worst_Raw']), "PTS MIN (BRUT)", "Le pire score brut enregistré"), unsafe_allow_html=True)
-                st.markdown(hof_card("THE FARMER", "🥕", "#F97316", lapin['Player'], int(lapin['Carottes']), "CAROTTES", "Le plus grand nombre de carottes (< 20 pts)"), unsafe_allow_html=True)
+            # GRID DISPLAY (2 COLUMNS LOGIC)
+            rows = [hof_list[i:i+2] for i in range(0, len(hof_list), 2)]
+            for row_cards in rows:
+                cols = st.columns(2)
+                for i, card in enumerate(row_cards):
+                    with cols[i]:
+                        st.markdown(f"""
+                        <div class="glass-card" style="position:relative; overflow:hidden; margin-bottom:10px">
+                            <div style="position:absolute; right:-10px; top:-10px; font-size:5rem; opacity:0.05; pointer-events:none">{card['icon']}</div>
+                            <div class="hof-badge" style="color:{card['color']}; border:1px solid {card['color']}">{card['icon']} {card['title']}</div>
+                            <div style="display:flex; justify-content:space-between; align-items:flex-end;">
+                                <div>
+                                    <div class="hof-player">{card['player']}</div>
+                                    <div style="font-size:0.8rem; color:#888; margin-top:4px">{card['desc']}</div>
+                                </div>
+                                <div>
+                                    <div class="hof-stat" style="color:{card['color']}">{card['val']}</div>
+                                    <div class="hof-unit">{card['unit']}</div>
+                                </div>
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
 
         elif menu == "Admin":
             section_title("ADMIN <span class='highlight'>PANEL</span>", "Accès Restreint")

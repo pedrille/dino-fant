@@ -97,7 +97,24 @@ st.markdown(f"""
     h1, h2, h3 {{ font-family: 'Rajdhani', sans-serif; text-transform: uppercase; margin: 0; }}
     h1 {{ font-size: 3rem; font-weight: 800; background: linear-gradient(90deg, #FFF, #888); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }}
     .sub-header {{ font-size: 0.9rem; color: #666; letter-spacing: 1.5px; margin-bottom: 25px; font-weight: 500; }}
-    .glass-card {{ background: linear-gradient(145deg, rgba(25,25,25,0.6) 0%, rgba(10,10,10,0.8) 100%); backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 16px; padding: 24px; margin-bottom: 20px; box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3); }}
+    
+    /* --- FIX UI 1: Uniformiser la hauteur des cartes --- */
+    .glass-card {{ 
+        background: linear-gradient(145deg, rgba(25,25,25,0.6) 0%, rgba(10,10,10,0.8) 100%); 
+        backdrop-filter: blur(20px); 
+        border: 1px solid rgba(255, 255, 255, 0.08); 
+        border-radius: 16px; 
+        padding: 24px; 
+        margin-bottom: 20px; 
+        box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
+        
+        /* AJOUTS POUR ALIGNEMENT PARFAIT */
+        min-height: 165px; /* Force une hauteur mini égale pour tous */
+        display: flex;
+        flex-direction: column;
+        justify-content: center; /* Centre verticalement le contenu */
+    }}
+    
     .trend-section-title {{ font-family: 'Rajdhani'; font-size: 1.2rem; font-weight: 700; color: #FFF; margin-bottom: 5px; border-left: 4px solid #555; padding-left: 10px; }}
     .trend-section-desc {{ font-size: 0.8rem; color: #888; margin-bottom: 15px; padding-left: 14px; font-style: italic; }}
     .trend-box {{ background: rgba(255,255,255,0.03); border-radius: 12px; padding: 15px; border: 1px solid rgba(255,255,255,0.05); height: 100%; }}
@@ -134,7 +151,7 @@ st.markdown(f"""
     
     /* Player Lab - Match Pills FULL WIDTH RESPONSIVE SCROLL REVERSE */
     .match-pill {{
-        flex: 0 0 auto; /* Don't shrink/grow freely, keep fixed size logic */
+        flex: 0 0 auto; 
         min-width: 30px;
         height: 40px; 
         border-radius: 4px; 
@@ -145,12 +162,12 @@ st.markdown(f"""
     }}
     .match-row {{ 
         display: flex; 
-        flex-direction: row-reverse; /* Afficher du plus récent au plus ancien (Gauche < Droite) */
+        flex-direction: row-reverse; 
         overflow-x: auto;
         gap: 4px; 
         padding-bottom: 8px;
         width: 100%;
-        justify-content: flex-start; /* Avec row-reverse, le début est à droite */
+        justify-content: flex-start; 
     }}
 
     /* Boutons Streamlit Fix */
@@ -513,8 +530,10 @@ def send_discord_webhook(day_df, pick_num, url_app):
     except Exception as e: return str(e)
 
 # --- 5. UI COMPONENTS ---
+# FIX DASHBOARD MVP: New Line for Badges + FIX UI 2 (Gestion du vide)
 def kpi_card(label, value, sub, color="#FFF"):
     st.markdown(f"""<div class="glass-card" style="text-align:center"><div class="kpi-label">{label}</div><div class="kpi-num" style="color:{color}">{value}</div><div class="kpi-sub" style="color:{C_ACCENT}">{sub}</div></div>""", unsafe_allow_html=True)
+
 def section_title(title, subtitle):
     st.markdown(f"<h1>{title}</h1><div class='sub-header'>{subtitle}</div>", unsafe_allow_html=True)
 
@@ -537,7 +556,7 @@ try:
     """, height=0, width=0)
 
     with st.spinner('🦖 Analyse des données en cours...'):
-        # LOAD DATA AVEC NOUVEAU PARSING
+        # LOAD DATA
         df, team_rank, bp_map, team_history, daily_max_map, team_bp_real_load, player_real_bp_map = load_data()
     
     # GLOBAL METRIC
@@ -549,7 +568,7 @@ try:
     if df is not None and not df.empty:
         latest_pick = df['Pick'].max()
         day_df = df[df['Pick'] == latest_pick].sort_values('Score', ascending=False).copy()
-        # COMPUTE AVEC BP MAP MANUELLE
+        # COMPUTE
         full_stats = compute_stats(df, bp_map, daily_max_map, player_real_bp_map)
         leader = full_stats.sort_values('Total', ascending=False).iloc[0]
         
@@ -568,22 +587,23 @@ try:
             st.markdown("<div style='text-align:center; margin-bottom: 30px;'>", unsafe_allow_html=True)
             st.image("raptors-ttfl-min.png", use_container_width=True) 
             st.markdown("</div>", unsafe_allow_html=True)
+            # MENU CLEAN (NO CARROT EMOJI)
             menu = option_menu(menu_title=None, options=["Dashboard", "Team HQ", "Player Lab", "Bonus x2", "No-Carrot", "Trends", "Hall of Fame", "Admin"], icons=["grid-fill", "people-fill", "person-bounding-box", "lightning-charge-fill", "shield-check", "fire", "trophy-fill", "shield-lock"], default_index=0, styles={"container": {"padding": "0!important", "background-color": "#000000"}, "icon": {"color": "#666", "font-size": "1.1rem"}, "nav-link": {"font-family": "Rajdhani, sans-serif", "font-weight": "700", "font-size": "15px", "text-transform": "uppercase", "color": "#AAA", "text-align": "left", "margin": "5px 0px", "--hover-color": "#111"}, "nav-link-selected": {"background-color": C_ACCENT, "color": "#FFF", "icon-color": "#FFF", "box-shadow": "0px 4px 20px rgba(206, 17, 65, 0.4)"}})
-            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v20.0</div></div>""", unsafe_allow_html=True)
+            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v21.0</div></div>""", unsafe_allow_html=True)
             
         if menu == "Dashboard":
             section_title("RAPTORS <span class='highlight'>DASHBOARD</span>", f"Daily Briefing • Pick #{int(latest_pick)}")
             top = day_df.iloc[0]
             
-            # LOGIQUE MVP & BP & BONUS
+            # LOGIQUE MVP & BP & BONUS (TASK 1)
             val_suffix = ""
             if 'IsBonus' in top and top['IsBonus']: val_suffix += " 🌟x2"
             if 'IsBP' in top and top['IsBP']: val_suffix += " 🎯BP"
 
             # HTML Construction for MVP Card Subtext (New Line)
-            # On met le score en gros, et les badges en dessous en plus petit
-            # La couleur du score est gérée par kpi-sub (rouge), donc on force le gris pour les badges
-            sub_html = f"<div><div style='font-size:1.4rem; font-weight:800'>{int(top['Score'])} PTS</div><div style='font-size:0.9rem; color:#999; font-weight:600; margin-top:4px'>{val_suffix}</div></div>"
+            # FIX UI 2: &nbsp; pour maintenir la ligne si vide
+            badges_html = val_suffix if val_suffix else "&nbsp;"
+            sub_html = f"<div><div style='font-size:1.4rem; font-weight:800'>{int(top['Score'])} PTS</div><div style='font-size:0.9rem; color:#999; font-weight:600; margin-top:4px'>{badges_html}</div></div>"
 
             # 5 COLONNES POUR LE DASHBOARD
             c1, c2, c3, c4, c5 = st.columns(5)
@@ -728,7 +748,7 @@ try:
                 st.markdown("<div style='height:15px'></div>", unsafe_allow_html=True)
 
                 g7, g8, g9 = st.columns(3, gap="medium")
-                # CLEAN EMOJIS ONLY
+                # UPDATED DESCRIPTIONS FOR EMOJI CONSISTENCY
                 with g7: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_PURPLE}'>{total_bp_team}</div><div class='stat-mini-lbl'>TOTAL BEST PICKS 🎯</div></div>", unsafe_allow_html=True)
                 with g8: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_BONUS}'>{total_bonus_played}</div><div class='stat-mini-lbl'>BONUS JOUÉS 🌟</div></div>", unsafe_allow_html=True)
                 with g9: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{avg_bonus_team:.1f}</div><div class='stat-mini-lbl'>MOYENNE SOUS BONUS</div></div>", unsafe_allow_html=True)

@@ -7,6 +7,7 @@ from streamlit_option_menu import option_menu
 import numpy as np
 import requests
 import streamlit.components.v1 as components
+import random
 
 # --- 1. CONFIGURATION & ASSETS ---
 st.set_page_config(
@@ -18,6 +19,36 @@ st.set_page_config(
 
 # ✅ LIEN DE L'IMAGE DISCORD (RAW)
 DISCORD_AVATAR_URL = "https://raw.githubusercontent.com/pedrille/dino-fant/main/basketball_discord.png"
+
+# --- 1.5 CONFIG PUNCHLINES (ANTI-PACERS MIXÉES) ---
+PACERS_PUNCHLINES = [
+    "Un bon Pacer est un Pacer sous carotte 🥕",
+    "PACERS : Petit Animal Chétif Et Rarement Stylé 🐁",
+    "Les Pacers gèrent leur avance comme Doc Rivers gère un 3-1 📉",
+    "Info : Les Pacers mangent les kiwis avec la peau 🥝",
+    "Les Pacers c'est les Clippers : beaucoup de bruit, zéro bague 💍",
+    "Si on change quelques lettres à Pacers, ça donne 'Trompette' 🎺",
+    "PACER : Personne Ayant une Chatte EnoRme 🐱",
+    "Stat du jour : 100% des Pacers portent des chaussettes avec des sandales 🧦",
+    "L'effectif des Pacers est aussi solide que les genoux de Derrick Rose 🌹💔",
+    "Définition de Pacers : 'Groupe de personnes ayant beaucoup de chance' 🍀",
+    "Les Pacers sont une erreur de casting, comme Marvin Bagley devant Luka 🇸🇮",
+    "Sondage : Les Pacers préfèrent les raisins secs aux pépites de chocolat 🍪",
+    "PACERS : Pas Assez Compétents Et Réellement Surcotés 📉",
+    "Le classement est formel : Les Pacers trichent (source : tkt) 🕵️‍♂️",
+    "Ball Don't Lie : Les Pacers vont finir par payer l'addition 🗣️",
+    "Info : Les Pacers applaudissent quand l'avion atterrit 👏✈️",
+    "Les Pacers sont aussi aimés que Dillon Brooks 🐻",
+    "Pacers ? Connais pas. Ça se mange ? 🍔",
+    "Les Pacers font plus de briques que Westbrook un soir de pleine lune 🌕",
+    "Un Pacer ne fait pas de Best Pick, il fait un 'Pick par erreur' 🤷‍♂️",
+    "Le QI Basket des Pacers est inférieur au temps de jeu de Thanasis 🇬🇷",
+    "Insolite : 100% des Pacers mettent de la pizza sur leur ananas 🍍",
+    "Les Pacers passeront le 2ème tour quand Embiid le passera (jamais) 🚑",
+    "Les Pacers c'est comme les éclairs au café... C'est de la m**** ☕",
+    "Les Pacers croient que 'Tanking' est le nom d'un joueur chinois 🇨🇳",
+    "Si on retourne le classement, les Pacers sont enfin à leur vraie place 🙃"
+]
 
 # Palette de couleurs (Globales)
 C_BG = "#050505"
@@ -179,7 +210,7 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # --- 3. DATA ENGINE ---
-@st.cache_data(ttl=0) # Ne garde rien en mémoire, recharge à chaque visite
+@st.cache_data(ttl=0, show_spinner=False) # HIDE DEFAULT SPINNER
 def load_data():
     conn = st.connection("gsheets", type=GSheetsConnection)
     try:
@@ -290,7 +321,7 @@ def load_data():
     except: return pd.DataFrame(), 0, {}, [], {}, 0
 
 # OPTIMISATION : CACHING STATS CALCULATION TO SPEED UP NAVIGATION
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=300, show_spinner=False) # HIDE DEFAULT SPINNER
 def compute_stats(df, bp_map, daily_max_map):
     stats = []
     latest_pick = df['Pick'].max()
@@ -438,9 +469,15 @@ def send_discord_webhook(day_df, pick_num, url_app):
     podium_text = ""
     medals = ["🥇", "🥈", "🥉"]
     for i, row in top_3.iterrows():
-        bonus_mark = " 🔥(x2)" if row['IsBonus'] else ""
+        bonus_mark = " 🔥" if row['IsBonus'] else ""
         podium_text += f"{medals[i]} **{row['Player']}** • {int(row['Score'])} pts{bonus_mark}\n"
+    
     avg_score = int(day_df['Score'].mean())
+    
+    # SELECTION DU PUNCHLINE (IDENTIQUE A GSHEET)
+    random_quote = random.choice(PACERS_PUNCHLINES)
+    footer_text = "Pensée du jour • " + random_quote
+
     data = {
         "username": "RaptorsTTFL Dashboard",
         "avatar_url": DISCORD_AVATAR_URL, 
@@ -448,8 +485,8 @@ def send_discord_webhook(day_df, pick_num, url_app):
             "title": f"🏀 RECAP DU PICK #{int(pick_num)}",
             "description": f"Les matchs sont terminés, voici les scores de l'équipe !\n\n📊 **MOYENNE TEAM :** {avg_score} pts",
             "color": 13504833,
-            "fields": [{"name": "🏆 LE PODIUM", "value": podium_text, "inline": False}, {"name": "", "value": f"👉 [Voir tous les détails sur le Dashboard]({url_app})", "inline": False}],
-            "footer": {"text": "Raptors TTFL • We The North"}
+            "fields": [{"name": "🏆 LE PODIUM", "value": podium_text, "inline": False}, {"name": "", "value": f"👉 [Voir le Dashboard complet]({url_app})", "inline": False}],
+            "footer": {"text": footer_text}
         }]
     }
     try: requests.post(webhook_url, json=data); return "success"
@@ -463,7 +500,32 @@ def section_title(title, subtitle):
 
 # --- 6. MAIN APP ---
 try:
-    df, team_rank, bp_map, team_history, daily_max_map, team_bp_real_load = load_data()
+    # UX BOOSTER: SCRIPT JS POUR SCROLL TOP + FERMETURE SIDEBAR MOBILE
+    components.html("""
+    <script>
+        // Fonction pour scroller en haut (simule un chargement page neuve)
+        window.parent.document.querySelector('.main').scrollTo(0, 0);
+
+        // Fonction pour fermer la sidebar sur mobile après un clic
+        const navLinks = window.parent.document.querySelectorAll('.nav-link');
+        navLinks.forEach((link) => {
+            link.addEventListener('click', () => {
+                // On attend un peu que Streamlit réagisse
+                setTimeout(() => {
+                    const closeBtn = window.parent.document.querySelector('button[data-testid="baseButton-header"]');
+                    // Si on est sur un écran petit (mobile) et que le bouton existe
+                    if (window.parent.innerWidth <= 768 && closeBtn) {
+                        closeBtn.click();
+                    }
+                }, 200);
+            });
+        });
+    </script>
+    """, height=0, width=0)
+
+    # CHARGEMENT DES DONNÉES AVEC SPINNER
+    with st.spinner('🦖 Analyse des données en cours...'):
+        df, team_rank, bp_map, team_history, daily_max_map, team_bp_real_load = load_data()
     
     # GLOBAL METRIC
     if df is not None and not df.empty:
@@ -486,8 +548,7 @@ try:
             st.markdown("</div>", unsafe_allow_html=True)
             menu = option_menu(menu_title=None, options=["Dashboard", "Team HQ", "Player Lab", "Bonus x2", "Trends", "Hall of Fame", "Admin"], icons=["grid-fill", "people-fill", "person-bounding-box", "lightning-charge-fill", "fire", "trophy-fill", "shield-lock"], default_index=0, styles={"container": {"padding": "0!important", "background-color": "#000000"}, "icon": {"color": "#666", "font-size": "1.1rem"}, "nav-link": {"font-family": "Rajdhani, sans-serif", "font-weight": "700", "font-size": "15px", "text-transform": "uppercase", "color": "#AAA", "text-align": "left", "margin": "5px 0px", "--hover-color": "#111"}, "nav-link-selected": {"background-color": C_ACCENT, "color": "#FFF", "icon-color": "#FFF", "box-shadow": "0px 4px 20px rgba(206, 17, 65, 0.4)"}})
             st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v16.1</div></div>""", unsafe_allow_html=True)
-            components.html("""<script>const options = window.parent.document.querySelectorAll('.nav-link'); options.forEach((option) => { option.addEventListener('click', () => { const sidebar = window.parent.document.querySelector('section[data-testid="stSidebar"]'); if (sidebar) {} }); });</script>""", height=0, width=0)
-
+            
         if menu == "Dashboard":
             section_title("RAPTORS <span class='highlight'>DASHBOARD</span>", f"Daily Briefing • Pick #{int(latest_pick)}")
             top = day_df.iloc[0]
@@ -645,11 +706,24 @@ try:
 
             st.markdown("### 🔥 HEATMAP DE LA SAISON")
             st.markdown(f"<div class='chart-desc'>Rouge < 35 | Gris 35-45 (Neutre) | Vert > 45.</div>", unsafe_allow_html=True)
-            heatmap_data = df.pivot_table(index='Player', columns='Pick', values='Score', aggfunc='sum')
+            
+            # --- NOUVEAU : FILTRE HEATMAP ---
+            heat_filter = st.selectbox("📅 Filtrer la Heatmap", ["VUE GLOBALE"] + list(df['Month'].unique()), key='heat_filter')
+            
+            if heat_filter == "VUE GLOBALE":
+                df_heat = df
+            else:
+                df_heat = df[df['Month'] == heat_filter]
+            
+            heatmap_data = df_heat.pivot_table(index='Player', columns='Pick', values='Score', aggfunc='sum')
             custom_colors = [[0.0, '#EF4444'], [0.43, '#1F2937'], [0.56, '#1F2937'], [1.0, '#10B981']]
+            
+            # Ajustement taille auto selon le nombre de colonnes pour rester lisible
+            fig_height = 500
+            
             fig_heat = px.imshow(heatmap_data, labels=dict(x="Pick", y="Player", color="Score"), x=heatmap_data.columns, y=heatmap_data.index, color_continuous_scale=custom_colors, zmin=0, zmax=80, aspect="auto")
             fig_heat.update_traces(xgap=1, ygap=1)
-            fig_heat.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, height=500, xaxis={'showgrid': False}, yaxis={'showgrid': False})
+            fig_heat.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, height=fig_height, xaxis={'showgrid': False}, yaxis={'showgrid': False})
             st.plotly_chart(fig_heat, use_container_width=True)
 
             st.markdown("### 📊 DATA ROOM")

@@ -951,7 +951,16 @@ try:
                 r_cats = ['SCORING', 'CEILING', 'FORME', 'RÉGULARITÉ', 'CLUTCH']
                 
                 fig_radar = go.Figure(data=go.Scatterpolar(r=r_vals + [r_vals[0]], theta=r_cats + [r_cats[0]], fill='toself', line_color=C_ACCENT, fillcolor="rgba(206, 17, 65, 0.3)"))
-                fig_radar.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 100], showticklabels=False, linecolor='#333'), bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font=dict(color='white', size=14, family="Rajdhani"), margin=dict(t=20, b=20, l=40, r=40), height=400)
+                fig_radar.update_layout(
+                    polar=dict(
+                        radialaxis=dict(visible=True, range=[0, 100], showticklabels=False, linecolor='#333'),
+                        bgcolor='rgba(0,0,0,0)'
+                    ),
+                    paper_bgcolor='rgba(0,0,0,0)', 
+                    font=dict(color='white', size=14, family="Rajdhani"), 
+                    margin=dict(t=20, b=20, l=40, r=40), 
+                    height=400
+                )
                 st.plotly_chart(fig_radar, use_container_width=True)
             
             with c_radar_legend:

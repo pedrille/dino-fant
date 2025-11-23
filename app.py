@@ -1442,7 +1442,7 @@ try:
                 with c2:
                     st.markdown("<div class='glass-card'><h4>📡 DISCORD</h4>", unsafe_allow_html=True)
                     if st.button("🚀 ENVOYER RAPPORT", type="primary"):
-                        res = send_discord_webhook(day_df, latest_pick, "https://dino-fant-tvewyye4t3dmqfeuvqsvmg.streamlit.app/")
+                        res = send_discord_webhook(day_df, latest_pick, "https://raptorsttfl-dashboard.streamlit.app/")
                         if res == "success": st.success("✅ Envoyé !")
                         else: st.error(f"Erreur : {res}")
                     st.markdown("</div>", unsafe_allow_html=True)

@@ -863,7 +863,7 @@ try:
 
             st.markdown("<div style='margin-bottom:30px'></div>", unsafe_allow_html=True)
             if len(team_history) > 1:
-            st.markdown("<div style='margin-bottom:30px'></div>", unsafe_allow_html=True)
+                st.markdown("<div style='margin-bottom:30px'></div>", unsafe_allow_html=True)
             
             # --- NOUVEAU : BAR CHART RACE (VRAIE ANIMATION PLOTLY) ---
             st.markdown("### 🏁 LA COURSE AU TITRE (EVOLUTION)")

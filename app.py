@@ -681,26 +681,31 @@ try:
         # SÉLECTEUR DE PÉRIODE
         st.markdown("<div style='font-family:Rajdhani; font-weight:700; color:#AAA; margin-bottom:5px; font-size:0.9rem; letter-spacing:1px'>📅 PÉRIODE ACTIVE</div>", unsafe_allow_html=True)
         
-        # On définit les options
-        options_saisons = list(SEASONS_CONFIG.keys())
-        
-        # --- LOGIQUE AUTO-FOCUS : PÉRIODE ACTUELLE ---
-        default_ix = 0 # Par défaut : Index 0 (Saison Complète)
-        
         # 1. On récupère le dernier pick joué sur la totalité des données
         real_current_pick = df['Pick'].max() if df is not None and not df.empty else 0
         
-        # 2. On cherche dans quelle période se trouve ce pick
-        for i, (s_name, (s_start, s_end)) in enumerate(SEASONS_CONFIG.items()):
-            # On ignore la "Saison Complète" (index 0) pour privilégier une période spécifique
-            if i == 0: continue 
+        # 2. FILTRAGE : On ne garde que "Saison Complète" ET les périodes commencées
+        options_saisons = []
+        for s_name, (s_start, s_end) in SEASONS_CONFIG.items():
+            # Toujours afficher la vue globale
+            if "SAISON COMPLÈTE" in s_name:
+                options_saisons.append(s_name)
+            # Pour les périodes, on affiche SEULEMENT si le pick actuel a dépassé le début
+            elif real_current_pick >= s_start:
+                options_saisons.append(s_name)
+        
+        # 3. LOGIQUE AUTO-FOCUS (Sur la liste filtrée)
+        default_ix = 0 
+        for i, s_name in enumerate(options_saisons):
+            # On récupère les bornes via la config globale
+            s_start, s_end = SEASONS_CONFIG[s_name]
             
-            # Si le pick actuel est compris dans cette période, c'est elle qu'on sélectionne
-            if s_start <= real_current_pick <= s_end:
+            # Si le pick actuel est DANS cette période (et que ce n'est pas la saison complète)
+            if "SAISON COMPLÈTE" not in s_name and s_start <= real_current_pick <= s_end:
                 default_ix = i
                 break
         
-        # 3. On crée le sélecteur avec l'index calculé
+        # 4. Création du sélecteur avec la liste épurée
         selected_season_name = st.selectbox("Période", options_saisons, index=default_ix, label_visibility="collapsed", key="season_selector")
         
         start_pick, end_pick = SEASONS_CONFIG[selected_season_name]

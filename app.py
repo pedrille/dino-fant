@@ -863,26 +863,68 @@ try:
 
             st.markdown("<div style='margin-bottom:30px'></div>", unsafe_allow_html=True)
             if len(team_history) > 1:
-                st.markdown("<div style='margin-bottom:30px'></div>", unsafe_allow_html=True)
+            st.markdown("<div style='margin-bottom:30px'></div>", unsafe_allow_html=True)
             
-            # --- NOUVEAU : BAR CHART RACE ---
+            # --- NOUVEAU : BAR CHART RACE (VRAIE ANIMATION PLOTLY) ---
             st.markdown("### 🏁 LA COURSE AU TITRE (EVOLUTION)")
-            st.markdown("<div class='chart-desc'>Utilisez le slider pour revivre la saison pick par pick.</div>", unsafe_allow_html=True)
+            st.markdown("<div class='chart-desc'>Cliquez sur ▶️ pour lancer la course. L'animation est fluide et gérée par le navigateur.</div>", unsafe_allow_html=True)
             
             if not df.empty:
+                # 1. Préparation des données cumulées (Format Long pour Plotly Animation)
+                # On pivote pour avoir les Picks en index et Joueurs en colonnes
                 pivoted = df.pivot_table(index='Pick', columns='Player', values='Score', aggfunc='sum').fillna(0)
+                
+                # On calcule le cumulatif
                 cum_df = pivoted.cumsum()
-                min_p, max_p = int(df['Pick'].min()), int(df['Pick'].max())
-                sel_pick_race = st.slider("Voyager dans le temps (Pick #)", min_value=min_p, max_value=max_p, value=max_p)
                 
-                race_data = cum_df.loc[sel_pick_race].reset_index()
-                race_data.columns = ['Player', 'Total']
-                race_data = race_data.sort_values('Total', ascending=True)
+                # On repasse en format long pour Plotly Express
+                race_df = cum_df.reset_index().melt(id_vars='Pick', var_name='Player', value_name='Total')
                 
-                fig_race = px.bar(race_data, x='Total', y='Player', text='Total', orientation='h',
-                                  color='Total', color_continuous_scale='Viridis')
-                fig_race.update_traces(textposition='outside', marker_line_width=0)
-                fig_race.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA', 'family':'Rajdhani'}, xaxis=dict(visible=False), yaxis=dict(title=None, tickfont=dict(size=14, weight=700)), height=max(400, len(race_data)*35), margin=dict(l=0,r=50,t=0,b=0), showlegend=False, coloraxis_showscale=False)
+                # On s'assure que les picks sont bien triés
+                race_df = race_df.sort_values('Pick')
+                
+                # Max global pour fixer l'échelle X (évite que l'axe ne saute tout le temps)
+                global_max = race_df['Total'].max() * 1.1
+
+                # 2. Création du Graphique Animé
+                fig_race = px.bar(
+                    race_df, 
+                    x="Total", 
+                    y="Player", 
+                    color="Player",
+                    text="Total",
+                    orientation='h',
+                    animation_frame="Pick",       # C'est la clé de l'animation fluide
+                    animation_group="Player",     # Permet de suivre l'objet lors des transitions
+                    range_x=[0, global_max],
+                    color_discrete_map=PLAYER_COLORS # On garde notre charte graphique
+                )
+
+                # 3. Tuning du Layout pour l'effet "Course"
+                fig_race.update_layout(
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    font={'color': '#AAA', 'family': 'Rajdhani'},
+                    xaxis=dict(visible=False, range=[0, global_max]), # On cache l'axe X pour le look
+                    yaxis=dict(title=None, tickfont=dict(size=14, weight=700)),
+                    height=500,
+                    margin=dict(l=0, r=50, t=0, b=0),
+                    showlegend=False,
+                    # Ce paramètre force le tri des barres du plus grand au plus petit à chaque frame
+                    yaxis_categoryorder='total ascending' 
+                )
+
+                # 4. Tuning de la vitesse d'animation
+                fig_race.layout.updatemenus[0].buttons[0].args[1]["frame"]["duration"] = 150 # Vitesse (ms) entre chaque pick
+                fig_race.layout.updatemenus[0].buttons[0].args[1]["transition"]["duration"] = 100 # Fluidité du mouvement
+
+                # Style des traces (texte à l'extérieur, barres pleines)
+                fig_race.update_traces(textposition='outside', marker_line_width=0, textfont_size=14, textfont_color="#FFF")
+                
+                # Suppression du titre automatique du slider pour faire propre
+                fig_race.layout.sliders[0].currentvalue = {"prefix": "PICK #", "font": {"size": 20, "color": C_ACCENT}}
+                fig_race.layout.sliders[0].pad = {"t": 50}
+
                 st.plotly_chart(fig_race, use_container_width=True)
 
             st.markdown("### 🔥 HEATMAP DE LA PÉRIODE")

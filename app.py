@@ -616,6 +616,10 @@ try:
         
         start_pick, end_pick = SEASONS_CONFIG[selected_season_name]
         
+        # --- CORRECTION ICI : INITIALISATION PAR DEFAUT ---
+        latest_pick = 0 
+        # --------------------------------------------------
+
         # --- CRUCIAL : ON GARDE UNE COPIE DE TOUTE LA SAISON ---
         df_full_history = df.copy() if df is not None else pd.DataFrame()
 

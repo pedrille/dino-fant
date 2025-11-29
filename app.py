@@ -1033,8 +1033,13 @@ try:
                 # Style des traces
                 fig_race.update_traces(textposition='outside', marker_line_width=0, textfont_size=14, textfont_color="#FFF")
                 
+                # ... (Fin du bloc Bar Chart Race) ...
                 st.plotly_chart(fig_race, use_container_width=True)
-            
+
+            # --- AJOUT D'ESPACE ICI ---
+            st.markdown("<div style='height: 40px;'></div>", unsafe_allow_html=True)
+            # --------------------------
+
             st.markdown("### 🔥 HEATMAP")
             st.markdown(f"<div class='chart-desc'>Rouge < 35 | Gris 35-45 (Neutre) | Vert > 45.</div>", unsafe_allow_html=True)
             

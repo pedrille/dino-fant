@@ -95,6 +95,12 @@ C_DARK_GREY = "#1F2937"
 C_GREY_BAR = "#374151" 
 C_ALIEN = "#84CC16"
 
+# --- FONCTION COULEUR UNIFIÉE ---
+def get_uniform_color(score):
+    if score < 20: return "#EF4444"   # C_RED (< 20)
+    elif score < 40: return "#374151" # GRIS-MID  (20-39)
+    else: return "#10B981"            # C_GREEN (40+)
+        
 # --- 2. CSS PREMIUM ---
 st.markdown(f"""
 <style>
@@ -445,6 +451,19 @@ def compute_stats(df, bp_map, daily_max_map):
 
         spread = scores.max() - scores.min()
 
+        # ... après spread = ...
+        
+        # CALCUL TENDANCE 7 DERNIERS MATCHS
+        scores_last_7 = d['Score'].tail(7)
+        avg_last_7 = scores_last_7.mean() if len(scores_last_7) > 0 else 0
+        diff_7 = avg_last_7 - scores.mean() 
+        
+        if diff_7 >= 1: trend_icon = "↗️"
+        elif diff_7 <= -1: trend_icon = "↘️"
+        else: trend_icon = "➡️"
+        
+        # ... continue vers stats.append ...
+
         streak_30 = 0
         for s in reversed(scores):
             if s >= 30: streak_30 += 1
@@ -492,6 +511,7 @@ def compute_stats(df, bp_map, daily_max_map):
             'ProgressionPct': progression_pct, 'ReliabilityPct': reliability_pct, 'AvgZ': avg_z,
             'Trend': trend_data.get(p, []), 'AvgWithBonus': avg_with_bonus, 'AvgWithoutBonus': avg_without_bonus, 'BonusPlayed': len(scores_with_bonus),
             'CurrentNoCarrot': current_no_carrot_streak, 'MaxNoCarrot': max_no_carrot, 'ModeScore': mode_score, 'ModeCount': mode_count, 'Spread': spread,
+            'Trend7Icon': trend_icon,
             'MaxAlien': max_alien_streak
         })
     return pd.DataFrame(stats)
@@ -711,16 +731,12 @@ try:
             with c_perf:
                 st.markdown("<h3 style='margin-bottom:10px; margin-top:0; color:#FFF; font-family:Rajdhani; font-weight:700'>📊 SCORES DU SOIR</h3>", unsafe_allow_html=True)
                 
-                def get_bar_color(score):
-                    if score < 35: return C_RED
-                    elif score <= 45: return C_GREY_BAR
-                    else: return C_GREEN
-                
-                day_df['BarColor'] = day_df['Score'].apply(get_bar_color)
+                # UTILISATION DE LA FONCTION UNIFIÉE
+                day_df['BarColor'] = day_df['Score'].apply(get_uniform_color)
                 
                 fig = px.bar(day_df, x='Player', y='Score', text='Score', color='BarColor', color_discrete_map="identity")
                 fig.update_traces(textposition='outside', marker_line_width=0, textfont_size=14, textfont_family="Rajdhani", cliponaxis=False)
-                fig.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA', 'family': 'Inter'}, yaxis=dict(showgrid=False, visible=False), xaxis=dict(title=None, tickfont=dict(size=14, family='Rajdhani', weight=600)), height=350, showlegend=False, coloraxis_showscale=False, margin=dict(l=0, r=0, t=0, b=0))
+                fig.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA', 'family': 'Inter'}, yaxis=dict(showgrid=False, visible=False), xaxis=dict(title=None, tickfont=dict(size=14, family='Rajdhani', weight=600)), height=350, showlegend=False, margin=dict(l=0, r=0, t=0, b=0))
                 st.plotly_chart(fig, use_container_width=True)
             
             with c_clutch:
@@ -762,10 +778,20 @@ try:
                 st.markdown(f"""
                 <div class='glass-card' style='height:100%'>
                     <div style='color:{C_TEXT}; font-family:Rajdhani; font-weight:700; margin-bottom:5px'>🎨 TEXTURE DES PICKS</div>
-                    <div class='chart-desc'>Rouge < 35 | Gris 35-45 | Vert > 45.</div>
-                    """ , unsafe_allow_html=True)
+                    <div class='chart-desc'>Rouge < 20 | Gris 20-39 | Vert 40+.</div>
+                """ , unsafe_allow_html=True)
                 
-                fig_donut = px.pie(dist_counts, values='Count', names='Range', hole=0.4, color='Range', color_discrete_map={'< 35': C_RED, '35-45': C_DARK_GREY, '45+': C_GREEN})
+                # BINS UNIFORMISÉS [0-19, 20-39, 40+]
+                bins = [-1, 19, 39, 200]
+                labels = ['< 20', '20-39', '40+']
+                day_df['Range'] = pd.cut(day_df['Score'], bins=bins, labels=labels)
+                dist_counts = day_df['Range'].value_counts().reset_index()
+                dist_counts.columns = ['Range', 'Count']
+                
+                # MAP COULEURS AVEC TON GRIS SPÉCIFIQUE
+                color_map = {'< 20': C_RED, '20-39': "#374151", '40+': C_GREEN}
+                
+                fig_donut = px.pie(dist_counts, values='Count', names='Range', hole=0.4, color='Range', color_discrete_map=color_map)
                 fig_donut.update_layout(showlegend=False, margin=dict(t=10, b=10, l=10, r=10), height=220, paper_bgcolor='rgba(0,0,0,0)')
                 fig_donut.update_traces(textposition='inside', textinfo='label+value', textfont_size=14)
                 st.plotly_chart(fig_donut, use_container_width=True)
@@ -833,12 +859,27 @@ try:
 
             st.markdown("<div style='margin-bottom:30px'></div>", unsafe_allow_html=True)
             if len(team_history) > 1:
-                st.markdown("### 📈 ÉVOLUTION DU CLASSEMENT GLOBAL")
-                hist_df = pd.DataFrame({'Deck': range(1, len(team_history)+1), 'Rank': team_history})
-                fig_h = px.line(hist_df, x='Deck', y='Rank', markers=True)
-                fig_h.update_traces(line_color=C_ACCENT, line_width=3, marker_size=8)
-                fig_h.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, yaxis=dict(autorange="reversed", gridcolor='#222'), xaxis=dict(showgrid=False))
-                st.plotly_chart(fig_h, use_container_width=True)
+                st.markdown("<div style='margin-bottom:30px'></div>", unsafe_allow_html=True)
+            
+            # --- NOUVEAU : BAR CHART RACE ---
+            st.markdown("### 🏁 LA COURSE AU TITRE (EVOLUTION)")
+            st.markdown("<div class='chart-desc'>Utilisez le slider pour revivre la saison pick par pick.</div>", unsafe_allow_html=True)
+            
+            if not df.empty:
+                pivoted = df.pivot_table(index='Pick', columns='Player', values='Score', aggfunc='sum').fillna(0)
+                cum_df = pivoted.cumsum()
+                min_p, max_p = int(df['Pick'].min()), int(df['Pick'].max())
+                sel_pick_race = st.slider("Voyager dans le temps (Pick #)", min_value=min_p, max_value=max_p, value=max_p)
+                
+                race_data = cum_df.loc[sel_pick_race].reset_index()
+                race_data.columns = ['Player', 'Total']
+                race_data = race_data.sort_values('Total', ascending=True)
+                
+                fig_race = px.bar(race_data, x='Total', y='Player', text='Total', orientation='h',
+                                  color='Total', color_continuous_scale='Viridis')
+                fig_race.update_traces(textposition='outside', marker_line_width=0)
+                fig_race.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA', 'family':'Rajdhani'}, xaxis=dict(visible=False), yaxis=dict(title=None, tickfont=dict(size=14, weight=700)), height=max(400, len(race_data)*35), margin=dict(l=0,r=50,t=0,b=0), showlegend=False, coloraxis_showscale=False)
+                st.plotly_chart(fig_race, use_container_width=True)
 
             st.markdown("### 🔥 HEATMAP DE LA PÉRIODE")
             st.markdown(f"<div class='chart-desc'>Rouge < 35 | Gris 35-45 (Neutre) | Vert > 45.</div>", unsafe_allow_html=True)
@@ -862,8 +903,10 @@ try:
             st.plotly_chart(fig_heat, use_container_width=True)
 
             st.markdown("### 📊 DATA ROOM")
-            st.dataframe(full_stats[['Player', 'Trend', 'Total', 'Moyenne', 'BP_Count', 'Nukes', 'Carottes', 'Bonus_Gained']].sort_values('Total', ascending=False), hide_index=True, use_container_width=True, column_config={
+            st.dataframe(full_stats[['Player', 'Trend7Icon', 'Trend', 'Total', 'Moyenne', 'BP_Count', 'Nukes', 'Carottes', 'Bonus_Gained']].sort_values('Total', ascending=False), 
+            hide_index=True, use_container_width=True, column_config={
                 "Player": st.column_config.TextColumn("Joueur", width="medium"),
+                "Trend7Icon": st.column_config.TextColumn("7J", width="small", help="Tendance 7 derniers matchs"),
                 "Trend": st.column_config.LineChartColumn("Forme (20j)", width="medium", y_min=0, y_max=80),
                 "Total": st.column_config.ProgressColumn("Total Pts", format="%d", min_value=0, max_value=full_stats['Total'].max()),
                 "Moyenne": st.column_config.NumberColumn("Moyenne", format="%.1f"),
@@ -929,7 +972,8 @@ try:
                     if r['IsBonus']:
                         bg = C_GOLD; txt_col = "#000000"; border = f"2px solid {C_GOLD}"
                     else:
-                        bg = C_RED if sc < 20 else (C_GREEN if sc > 40 else "#333")
+                        # UTILISATION DE LA FONCTION UNIFIÉE
+                        bg = get_uniform_color(r['Score'])
                         txt_col = "#FFF"; border = "1px solid rgba(255,255,255,0.1)"
                     
                     # V21.5 : New Logic for centered pill with optional target
@@ -1102,6 +1146,45 @@ try:
                 )
                 st.plotly_chart(fig_evol, use_container_width=True)
 
+                st.markdown("<br>", unsafe_allow_html=True)
+            st.markdown("<h3 style='margin-bottom:15px'>⚔️ DUEL : LE COMPARATEUR</h3>", unsafe_allow_html=True)
+            
+            dc1, dc2 = st.columns(2)
+            with dc1: p1_sel = st.selectbox("Joueur A", sorted(df['Player'].unique()), index=0, key="p1_comp")
+            with dc2: p2_sel = st.selectbox("Joueur B", sorted(df['Player'].unique()), index=1, key="p2_comp")
+            
+            if p1_sel and p2_sel:
+                stat1 = full_stats[full_stats['Player'] == p1_sel].iloc[0]
+                stat2 = full_stats[full_stats['Player'] == p2_sel].iloc[0]
+                
+                # Fonction helper pour affichage ligne duel
+                def comp_row(label, v1, v2, format_str="{}", inverse=False):
+                    color1, color2 = "#FFF", "#FFF"
+                    if v1 != v2:
+                        # Logique : Vert pour le meilleur, Gris foncé pour le perdant
+                        better_v1 = (v1 > v2) if not inverse else (v1 < v2)
+                        if better_v1: color1 = C_GREEN; color2 = "#666"
+                        else: color1 = "#666"; color2 = C_GREEN
+                    
+                    st.markdown(f"""
+                    <div style="display:flex; justify-content:space-between; border-bottom:1px solid rgba(255,255,255,0.05); padding:8px 0;">
+                        <div style="width:30%; text-align:left; font-family:Rajdhani; font-weight:700; color:{color1}">{format_str.format(v1)}</div>
+                        <div style="width:40%; text-align:center; font-size:0.8rem; color:#AAA; letter-spacing:1px;">{label}</div>
+                        <div style="width:30%; text-align:right; font-family:Rajdhani; font-weight:700; color:{color2}">{format_str.format(v2)}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                st.markdown(f"<div class='glass-card'>", unsafe_allow_html=True)
+                comp_row("POINTS TOTAL", stat1['Total'], stat2['Total'], "{:.0f}")
+                comp_row("MOYENNE", stat1['Moyenne'], stat2['Moyenne'], "{:.1f}")
+                comp_row("FORME (15J)", stat1['Last15'], stat2['Last15'], "{:.1f}")
+                comp_row("RECORD SAISON", stat1['Best'], stat2['Best'], "{:.0f}")
+                comp_row("BEST PICKS", stat1['BP_Count'], stat2['BP_Count'], "{:.0f}")
+                comp_row("NUKES (>50)", stat1['Nukes'], stat2['Nukes'], "{:.0f}")
+                comp_row("CAROTTES (<20)", stat1['Carottes'], stat2['Carottes'], "{:.0f}", inverse=True)
+                comp_row("FIABILITÉ", stat1['ReliabilityPct'], stat2['ReliabilityPct'], "{:.0f}%")
+                st.markdown("</div>", unsafe_allow_html=True)
+
         elif menu == "Bonus x2":
             section_title("BONUS <span class='highlight'>ZONE</span>", "Analyse de Rentabilité")
             
@@ -1224,16 +1307,22 @@ try:
                 all_picks = pd.DataFrame({'Pick': sorted(df['Pick'].unique())})
                 carrot_chart = pd.merge(all_picks, carrot_counts, on='Pick', how='left').fillna(0)
                 
-                fig_car = px.bar(carrot_chart, x='Pick', y='Carottes', color='Carottes', color_continuous_scale=['#10B981', '#EF4444'])
+                # --- VERIFIE BIEN L'ALIGNEMENT DE CE BLOC CI-DESSOUS ---
+                # Définition de la couleur : Gris foncé (#374151) si 0 carotte, Rouge (C_RED) si > 0
+                carrot_chart['Color'] = carrot_chart['Carottes'].apply(lambda x: "#374151" if x == 0 else C_RED)
+                
+                # On utilise 'marker_color' pour appliquer nos couleurs personnalisées
+                fig_car = px.bar(carrot_chart, x='Pick', y='Carottes', marker_color=carrot_chart['Color'])
+                
                 fig_car.update_layout(
-                    plot_bgcolor='rgba(0,0,0,0)', 
-                    paper_bgcolor='rgba(0,0,0,0)', 
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    paper_bgcolor='rgba(0,0,0,0)',
                     font={'color': '#AAA'},
                     xaxis=dict(showgrid=False),
-                    yaxis=dict(showgrid=True, gridcolor='#222'),
-                    coloraxis_showscale=False,
+                    yaxis=dict(showgrid=True, gridcolor='#222', title="Nb Carottes"),
                     height=350
                 )
+                # -------------------------------------------------------
                 st.plotly_chart(fig_car, use_container_width=True)
 
             with c_list:
@@ -1467,6 +1556,36 @@ try:
             # --- IMPORTANT : ON UTILISE LES DONNEES GLOBALES (df_full_history) POUR LES RECORDS ---
             # Cela garantit que cette section reste statique quelle que soit la période sélectionnée
             full_stats_global = compute_stats(df_full_history, bp_map, daily_max_map)
+
+            # --- CALCULS SPECIFIQUES PHOENIX & DECK ---
+            phoenix_list = []
+            deck_list = []
+
+            for p in df_full_history['Player'].unique():
+                # On trie par Pick pour l'ordre chronologique
+                p_df = df_full_history[df_full_history['Player'] == p].sort_values('Pick')
+                scores = p_df['Score'].values
+                
+                # 1. PHOENIX (Max score le lendemain d'une carotte < 20)
+                max_phoenix_val = 0
+                for i in range(1, len(scores)):
+                    if scores[i-1] < 20: 
+                        if scores[i] > max_phoenix_val: max_phoenix_val = scores[i]
+                phoenix_list.append({'Player': p, 'PhoenixScore': max_phoenix_val})
+                
+                # 2. KING OF DECKS (Max somme sur 7 matchs consécutifs)
+                if len(scores) >= 7:
+                    # Rolling sum sur fenêtre de 7
+                    r_sum = pd.Series(scores).rolling(window=7).sum().max()
+                    deck_list.append({'Player': p, 'DeckScore': r_sum})
+                else:
+                    deck_list.append({'Player': p, 'DeckScore': 0})
+
+            df_phoenix = pd.DataFrame(phoenix_list)
+            df_deck = pd.DataFrame(deck_list)
+            
+            phoenix_winner = df_phoenix.sort_values('PhoenixScore', ascending=False).iloc[0]
+            deck_winner = df_deck.sort_values('DeckScore', ascending=False).iloc[0]
             
             # DATA HOF CALCULATIONS (Based on GLOBAL Stats)
             sniper = full_stats_global.sort_values('Moyenne', ascending=False).iloc[0]
@@ -1498,7 +1617,7 @@ try:
             brick_layer = full_stats_global.sort_values('Worst_Raw', ascending=True).iloc[0]
             lapin = full_stats_global.sort_values('Carottes', ascending=False).iloc[0]
 
-            # LIST OF 24 CARDS WITH UNIQUE COLORS
+            # LIST OF 26 CARDS WITH UNIQUE COLORS
             hof_list = [
                 {"title": "THE GOAT", "icon": "🏆", "color": C_GOLD, "player": sniper['Player'], "val": f"{sniper['Moyenne']:.1f}", "unit": "PTS MOYENNE (TOTAL)", "desc": "Meilleure moyenne générale de la saison (Bonus incl.)"},
                 {"title": "REAL MVP", "icon": "💎", "color": C_PURE, "player": pure_avg['Player'], "val": f"{pure_avg['Moyenne_Raw']:.1f}", "unit": "PTS MOYENNE (BRUT)", "desc": "Meilleure moyenne sans compter les bonus"},
@@ -1506,6 +1625,8 @@ try:
                 {"title": "ALPHA DOG", "icon": "🐺", "color": C_ALPHA, "player": alpha_dog['Player'], "val": int(alpha_dog['Alpha_Count']), "unit": "TOPS TEAM", "desc": "Le plus souvent meilleur scoreur de l'équipe"},
                 {"title": "THE CEILING", "icon": "🏔️", "color": "#FB7185", "player": peak['Player'], "val": int(peak['Best']), "unit": "PTS MAX", "desc": "Record absolu sur un match (Bonus inclus)"},
                 {"title": "PURE SCORER", "icon": "🏀", "color": "#7C3AED", "player": pure_peak['Player'], "val": int(pure_peak['Best_Raw']), "unit": "PTS MAX (BRUT)", "desc": "Record absolu sur un match (Sans bonus)"},
+                {"title": "KING OF DECKS", "icon": "🃏", "color": "#8B5CF6", "player": deck_winner['Player'], "val": int(deck_winner['DeckScore']), "unit": "PTS (7 MATCHS)", "desc": "Meilleur cumul sur 7 matchs consécutifs"},
+                {"title": "THE PHOENIX", "icon": "🐣", "color": "#F97316", "player": phoenix_winner['Player'], "val": int(phoenix_winner['PhoenixScore']), "unit": "PTS REBOND", "desc": "Meilleur score réalisé le lendemain d'une carotte"},
                 {"title": "THE ALCHEMIST", "icon": "⚗️", "color": C_BONUS, "player": alchemist['Player'], "val": int(alchemist['Bonus_Gained']), "unit": "PTS BONUS", "desc": "Le plus de points gagnés grâce aux bonus"},
                 {"title": "NUCLEAR", "icon": "☢️", "color": C_ACCENT, "player": nuke['Player'], "val": int(nuke['Nukes']), "unit": "BOMBS", "desc": "Le plus de scores > 50 pts"},
                 {"title": "HEAVY HITTER", "icon": "🥊", "color": "#DC2626", "player": heavy['Player'], "val": int(heavy['Count40']), "unit": "PICKS > 40", "desc": "Le plus de scores > 40 pts"},

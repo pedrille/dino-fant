@@ -927,7 +927,7 @@ try:
 
                 st.plotly_chart(fig_race, use_container_width=True)
 
-            st.markdown("### 🔥 HEATMAP DE LA PÉRIODE")
+            st.markdown("### 🔥 HEATMAP")
             st.markdown(f"<div class='chart-desc'>Rouge < 35 | Gris 35-45 (Neutre) | Vert > 45.</div>", unsafe_allow_html=True)
             
             # --- FILTRE HEATMAP ---

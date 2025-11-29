@@ -1703,6 +1703,11 @@ try:
 </div>
 """
                     st.markdown(html_content, unsafe_allow_html=True)
+            # ... fin de la boucle des trophées ...
+            
+            # ESPACE AJOUTÉ ICI
+            st.markdown("<div style='height: 50px;'></div>", unsafe_allow_html=True)
+            
             st.markdown("<h3 style='margin-bottom:10px; font-family:Rajdhani; color:#AAA;'>🏛️ RECORDS GLOBAUX SAISON</h3>", unsafe_allow_html=True)
             
             # --- IMPORTANT : ON UTILISE LES DONNEES GLOBALES (df_full_history) POUR LES RECORDS ---

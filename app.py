@@ -178,7 +178,20 @@ st.markdown(f"""
     .hof-stat {{ font-family: 'Rajdhani'; font-size: 2.2rem; font-weight: 800; text-align: right; line-height: 1; }}
     .hof-unit {{ font-size: 0.7rem; color: #666; text-align: right; font-weight: 600; text-transform: uppercase; }}
     .kpi-label {{ color: #888; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px; }}
-    .kpi-num {{ font-family: 'Rajdhani'; font-weight: 800; font-size: 2.8rem; line-height: 1; color: #FFF; }}
+    /* CORRECTION TAILLE DE POLICE ADAPTATIVE */
+    .kpi-num {{ 
+        font-family: 'Rajdhani'; 
+        font-weight: 800; 
+        /* Avant : 2.8rem (trop gros) */
+        /* Maintenant : s'adapte entre 1.6rem et 2.2rem selon l'écran */
+        font-size: clamp(1.6rem, 2vw, 2.2rem); 
+        line-height: 1.1; 
+        color: #FFF; 
+        /* Empêche les césures moches au milieu des mots */
+        white-space: nowrap; 
+        overflow: hidden;
+        text-overflow: ellipsis; 
+    }}
 
     /* --- TOOLTIP INFO SAISON --- */
     .season-info-icon {{

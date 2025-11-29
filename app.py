@@ -1022,9 +1022,6 @@ try:
                 
                 st.plotly_chart(fig_race, use_container_width=True)
             
-            # ... fin du bloc precedent ...
-            
-            # ESPACE AJOUTÉ ICI
             st.markdown("### 🔥 HEATMAP")
             st.markdown(f"<div class='chart-desc'>Rouge < 35 | Gris 35-45 (Neutre) | Vert > 45.</div>", unsafe_allow_html=True)
             

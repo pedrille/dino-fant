@@ -75,6 +75,33 @@ SEASONS_CONFIG = {
     "💍 PART 4: THE FINAL PUSH (Post All-Star)": (114, 165)
 }
 
+# --- CONFIG SAISONS (SPRINTS V22.0) ---
+# ... (ton SEASONS_CONFIG existant) ...
+
+# --- AJOUTER JUSTE EN DESSOUS ---
+SEASONS_DETAILS = [
+    {
+        "dates": "21 Oct - 26 Nov 2025",
+        "desc": "De l'Opening Night à la veille de Thanksgiving.",
+        "icon": "🍂"
+    },
+    {
+        "dates": "28 Nov - 31 Dec 2025",
+        "desc": "Du lendemain de Thanksgiving au Réveillon (inclut Christmas Day).",
+        "icon": "❄️"
+    },
+    {
+        "dates": "01 Jan - 12 Fev 2026",
+        "desc": "Début 2026 jusqu'à la coupure du All-Star Break.",
+        "icon": "🎆"
+    },
+    {
+        "dates": "19 Fev - 12 Avr 2026",
+        "desc": "Reprise post All-Star jusqu'à la fin de la saison régulière.",
+        "icon": "💍"
+    }
+]
+
 # Palette de couleurs (Globales UI)
 C_BG = "#050505"
 C_ACCENT = "#CE1141" # Raptors Red
@@ -152,6 +179,50 @@ st.markdown(f"""
     .hof-unit {{ font-size: 0.7rem; color: #666; text-align: right; font-weight: 600; text-transform: uppercase; }}
     .kpi-label {{ color: #888; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px; }}
     .kpi-num {{ font-family: 'Rajdhani'; font-weight: 800; font-size: 2.8rem; line-height: 1; color: #FFF; }}
+
+    /* --- TOOLTIP INFO SAISON --- */
+    .season-info-icon {{
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        font-size: 1rem;
+        color: rgba(255, 255, 255, 0.3);
+        cursor: help;
+        z-index: 10;
+        transition: color 0.3s;
+    }}
+    .season-info-icon:hover {{
+        color: #FFF;
+    }}
+    
+    .season-tooltip {{
+        visibility: hidden;
+        width: 220px;
+        background-color: rgba(10, 10, 10, 0.95);
+        color: #EEE;
+        text-align: left;
+        border-radius: 8px;
+        padding: 12px;
+        position: absolute;
+        z-index: 100;
+        top: 35px; /* Apparaît sous l'icône */
+        right: 0;
+        border: 1px solid #444;
+        font-family: 'Inter', sans-serif;
+        font-size: 0.75rem;
+        line-height: 1.4;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.8);
+        opacity: 0;
+        transition: opacity 0.3s;
+        pointer-events: none; /* Evite de cliquer dessus par erreur */
+    }}
+
+    .season-info-icon:hover .season-tooltip {{
+        visibility: visible;
+        opacity: 1;
+    }}
+    
+    .st-label {{ color: #CCC; font-weight:700; display:block; margin-bottom:2px; }}
     
     /* TEAM HQ & GRILLES */
     .stat-box-mini {{ 
@@ -1547,8 +1618,13 @@ try:
             
             for i, s_name in enumerate(season_keys):
                 s_start, s_end = SEASONS_CONFIG[s_name]
-                short_name = s_name.split(':')[0].replace("PART ", "P") # Ex: P1, P2...
-                full_title = s_name.split(':')[1].split('(')[0].strip() # Ex: THE OPENING RUN
+                short_name = s_name.split(':')[0].replace("PART ", "P") 
+                full_title = s_name.split(':')[1].split('(')[0].strip()
+                
+                # --- RECUPERATION DES DETAILS ---
+                details = SEASONS_DETAILS[i]
+                dates_txt = details["dates"]
+                desc_txt = details["desc"]
                 
                 # État de la période
                 is_finished = real_latest_pick > s_end
@@ -1584,10 +1660,20 @@ try:
                         icon = "🔥"
                         short_name += " (EN COURS)"
 
-                # Rendu de la carte trophée
+                # Rendu de la carte trophée AVEC INFO-BULLE AJOUTÉE
                 with trophy_cols[i]:
                     st.markdown(f"""
                     <div style="background:{card_bg}; border:1px solid {border_col}; border-radius:10px; padding:15px; text-align:center; height:100%; position:relative;">
+                        
+                        <div class="season-info-icon">
+                            ℹ️
+                            <div class="season-tooltip">
+                                <span class="st-label">📅 {dates_txt}</span>
+                                <span style="color:{C_ACCENT}; font-weight:600">Picks #{s_start} à #{s_end}</span><br>
+                                <span style="font-style:italic; color:#888; font-size:0.7rem; margin-top:4px; display:block">{desc_txt}</span>
+                            </div>
+                        </div>
+                        
                         <div style="font-size:0.7rem; color:#888; text-transform:uppercase; letter-spacing:1px; margin-bottom:5px;">{short_name}</div>
                         <div style="font-family:Rajdhani; font-weight:700; color:{title_col}; font-size:0.9rem; text-transform:uppercase; height:35px; line-height:1.1; margin-bottom:10px;">{full_title}</div>
                         <div style="font-size:1.5rem; margin-bottom:5px;">{icon}</div>

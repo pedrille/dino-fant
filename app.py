@@ -1660,29 +1660,26 @@ try:
                         icon = "🔥"
                         short_name += " (EN COURS)"
 
-                # Rendu de la carte trophée AVEC INFO-BULLE AJOUTÉE
+                # Rendu de la carte trophée (HTML COLLE A GAUCHE pour éviter le bug d'affichage)
                 with trophy_cols[i]:
-                    st.markdown(f"""
-                    <div style="background:{card_bg}; border:1px solid {border_col}; border-radius:10px; padding:15px; text-align:center; height:100%; position:relative;">
-                        
-                        <div class="season-info-icon">
-                            ℹ️
-                            <div class="season-tooltip">
-                                <span class="st-label">📅 {dates_txt}</span>
-                                <span style="color:{C_ACCENT}; font-weight:600">Picks #{s_start} à #{s_end}</span><br>
-                                <span style="font-style:italic; color:#888; font-size:0.7rem; margin-top:4px; display:block">{desc_txt}</span>
-                            </div>
-                        </div>
-                        
-                        <div style="font-size:0.7rem; color:#888; text-transform:uppercase; letter-spacing:1px; margin-bottom:5px;">{short_name}</div>
-                        <div style="font-family:Rajdhani; font-weight:700; color:{title_col}; font-size:0.9rem; text-transform:uppercase; height:35px; line-height:1.1; margin-bottom:10px;">{full_title}</div>
-                        <div style="font-size:1.5rem; margin-bottom:5px;">{icon}</div>
-                        <div style="font-family:Rajdhani; font-weight:800; color:#FFF; font-size:1.1rem;">{player_name}</div>
-                        <div style="font-size:0.8rem; color:{title_col}; font-weight:600;">{score_val}</div>
-                    </div>
-                    """, unsafe_allow_html=True)
-
-            st.markdown("<br>", unsafe_allow_html=True)
+                    html_content = f"""
+<div style="background:{card_bg}; border:1px solid {border_col}; border-radius:10px; padding:15px; text-align:center; height:100%; position:relative;">
+    <div class="season-info-icon">
+        ℹ️
+        <div class="season-tooltip">
+            <span class="st-label">📅 {dates_txt}</span>
+            <span style="color:{C_ACCENT}; font-weight:600">Picks #{s_start} à #{s_end}</span><br>
+            <span style="font-style:italic; color:#888; font-size:0.7rem; margin-top:4px; display:block">{desc_txt}</span>
+        </div>
+    </div>
+    <div style="font-size:0.7rem; color:#888; text-transform:uppercase; letter-spacing:1px; margin-bottom:5px;">{short_name}</div>
+    <div style="font-family:Rajdhani; font-weight:700; color:{title_col}; font-size:0.9rem; text-transform:uppercase; height:35px; line-height:1.1; margin-bottom:10px;">{full_title}</div>
+    <div style="font-size:1.5rem; margin-bottom:5px;">{icon}</div>
+    <div style="font-family:Rajdhani; font-weight:800; color:#FFF; font-size:1.1rem;">{player_name}</div>
+    <div style="font-size:0.8rem; color:{title_col}; font-weight:600;">{score_val}</div>
+</div>
+"""
+                    st.markdown(html_content, unsafe_allow_html=True)
             st.markdown("<h3 style='margin-bottom:10px; font-family:Rajdhani; color:#AAA;'>🏛️ RECORDS GLOBAUX SAISON</h3>", unsafe_allow_html=True)
             
             # --- IMPORTANT : ON UTILISE LES DONNEES GLOBALES (df_full_history) POUR LES RECORDS ---

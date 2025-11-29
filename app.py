@@ -65,6 +65,16 @@ PACERS_PUNCHLINES = [
     "Si on retourne le classement, les Pacers sont enfin à leur vraie place 🙃"
 ]
 
+# --- CONFIG SAISONS (SPRINTS V22.0) ---
+# Bornes exactes basées sur le calendrier 2025-2026
+SEASONS_CONFIG = {
+    "🏆 SAISON COMPLÈTE": (1, 165),
+    "🍂 PART 1: THE OPENING RUN (Oct - Thanksgiving)": (1, 37),
+    "❄️ PART 2: WINTER WAR (Nov - NYE)": (38, 70),
+    "🎆 PART 3: NEW YEAR BATTLE (Jan - All-Star)": (71, 113),
+    "💍 PART 4: THE FINAL PUSH (Post All-Star)": (114, 165)
+}
+
 # Palette de couleurs (Globales UI)
 C_BG = "#050505"
 C_ACCENT = "#CE1141" # Raptors Red
@@ -374,6 +384,7 @@ def load_data():
 @st.cache_data(ttl=300, show_spinner=False) 
 def compute_stats(df, bp_map, daily_max_map):
     stats = []
+    if df.empty: return pd.DataFrame()
     latest_pick = df['Pick'].max()
     season_avgs = df.groupby('Player')['Score'].mean()
     season_avgs_raw = df.groupby('Player')['ScoreVal'].mean()
@@ -570,6 +581,63 @@ try:
         # LOAD DATA
         df, team_rank, bp_map, team_history, daily_max_map = load_data()
     
+    # --- SÉLECTEUR TEMPOREL (SIDEBAR) ---
+    with st.sidebar:
+        st.markdown("<div style='text-align:center; margin-bottom: 20px;'>", unsafe_allow_html=True)
+        st.image("raptors-ttfl-min.png", use_container_width=True) 
+        st.markdown("</div>", unsafe_allow_html=True)
+        
+        # SÉLECTEUR DE PÉRIODE
+        st.markdown("<div style='font-family:Rajdhani; font-weight:700; color:#AAA; margin-bottom:5px; font-size:0.9rem; letter-spacing:1px'>📅 PÉRIODE ACTIVE</div>", unsafe_allow_html=True)
+        
+        # On définit les options
+        options_saisons = list(SEASONS_CONFIG.keys())
+        selected_season_name = st.selectbox("Période", options_saisons, index=0, label_visibility="collapsed", key="season_selector")
+        
+        start_pick, end_pick = SEASONS_CONFIG[selected_season_name]
+        
+        # --- CRUCIAL : ON GARDE UNE COPIE DE TOUTE LA SAISON ---
+        df_full_history = df.copy() if df is not None else pd.DataFrame()
+
+        # FILTRAGE POUR L'AFFICHAGE (Dashboard, Lab, etc.)
+        if df is not None and not df.empty:
+            df = df[(df['Pick'] >= start_pick) & (df['Pick'] <= end_pick)].copy()
+            
+            if df.empty and selected_season_name != "🏆 SAISON COMPLÈTE":
+                st.warning(f"⏳ La période '{selected_season_name}' n'a pas encore commencé.")
+                st.stop()
+            else:
+                latest_pick = df['Pick'].max() if not df.empty else 0
+
+        # MENU NAVIGATION
+        menu = option_menu(menu_title=None, options=["Dashboard", "Team HQ", "Player Lab", "Bonus x2", "No-Carrot", "Trends", "Hall of Fame", "Admin"], icons=["grid-fill", "people-fill", "person-bounding-box", "lightning-charge-fill", "shield-check", "fire", "trophy-fill", "shield-lock"], default_index=0, styles={"container": {"padding": "0!important", "background-color": "#000000"}, "icon": {"color": "#666", "font-size": "1.1rem"}, "nav-link": {"font-family": "Rajdhani, sans-serif", "font-weight": "700", "font-size": "15px", "text-transform": "uppercase", "color": "#AAA", "text-align": "left", "margin": "5px 0px", "--hover-color": "#111"}, "nav-link-selected": {"background-color": C_ACCENT, "color": "#FFF", "icon-color": "#FFF", "box-shadow": "0px 4px 20px rgba(206, 17, 65, 0.4)"}})
+        st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Pick Actuel #{int(latest_pick)}<br>War Room v22.0</div></div>""", unsafe_allow_html=True)
+
+    # --- BANDEAU UI (AMÉLIORÉ) ---
+    if selected_season_name != "🏆 SAISON COMPLÈTE":
+        season_color = C_ACCENT 
+        if "WINTER" in selected_season_name: season_color = C_BLUE 
+        elif "NEW YEAR" in selected_season_name: season_color = C_GOLD 
+        elif "FINAL" in selected_season_name: season_color = C_GREEN 
+        
+        st.markdown(f"""
+        <div style="background: linear-gradient(90deg, {season_color} 0%, rgba(0,0,0,0) 100%); padding: 15px 25px; border-radius: 12px; margin-bottom: 25px; border-left: 6px solid #FFF; box-shadow: 0 4px 20px rgba(0,0,0,0.5);">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                    <div style="color: #FFF; font-family: 'Rajdhani'; font-weight: 800; font-size: 1.5rem; text-transform: uppercase; letter-spacing: 2px;">
+                        {selected_season_name.split('(')[0]}
+                    </div>
+                    <div style="color: rgba(255,255,255,0.8); font-size: 0.8rem; font-weight: 600; text-transform:uppercase; letter-spacing:1px; margin-top:2px;">
+                        🎯 PICKS #{start_pick} à #{end_pick}
+                    </div>
+                </div>
+                <div style="background:rgba(0,0,0,0.4); padding:5px 15px; border-radius:20px; color:#FFF; font-weight:700; font-size:0.8rem; border:1px solid rgba(255,255,255,0.2)">
+                    MODE TOURNOI ACTIF
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    
     # GLOBAL METRIC
     if df is not None and not df.empty:
         team_avg_per_pick = df['Score'].mean()
@@ -593,14 +661,6 @@ try:
             daily_min = df[df['Pick'] == p_id]['Score'].min()
             if daily_min >= 20: team_streak_nc += 1
             else: break
-
-        with st.sidebar:
-            st.markdown("<div style='text-align:center; margin-bottom: 30px;'>", unsafe_allow_html=True)
-            st.image("raptors-ttfl-min.png", use_container_width=True) 
-            st.markdown("</div>", unsafe_allow_html=True)
-            # MENU CLEAN (NO CARROT EMOJI)
-            menu = option_menu(menu_title=None, options=["Dashboard", "Team HQ", "Player Lab", "Bonus x2", "No-Carrot", "Trends", "Hall of Fame", "Admin"], icons=["grid-fill", "people-fill", "person-bounding-box", "lightning-charge-fill", "shield-check", "fire", "trophy-fill", "shield-lock"], default_index=0, styles={"container": {"padding": "0!important", "background-color": "#000000"}, "icon": {"color": "#666", "font-size": "1.1rem"}, "nav-link": {"font-family": "Rajdhani, sans-serif", "font-weight": "700", "font-size": "15px", "text-transform": "uppercase", "color": "#AAA", "text-align": "left", "margin": "5px 0px", "--hover-color": "#111"}, "nav-link-selected": {"background-color": C_ACCENT, "color": "#FFF", "icon-color": "#FFF", "box-shadow": "0px 4px 20px rgba(206, 17, 65, 0.4)"}})
-            st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Data Pick #{int(latest_pick)}<br>War Room v21.7</div></div>""", unsafe_allow_html=True)
             
         if menu == "Dashboard":
             section_title("RAPTORS <span class='highlight'>DASHBOARD</span>", f"Daily Briefing • Pick #{int(latest_pick)}")
@@ -630,12 +690,12 @@ try:
             team_daily_avg = day_df['Score'].mean()
             diff_perf = ((team_daily_avg - team_avg_per_pick) / team_avg_per_pick) * 100
             perf_col = C_GREEN if diff_perf > 0 else "#F87171"
-            with c3: kpi_card("PERF. TEAM SOIR", f"{diff_perf:+.1f}%", "VS MOY. SAISON", perf_col, is_fixed=True)
+            with c3: kpi_card("PERF. TEAM SOIR", f"{diff_perf:+.1f}%", "VS MOY. PÉRIODE", perf_col, is_fixed=True)
             
             col_streak = C_GREEN if team_streak_nc > 0 else C_RED
             with c4: kpi_card("SÉRIE TEAM NO-CARROT", f"{team_streak_nc}", "JOURS CONSÉCUTIFS", col_streak, is_fixed=True)
             
-            with c5: kpi_card("LEADER SAISON", leader['Player'], f"TOTAL: {int(leader['Total'])}", C_ACCENT, is_fixed=True)
+            with c5: kpi_card("LEADER PÉRIODE", leader['Player'], f"TOTAL: {int(leader['Total'])}", C_ACCENT, is_fixed=True)
             
             day_merged = pd.merge(day_df, full_stats[['Player', 'Moyenne']], on='Player')
             day_merged['Delta'] = day_merged['Score'] - day_merged['Moyenne']
@@ -679,7 +739,7 @@ try:
             current_ranks = full_stats.set_index('Player')['Total'].rank(ascending=False)
             
             with c_gen:
-                st.markdown(f"<div class='glass-card' style='height:100%'><div style='color:{C_ACCENT}; font-family:Rajdhani; font-weight:700; margin-bottom:5px'>🏆 TOP 5 GÉNÉRAL</div><div class='chart-desc'>Classement saison et évolution vs veille.</div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='glass-card' style='height:100%'><div style='color:{C_ACCENT}; font-family:Rajdhani; font-weight:700; margin-bottom:5px'>🏆 TOP 5 PÉRIODE</div><div class='chart-desc'>Classement de la période sélectionnée.</div>", unsafe_allow_html=True)
                 top_5_season = full_stats.sort_values('Total', ascending=False).head(5).reset_index()
                 for i, r in top_5_season.iterrows():
                     medal = medals.get(i, f"{i+1}")
@@ -735,13 +795,13 @@ try:
             team_season_avg_total = team_daily_totals['Score'].mean()
             
             k1, k2, k3, k4 = st.columns(4)
-            with k1: kpi_card("TOTAL SAISON", int(total_pts_season), "POINTS CUMULÉS", C_GOLD)
+            with k1: kpi_card("TOTAL PÉRIODE", int(total_pts_season), "POINTS CUMULÉS", C_GOLD)
             with k2: kpi_card("MOYENNE / PICK", f"{team_avg_per_pick:.1f}", "PAR JOUEUR", "#FFF")
             with k3: kpi_card("MOYENNE ÉQUIPE / SOIR", f"{int(avg_night)}", "TOTAL COLLECTIF", C_BLUE)
             
             diff_dyn_team = ((avg_team_15 - avg_night) / avg_night) * 100
             col_dyn_team = C_GREEN if diff_dyn_team > 0 else C_RED
-            with k4: kpi_card("DYNAMIQUE 15J", f"{diff_dyn_team:+.1f}%", "VS MOY. SAISON", col_dyn_team)
+            with k4: kpi_card("DYNAMIQUE 15J", f"{diff_dyn_team:+.1f}%", "VS MOY. PÉRIODE", col_dyn_team)
 
             st.markdown("<br>", unsafe_allow_html=True)
 
@@ -773,14 +833,14 @@ try:
 
             st.markdown("<div style='margin-bottom:30px'></div>", unsafe_allow_html=True)
             if len(team_history) > 1:
-                st.markdown("### 📈 ÉVOLUTION DU CLASSEMENT")
+                st.markdown("### 📈 ÉVOLUTION DU CLASSEMENT GLOBAL")
                 hist_df = pd.DataFrame({'Deck': range(1, len(team_history)+1), 'Rank': team_history})
                 fig_h = px.line(hist_df, x='Deck', y='Rank', markers=True)
                 fig_h.update_traces(line_color=C_ACCENT, line_width=3, marker_size=8)
                 fig_h.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, yaxis=dict(autorange="reversed", gridcolor='#222'), xaxis=dict(showgrid=False))
                 st.plotly_chart(fig_h, use_container_width=True)
 
-            st.markdown("### 🔥 HEATMAP DE LA SAISON")
+            st.markdown("### 🔥 HEATMAP DE LA PÉRIODE")
             st.markdown(f"<div class='chart-desc'>Rouge < 35 | Gris 35-45 (Neutre) | Vert > 45.</div>", unsafe_allow_html=True)
             
             # --- FILTRE HEATMAP ---
@@ -849,14 +909,14 @@ try:
 
             # --- KPI ROW 1 (ON GARDE) ---
             c1, c2, c3, c4, c5 = st.columns(5)
-            with c1: kpi_card("TOTAL POINTS", int(p_data['Total']), "SAISON")
+            with c1: kpi_card("TOTAL POINTS", int(p_data['Total']), "PÉRIODE")
             with c2: kpi_card("MOYENNE", f"{p_data['Moyenne']:.1f}", "PTS / PICK")
             with c3: kpi_card("SÉRIE NO-CAROTTE", f"{int(z_val)}", "MATCHS (>20 PTS)", z_col)
             with c4: kpi_card("CLASSEMENT", f"#{internal_rank}", f"SUR {nb_players}", rank_col)
-            with c5: kpi_card("BEST SCORE", int(p_data['Best']), "RECORD", C_GOLD)
+            with c5: kpi_card("BEST SCORE", int(p_data['Best']), "RECORD PÉRIODE", C_GOLD)
 
             # --- NEW ROW: SEASON HISTORY VISUALIZER ---
-            st.markdown("<div style='margin-top:20px; margin-bottom:5px; color:#888; font-size:0.8rem; text-transform:uppercase; letter-spacing:1px; text-align:center'>HISTORIQUE SAISON</div>", unsafe_allow_html=True)
+            st.markdown("<div style='margin-top:20px; margin-bottom:5px; color:#888; font-size:0.8rem; text-transform:uppercase; letter-spacing:1px; text-align:center'>HISTORIQUE MATCHS</div>", unsafe_allow_html=True)
             all_season_picks = p_hist_all.sort_values('Pick', ascending=True)
             
             if not all_season_picks.empty:
@@ -920,7 +980,7 @@ try:
 
             with col_top5:
                 st.markdown("#### 🌟 TOP 5 PICKS")
-                st.markdown("<div class='chart-desc'>Meilleurs scores de la saison.</div>", unsafe_allow_html=True)
+                st.markdown("<div class='chart-desc'>Meilleurs scores de la période.</div>", unsafe_allow_html=True)
                 top_5 = p_hist_all.sort_values('Score', ascending=False).head(5)
                 for i, r in top_5.reset_index().iterrows():
                     rank_num = i + 1
@@ -973,7 +1033,7 @@ try:
                 <div class='legend-box'>
                     <div class='legend-item'>
                         <div class='legend-title'>SCORING</div>
-                        <div class='legend-desc'>Volume de points moyen sur la saison.</div>
+                        <div class='legend-desc'>Volume de points moyen sur la période.</div>
                     </div>
                     <div class='legend-item'>
                         <div class='legend-title'>CEILING (PLAFOND)</div>
@@ -1000,7 +1060,7 @@ try:
             with c_dist:
                 if not p_hist_all.empty:
                     st.markdown("#### 📊 DISTRIBUTION DES SCORES", unsafe_allow_html=True)
-                    st.markdown("<div class='chart-desc'>Répartition de tous les scores de la saison par tranches de points.</div>", unsafe_allow_html=True)
+                    st.markdown("<div class='chart-desc'>Répartition des scores de la période par tranches.</div>", unsafe_allow_html=True)
                     fig_hist = px.histogram(p_hist_all, x="Score", nbins=15, color_discrete_sequence=[C_ACCENT], text_auto=True)
                     fig_hist.update_traces(marker_line_color='white', marker_line_width=1, opacity=0.8)
                     fig_hist.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, margin=dict(l=0, r=0, t=10, b=0), height=250, xaxis_title=None, yaxis_title=None, bargap=0.1)
@@ -1014,15 +1074,15 @@ try:
                     if not last_15_data.empty:
                         fig_trend = px.line(last_15_data, x="Pick", y="Score", markers=True)
                         fig_trend.update_traces(line_color=C_GOLD, marker_color=C_ACCENT, marker_size=8)
-                        fig_trend.add_hline(y=p_data['Moyenne'], line_dash="dot", line_color=C_TEXT, annotation_text="Moy. Saison", annotation_position="bottom right")
+                        fig_trend.add_hline(y=p_data['Moyenne'], line_dash="dot", line_color=C_TEXT, annotation_text="Moy. Période", annotation_position="bottom right")
                         fig_trend.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, margin=dict(l=0, r=0, t=10, b=0), height=250, xaxis_title=None, yaxis_title=None)
                         st.plotly_chart(fig_trend, use_container_width=True)
                     else:
                         st.info("Pas assez de données récentes.")
             
             if not p_hist_all.empty:
-                st.markdown("#### 🏔️ PARCOURS SAISON COMPLÈTE", unsafe_allow_html=True)
-                st.markdown("<div class='chart-desc'>Vue globale de la saison comparée à la moyenne de l'équipe.</div>", unsafe_allow_html=True)
+                st.markdown("#### 🏔️ PARCOURS PÉRIODE", unsafe_allow_html=True)
+                st.markdown("<div class='chart-desc'>Vue globale de la période comparée à la moyenne de l'équipe.</div>", unsafe_allow_html=True)
                 team_season_avg = df['Score'].mean()
                 fig_evol = px.line(p_hist_all, x="Pick", y="Score", markers=True)
                 fig_evol.update_traces(line_color=C_BLUE, line_width=2, marker_size=4)
@@ -1148,7 +1208,7 @@ try:
             
             k1, k2, k3 = st.columns(3)
             with k1: kpi_card("SÉRIE TEAM EN COURS", f"{team_streak_nc}", "JOURS SANS CAROTTE", C_GREEN if team_streak_nc > 0 else C_RED)
-            with k2: kpi_card("RECORD SAISON TEAM", f"{max_streak_team}", "JOURS CONSÉCUTIFS", C_GOLD)
+            with k2: kpi_card("RECORD PÉRIODE TEAM", f"{max_streak_team}", "JOURS CONSÉCUTIFS", C_GOLD)
             with k3: kpi_card("IRON MAN (ACTUEL)", iron_man_curr['Player'], f"{int(iron_man_curr['CurrentNoCarrot'])} MATCHS SUITE", C_BLUE)
 
             st.markdown("<br>", unsafe_allow_html=True)
@@ -1233,22 +1293,22 @@ try:
             
             col_trend = C_GREEN if team_trend_diff > 0 else C_RED
             sign_trend = "+" if team_trend_diff > 0 else ""
-            with k3: kpi_card("DYNAMIQUE", f"{sign_trend}{team_trend_diff:.1f}%", "VS SAISON", col_trend)
+            with k3: kpi_card("DYNAMIQUE", f"{sign_trend}{team_trend_diff:.1f}%", "VS PÉRIODE", col_trend)
             
             with k4: kpi_card("PLAFOND TEAM (15J)", int(max_team_15), "MEILLEUR SOIR", C_GOLD)
-            with k5: kpi_card("MVP PÉRIODE", best_form_player, f"{best_form_val:.1f} PTS", C_ACCENT)
+            with k5: kpi_card("MVP (15J)", best_form_player, f"{best_form_val:.1f} PTS", C_ACCENT)
 
             st.markdown("<br>", unsafe_allow_html=True)
 
             # --- TEAM GRAPH (15 DAYS) ---
             st.markdown("#### 📉 ÉVOLUTION DU SCORE D'ÉQUIPE (15 DERNIERS JOURS)")
-            st.markdown("<div class='chart-desc'>Comparatif du total journalier vs la moyenne de la saison.</div>", unsafe_allow_html=True)
+            st.markdown("<div class='chart-desc'>Comparatif du total journalier vs la moyenne de la période.</div>", unsafe_allow_html=True)
             
             # Plot
             fig_team_15 = px.line(team_daily_15, markers=True)
             fig_team_15.update_traces(line_color=C_ACCENT, line_width=3, marker_size=8)
             # Add Season Avg Line
-            fig_team_15.add_hline(y=season_avg_team, line_dash="dot", line_color=C_TEXT, annotation_text=f"Moyenne Saison ({int(season_avg_team)})", annotation_position="bottom right")
+            fig_team_15.add_hline(y=season_avg_team, line_dash="dot", line_color=C_TEXT, annotation_text=f"Moyenne ({int(season_avg_team)})", annotation_position="bottom right")
             
             fig_team_15.update_layout(
                 plot_bgcolor='rgba(0,0,0,0)', 
@@ -1278,7 +1338,7 @@ try:
             c_hot, c_cold = st.columns(2, gap="large")
             
             with c_hot:
-                st.markdown(f"<div class='trend-box'><div class='hot-header'>🔥 EN FEU (SUR-PERFORMANCE)</div><div style='font-size:0.8rem; color:#888; margin-bottom:10px'>Joueurs au-dessus de leur moyenne saison sur les 15 derniers matchs.</div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='trend-box'><div class='hot-header'>🔥 EN FEU (SUR-PERFORMANCE)</div><div style='font-size:0.8rem; color:#888; margin-bottom:10px'>Joueurs au-dessus de leur moyenne période sur les 15 derniers matchs.</div>", unsafe_allow_html=True)
                 if hot_players.empty:
                     st.info("Personne n'est en sur-régime actuellement.")
                 else:
@@ -1295,7 +1355,7 @@ try:
                 st.markdown("</div>", unsafe_allow_html=True)
 
             with c_cold:
-                st.markdown(f"<div class='trend-box'><div class='cold-header'>❄️ DANS LE DUR (SOUS-PERFORMANCE)</div><div style='font-size:0.8rem; color:#888; margin-bottom:10px'>Joueurs en-dessous de leur moyenne saison sur les 15 derniers matchs.</div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='trend-box'><div class='cold-header'>❄️ DANS LE DUR (SOUS-PERFORMANCE)</div><div style='font-size:0.8rem; color:#888; margin-bottom:10px'>Joueurs en-dessous de leur moyenne période sur les 15 derniers matchs.</div>", unsafe_allow_html=True)
                 if cold_players.empty:
                     st.info("Tout le monde tient son rang !")
                 else:
@@ -1339,35 +1399,104 @@ try:
         elif menu == "Hall of Fame":
             section_title("HALL OF <span class='highlight'>FAME</span>", "Records & Trophées de la saison")
             
-            # DATA HOF CALCULATIONS
-            sniper = full_stats.sort_values('Moyenne', ascending=False).iloc[0]
-            pure_avg = full_stats.sort_values('Moyenne_Raw', ascending=False).iloc[0]
-            sniper_bp = full_stats.sort_values('BP_Count', ascending=False).iloc[0]
-            alpha_dog = full_stats.sort_values('Alpha_Count', ascending=False).iloc[0]
-            peak = full_stats.sort_values('Best', ascending=False).iloc[0]
-            pure_peak = full_stats.sort_values('Best_Raw', ascending=False).iloc[0]
-            nuke = full_stats.sort_values('Nukes', ascending=False).iloc[0]
-            heavy = full_stats.sort_values('Count40', ascending=False).iloc[0]
-            alchemist = full_stats.sort_values('Bonus_Gained', ascending=False).iloc[0]
-            rock = full_stats.sort_values('Count30', ascending=False).iloc[0]
-            torche = full_stats.sort_values('Last15', ascending=False).iloc[0]
-            progression = full_stats.sort_values('ProgressionPct', ascending=False).iloc[0]
-            zen_master = full_stats.sort_values('ReliabilityPct', ascending=False).iloc[0]
-            intouch = full_stats.sort_values('Streak30', ascending=False).iloc[0]
+            # --- 🏆 SALLE DES TROPHÉES (NOUVEAU) ---
+            st.markdown("<h3 style='margin-bottom:15px; font-family:Rajdhani; color:#AAA;'>🏆 RAPTORS SEASON TROPHIES</h3>", unsafe_allow_html=True)
             
-            metronome = full_stats.sort_values('StdDev', ascending=True).iloc[0]
-            iron_wall = full_stats.sort_values('Worst', ascending=False).iloc[0]
+            trophy_cols = st.columns(4)
             
-            maniac = full_stats.sort_values('ModeCount', ascending=False).iloc[0]
-            iron_man = full_stats.sort_values('MaxNoCarrot', ascending=False).iloc[0]
-            albatross = full_stats.sort_values('Spread', ascending=False).iloc[0]
-            alien = full_stats.sort_values('MaxAlien', ascending=False).iloc[0]
+            # On itère sur les 4 parties de saison (on ignore la "Saison Complète")
+            season_keys = [k for k in SEASONS_CONFIG.keys() if "SAISON COMPLÈTE" not in k]
+            
+            # Le dernier pick réellement joué (globalement)
+            real_latest_pick = df_full_history['Pick'].max() if not df_full_history.empty else 0
+            
+            for i, s_name in enumerate(season_keys):
+                s_start, s_end = SEASONS_CONFIG[s_name]
+                short_name = s_name.split(':')[0].replace("PART ", "P") # Ex: P1, P2...
+                full_title = s_name.split(':')[1].split('(')[0].strip() # Ex: THE OPENING RUN
+                
+                # État de la période
+                is_finished = real_latest_pick > s_end
+                is_active = s_start <= real_latest_pick <= s_end
+                is_future = real_latest_pick < s_start
+                
+                # Style par défaut (Future)
+                card_bg = "rgba(255,255,255,0.02)"
+                border_col = "#333"
+                title_col = "#666"
+                icon = "🔒"
+                player_name = "VERROUILLÉ"
+                score_val = "-"
+                
+                if not is_future:
+                    # Calcul du vainqueur sur cette période spécifique
+                    df_part = df_full_history[(df_full_history['Pick'] >= s_start) & (df_full_history['Pick'] <= s_end)]
+                    if not df_part.empty:
+                        leader = df_part.groupby('Player')['Score'].sum().sort_values(ascending=False).head(1)
+                        if not leader.empty:
+                            player_name = leader.index[0]
+                            score_val = f"{int(leader.values[0])} pts"
+                    
+                    if is_finished:
+                        card_bg = "linear-gradient(145deg, rgba(255, 215, 0, 0.1) 0%, rgba(0,0,0,0.4) 100%)"
+                        border_col = C_GOLD
+                        title_col = C_GOLD
+                        icon = "👑"
+                    elif is_active:
+                        card_bg = "linear-gradient(145deg, rgba(59, 130, 246, 0.1) 0%, rgba(0,0,0,0.4) 100%)"
+                        border_col = C_BLUE
+                        title_col = C_BLUE
+                        icon = "🔥"
+                        short_name += " (EN COURS)"
 
-            bad_business = full_stats.sort_values('Bonus_Gained', ascending=True).iloc[0]
-            has_bonus = full_stats[full_stats['Worst_Bonus'] > 0]
-            crash_test = has_bonus.sort_values('Worst_Bonus', ascending=True).iloc[0] if not has_bonus.empty else full_stats.iloc[0]
-            brick_layer = full_stats.sort_values('Worst_Raw', ascending=True).iloc[0]
-            lapin = full_stats.sort_values('Carottes', ascending=False).iloc[0]
+                # Rendu de la carte trophée
+                with trophy_cols[i]:
+                    st.markdown(f"""
+                    <div style="background:{card_bg}; border:1px solid {border_col}; border-radius:10px; padding:15px; text-align:center; height:100%; position:relative;">
+                        <div style="font-size:0.7rem; color:#888; text-transform:uppercase; letter-spacing:1px; margin-bottom:5px;">{short_name}</div>
+                        <div style="font-family:Rajdhani; font-weight:700; color:{title_col}; font-size:0.9rem; text-transform:uppercase; height:35px; line-height:1.1; margin-bottom:10px;">{full_title}</div>
+                        <div style="font-size:1.5rem; margin-bottom:5px;">{icon}</div>
+                        <div style="font-family:Rajdhani; font-weight:800; color:#FFF; font-size:1.1rem;">{player_name}</div>
+                        <div style="font-size:0.8rem; color:{title_col}; font-weight:600;">{score_val}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.markdown("<h3 style='margin-bottom:10px; font-family:Rajdhani; color:#AAA;'>🏛️ RECORDS GLOBAUX SAISON</h3>", unsafe_allow_html=True)
+            
+            # --- IMPORTANT : ON UTILISE LES DONNEES GLOBALES (df_full_history) POUR LES RECORDS ---
+            # Cela garantit que cette section reste statique quelle que soit la période sélectionnée
+            full_stats_global = compute_stats(df_full_history, bp_map, daily_max_map)
+            
+            # DATA HOF CALCULATIONS (Based on GLOBAL Stats)
+            sniper = full_stats_global.sort_values('Moyenne', ascending=False).iloc[0]
+            pure_avg = full_stats_global.sort_values('Moyenne_Raw', ascending=False).iloc[0]
+            sniper_bp = full_stats_global.sort_values('BP_Count', ascending=False).iloc[0]
+            alpha_dog = full_stats_global.sort_values('Alpha_Count', ascending=False).iloc[0]
+            peak = full_stats_global.sort_values('Best', ascending=False).iloc[0]
+            pure_peak = full_stats_global.sort_values('Best_Raw', ascending=False).iloc[0]
+            nuke = full_stats_global.sort_values('Nukes', ascending=False).iloc[0]
+            heavy = full_stats_global.sort_values('Count40', ascending=False).iloc[0]
+            alchemist = full_stats_global.sort_values('Bonus_Gained', ascending=False).iloc[0]
+            rock = full_stats_global.sort_values('Count30', ascending=False).iloc[0]
+            torche = full_stats_global.sort_values('Last15', ascending=False).iloc[0]
+            progression = full_stats_global.sort_values('ProgressionPct', ascending=False).iloc[0]
+            zen_master = full_stats_global.sort_values('ReliabilityPct', ascending=False).iloc[0]
+            intouch = full_stats_global.sort_values('Streak30', ascending=False).iloc[0]
+            
+            metronome = full_stats_global.sort_values('StdDev', ascending=True).iloc[0]
+            iron_wall = full_stats_global.sort_values('Worst', ascending=False).iloc[0]
+            
+            maniac = full_stats_global.sort_values('ModeCount', ascending=False).iloc[0]
+            iron_man = full_stats_global.sort_values('MaxNoCarrot', ascending=False).iloc[0]
+            albatross = full_stats_global.sort_values('Spread', ascending=False).iloc[0]
+            alien = full_stats_global.sort_values('MaxAlien', ascending=False).iloc[0]
+
+            bad_business = full_stats_global.sort_values('Bonus_Gained', ascending=True).iloc[0]
+            has_bonus = full_stats_global[full_stats_global['Worst_Bonus'] > 0]
+            crash_test = has_bonus.sort_values('Worst_Bonus', ascending=True).iloc[0] if not has_bonus.empty else full_stats_global.iloc[0]
+            brick_layer = full_stats_global.sort_values('Worst_Raw', ascending=True).iloc[0]
+            lapin = full_stats_global.sort_values('Carottes', ascending=False).iloc[0]
 
             # LIST OF 24 CARDS WITH UNIQUE COLORS
             hof_list = [

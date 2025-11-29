@@ -988,37 +988,38 @@ try:
                     color="Player",
                     text="Total",
                     orientation='h',
-                    animation_frame="Pick",       # C'est la clé de l'animation fluide
-                    animation_group="Player",     # Permet de suivre l'objet lors des transitions
+                    animation_frame="Pick",       
+                    animation_group="Player",     
                     range_x=[0, global_max],
-                    color_discrete_map=PLAYER_COLORS # On garde notre charte graphique
+                    color_discrete_map=PLAYER_COLORS
                 )
 
-                # 3. Tuning du Layout pour l'effet "Course"
+                # 3. Tuning du Layout
                 fig_race.update_layout(
                     plot_bgcolor='rgba(0,0,0,0)',
                     paper_bgcolor='rgba(0,0,0,0)',
                     font={'color': '#AAA', 'family': 'Rajdhani'},
-                    xaxis=dict(visible=False, range=[0, global_max]), # On cache l'axe X pour le look
+                    xaxis=dict(visible=False, range=[0, global_max]),
                     yaxis=dict(title=None, tickfont=dict(size=14, weight=700)),
                     height=500,
                     margin=dict(l=0, r=50, t=0, b=0),
                     showlegend=False,
-                    # Ce paramètre force le tri des barres du plus grand au plus petit à chaque frame
                     yaxis_categoryorder='total ascending' 
                 )
 
-                # 4. Tuning de la vitesse d'animation
-                fig_race.layout.updatemenus[0].buttons[0].args[1]["frame"]["duration"] = 150 # Vitesse (ms) entre chaque pick
-                fig_race.layout.updatemenus[0].buttons[0].args[1]["transition"]["duration"] = 100 # Fluidité du mouvement
+                # 4. Tuning Vitesse (Sécurisé pour éviter le crash "Index out of range")
+                try:
+                    fig_race.layout.updatemenus[0].buttons[0].args[1]["frame"]["duration"] = 150 
+                    fig_race.layout.updatemenus[0].buttons[0].args[1]["transition"]["duration"] = 100
+                    # Suppression du préfixe slider
+                    fig_race.layout.sliders[0].currentvalue = {"prefix": "PICK #", "font": {"size": 20, "color": C_ACCENT}}
+                    fig_race.layout.sliders[0].pad = {"t": 50}
+                except:
+                    pass # Si pas d'animation (1 seule date), on ignore sans planter
 
-                # Style des traces (texte à l'extérieur, barres pleines)
+                # Style des traces
                 fig_race.update_traces(textposition='outside', marker_line_width=0, textfont_size=14, textfont_color="#FFF")
                 
-                # Suppression du titre automatique du slider pour faire propre
-                fig_race.layout.sliders[0].currentvalue = {"prefix": "PICK #", "font": {"size": 20, "color": C_ACCENT}}
-                fig_race.layout.sliders[0].pad = {"t": 50}
-
                 st.plotly_chart(fig_race, use_container_width=True)
 
             st.markdown("### 🔥 HEATMAP")
@@ -1451,8 +1452,11 @@ try:
                 # Définition de la couleur : Gris foncé (#374151) si 0 carotte, Rouge (C_RED) si > 0
                 carrot_chart['Color'] = carrot_chart['Carottes'].apply(lambda x: "#374151" if x == 0 else C_RED)
                 
-                # On utilise 'marker_color' pour appliquer nos couleurs personnalisées
-                fig_car = px.bar(carrot_chart, x='Pick', y='Carottes', marker_color=carrot_chart['Color'])
+                # CORRECTION ICI : On retire marker_color de px.bar
+                fig_car = px.bar(carrot_chart, x='Pick', y='Carottes')
+                
+                # On applique les couleurs APRÈS la création
+                fig_car.update_traces(marker_color=carrot_chart['Color'])
                 
                 fig_car.update_layout(
                     plot_bgcolor='rgba(0,0,0,0)',
@@ -1462,7 +1466,6 @@ try:
                     yaxis=dict(showgrid=True, gridcolor='#222', title="Nb Carottes"),
                     height=350
                 )
-                # -------------------------------------------------------
                 st.plotly_chart(fig_car, use_container_width=True)
 
             with c_list:

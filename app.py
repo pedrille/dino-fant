@@ -683,7 +683,25 @@ try:
         
         # On définit les options
         options_saisons = list(SEASONS_CONFIG.keys())
-        selected_season_name = st.selectbox("Période", options_saisons, index=0, label_visibility="collapsed", key="season_selector")
+        
+        # --- LOGIQUE AUTO-FOCUS : PÉRIODE ACTUELLE ---
+        default_ix = 0 # Par défaut : Index 0 (Saison Complète)
+        
+        # 1. On récupère le dernier pick joué sur la totalité des données
+        real_current_pick = df['Pick'].max() if df is not None and not df.empty else 0
+        
+        # 2. On cherche dans quelle période se trouve ce pick
+        for i, (s_name, (s_start, s_end)) in enumerate(SEASONS_CONFIG.items()):
+            # On ignore la "Saison Complète" (index 0) pour privilégier une période spécifique
+            if i == 0: continue 
+            
+            # Si le pick actuel est compris dans cette période, c'est elle qu'on sélectionne
+            if s_start <= real_current_pick <= s_end:
+                default_ix = i
+                break
+        
+        # 3. On crée le sélecteur avec l'index calculé
+        selected_season_name = st.selectbox("Période", options_saisons, index=default_ix, label_visibility="collapsed", key="season_selector")
         
         start_pick, end_pick = SEASONS_CONFIG[selected_season_name]
         

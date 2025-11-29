@@ -363,12 +363,14 @@ def load_data():
                 if i >= len(df_stats): break
                 p_name = str(df_stats.iloc[i, col_start_rank]).strip()
                 if "Team Raptors" in p_name:
-                    hist_vals = df_stats.iloc[i, col_start_rank+1:col_start_rank+25].values
+                    # CORRECTION ICI : On prend tout jusqu'à la fin de la ligne (.shape[1]) au lieu de +25
+                    hist_vals = df_stats.iloc[i, col_start_rank+1:df_stats.shape[1]].values
                     valid_history = []
                     for x in hist_vals:
                         try:
                             clean_x = str(x).replace(',', '').replace(' ', '')
                             val = float(clean_x)
+                            # On ajoute seulement si c'est un rang valide (>0)
                             if val > 0: valid_history.append(int(val))
                         except: pass
                     if valid_history:

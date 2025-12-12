@@ -23,7 +23,8 @@ def load_data():
             val_month = str(month_row[col_idx]).strip()
             if val_month and val_month.lower() != 'nan' and val_month != '':
                 # Normalisation des mois (accents) pour matcher les clés statiques
-                val_month = val_month.capitalize().replace("é", "e").replace("û", "u")
+                # Replaces é->e, û->u (e.g. Décembre -> Decembre)
+                val_month = val_month.capitalize().replace("\303\251", "e").replace("é", "e").replace("\303\273", "u").replace("û", "u")
                 current_month = val_month
             pick_val = pd.to_numeric(df_valeurs.iloc[pick_row_idx, col_idx], errors='coerce')
             if pd.notna(pick_val) and pick_val > 0: pick_to_month[int(pick_val)] = current_month
@@ -95,4 +96,9 @@ def load_data():
 
         return final_df, team_current_rank, bp_map, team_rank_history, daily_max_map
 
-    except: return pd.DataFrame(), 0, {}, [], {}
+    except Exception as e:
+        # Improved error handling for debugging
+        # In a real app, you might want to log this or show a friendly message
+        st.error(f"Erreur lors du chargement des données : {str(e)}")
+        # Return empty structures to avoid app crash
+        return pd.DataFrame(), 0, {}, [], {}

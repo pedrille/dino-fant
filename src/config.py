@@ -10,7 +10,7 @@ PLAYER_COLORS = {
     "Mims22": "#10B981",        # Emerald Green
     "MadDawgs": "#3B82F6",      # Royal Blue
     "Gabeur": "#8B5CF6",        # Violet
-    "HoodieRigone": "#F97316", # Orange
+    "HoodieRigone": "#F97316",  # Orange
     "iAmDjuu25": "#06B6D4",     # Cyan
     "Luoshtgin": "#EC4899",     # Pink
     "Mendosaaaa": "#84CC16",    # Lime
@@ -49,6 +49,7 @@ PACERS_PUNCHLINES = [
 ]
 
 # --- CONFIG SAISONS (SPRINTS V22.0) ---
+# Bornes exactes basées sur le calendrier 2025-2026
 SEASONS_CONFIG = {
     "🏆 SAISON COMPLÈTE": (1, 165),
     "🍂 PART 1: THE OPENING RUN (Oct - Thanksgiving)": (1, 37),
@@ -57,7 +58,7 @@ SEASONS_CONFIG = {
     "💍 PART 4: THE FINAL PUSH (Post All-Star)": (114, 165)
 }
 
-# --- DETAILS SAISONS (POUR LES TROPHÉES) ---
+# --- DETAILS SAISONS ---
 SEASONS_DETAILS = [
     {
         "dates": "21 Oct - 26 Nov 2025",
@@ -98,5 +99,5 @@ C_PURE = "#14B8A6"
 C_ORANGE = "#F97316"
 C_RED = "#EF4444"
 C_DARK_GREY = "#1F2937"
-C_GREY_BAR = "#374151"
+C_GREY_BAR = "#374151" 
 C_ALIEN = "#84CC16"

@@ -1,7 +1,4 @@
-
 # --- CONFIGURATION & ASSETS ---
-
-# ✅ LIEN DE L'IMAGE DISCORD (RAW)
 DISCORD_AVATAR_URL = "https://raw.githubusercontent.com/pedrille/dino-fant/main/basketball_discord.png"
 
 # --- CONFIG COULEURS JOUEURS (IDENTITÉ VISUELLE) ---
@@ -59,7 +56,6 @@ SEASONS_CONFIG = {
     "💍 PART 4: THE FINAL PUSH (Post All-Star)": (114, 165)
 }
 
-# --- DETAILS SAISONS ---
 SEASONS_DETAILS = [
     {
         "dates": "21 Oct - 26 Nov 2025",

@@ -1,11 +1,11 @@
-import streamlit as st
-from streamlit_gsheets import GSheetsConnection
-import pandas as pd
-import numpy as np
 
-# --- 3. DATA ENGINE ---
-# OPTIMIZATION: Updated TTL to 600s (10 minutes)
-@st.cache_data(ttl=600, show_spinner=False)
+import pandas as pd
+import streamlit as st
+import unicodedata
+from streamlit_gsheets import GSheetsConnection
+from src.utils import normalize_month
+
+@st.cache_data(ttl=0, show_spinner=False)
 def load_data():
     conn = st.connection("gsheets", type=GSheetsConnection)
     try:
@@ -21,7 +21,10 @@ def load_data():
         current_month = "Inconnu"
         for col_idx in range(1, len(month_row)):
             val_month = str(month_row[col_idx]).strip()
-            if val_month and val_month.lower() != 'nan' and val_month != '': current_month = val_month
+            # FIX: Normalize month name to avoid "Décembre" vs "Decembre" issues
+            if val_month and val_month.lower() != 'nan' and val_month != '':
+                current_month = normalize_month(val_month)
+
             pick_val = pd.to_numeric(df_valeurs.iloc[pick_row_idx, col_idx], errors='coerce')
             if pd.notna(pick_val) and pick_val > 0: pick_to_month[int(pick_val)] = current_month
 
@@ -59,7 +62,6 @@ def load_data():
         final_df['ZScore'] = np.where(final_df['DailyStd'] > 0, (final_df['Score'] - final_df['DailyMean']) / final_df['DailyStd'], 0)
 
         # B. STATS (Uniquement pour historique classement)
-        # OPTIMISATION : On ne scanne plus pour les BP individuels ici
         df_stats = conn.read(spreadsheet=st.secrets["SPREADSHEET_URL"], worksheet="Stats_Raptors_FR", header=None, ttl=0)
         team_rank_history = []
         team_current_rank = 0
@@ -92,4 +94,7 @@ def load_data():
 
         return final_df, team_current_rank, bp_map, team_rank_history, daily_max_map
 
-    except: return pd.DataFrame(), 0, {}, [], {}
+    except Exception as e:
+        # Uncomment for debug
+        # st.error(f"Error loading data: {e}")
+        return pd.DataFrame(), 0, {}, [], {}

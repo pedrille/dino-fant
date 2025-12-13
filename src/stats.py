@@ -1,9 +1,8 @@
+
 import pandas as pd
 import numpy as np
 import streamlit as st
 
-# OPTIMISATION : CACHING STATS CALCULATION
-@st.cache_data(ttl=300, show_spinner=False)
 def compute_stats(df, bp_map, daily_max_map):
     stats = []
     if df.empty: return pd.DataFrame()
@@ -30,8 +29,6 @@ def compute_stats(df, bp_map, daily_max_map):
         scores_without_bonus = d[d['IsBonus'] == False]['Score'].values
         avg_with_bonus = scores_with_bonus.mean() if len(scores_with_bonus) > 0 else 0
         avg_without_bonus = scores_without_bonus.mean() if len(scores_without_bonus) > 0 else 0
-        best_with_bonus = scores_with_bonus.max() if len(scores_with_bonus) > 0 else 0
-        best_without_bonus = scores_without_bonus.max() if len(scores_without_bonus) > 0 else 0
 
         current_no_carrot_streak = 0
         for s in reversed(scores):
@@ -67,8 +64,6 @@ def compute_stats(df, bp_map, daily_max_map):
 
         spread = scores.max() - scores.min()
 
-        # ... après spread = ...
-
         # CALCUL TENDANCE 7 DERNIERS MATCHS
         scores_last_7 = d['Score'].tail(7)
         avg_last_7 = scores_last_7.mean() if len(scores_last_7) > 0 else 0
@@ -77,8 +72,6 @@ def compute_stats(df, bp_map, daily_max_map):
         if diff_7 >= 1: trend_icon = "↗️"
         elif diff_7 <= -1: trend_icon = "↘️"
         else: trend_icon = "➡️"
-
-        # ... continue vers stats.append ...
 
         streak_30 = 0
         for s in reversed(scores):

@@ -3,33 +3,32 @@ import streamlit as st
 import pandas as pd
 from streamlit_option_menu import option_menu
 import streamlit.components.v1 as components
-import random
 
-# --- MODULE IMPORTS ---
-from src.config import (
-    SEASONS_CONFIG, SEASONS_DETAILS, PLAYER_COLORS,
-    C_BG, C_ACCENT, C_TEXT, C_GOLD, C_SILVER, C_BRONZE,
-    C_GREEN, C_BLUE, C_PURPLE, C_ALPHA, C_IRON, C_BONUS,
-    C_PURE, C_ORANGE, C_RED, C_ALIEN
-)
-from src.ui import (
-    inject_custom_css, kpi_card, section_title,
-    render_gauge, get_uniform_color
-)
+# Import Modules
+from src.config import C_BG, C_TEXT, C_ACCENT, C_GOLD, C_BLUE, C_GREEN, SEASONS_CONFIG
 from src.data_loader import load_data
-from src.stats import compute_stats, get_comparative_stats
-from src.utils import send_discord_webhook
+from src.stats import compute_stats
+import src.views as views
 
 # --- 1. CONFIGURATION & ASSETS ---
-st.set_page_config(
-    page_title="Raptors War Room",
-    layout="wide",
-    page_icon="🦖",
-    initial_sidebar_state="expanded"
-)
+st.set_page_config(page_title="Raptors War Room", layout="wide", page_icon="🦖", initial_sidebar_state="expanded")
 
-# --- 2. CSS PREMIUM ---
-inject_custom_css()
+# --- 2. CSS ---
+st.markdown(f"""
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Rajdhani:wght@500;600;700;800&display=swap');
+    .stApp {{ background-color: {C_BG}; color: {C_TEXT}; font-family: 'Inter', sans-serif; }}
+    section[data-testid="stSidebar"] {{ background-color: #000000 !important; border-right: 1px solid #222; }}
+    div[data-testid="stSidebarNav"] {{ display: none; }}
+    h1, h2, h3 {{ font-family: 'Rajdhani', sans-serif; text-transform: uppercase; margin: 0; }}
+    h1 {{ font-size: 3rem; font-weight: 800; background: linear-gradient(90deg, #FFF, #888); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }}
+    .glass-card {{ background: linear-gradient(145deg, rgba(25,25,25,0.6) 0%, rgba(10,10,10,0.8) 100%); backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 16px; padding: 24px; margin-bottom: 20px; }}
+    .kpi-dashboard-fixed {{ height: 190px; display: flex; flex-direction: column; justify-content: center; }}
+    .kpi-num {{ font-family: 'Rajdhani'; font-weight: 800; font-size: clamp(1.6rem, 2vw, 2.2rem); line-height: 1.1; color: #FFF; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
+    .stButton button {{ background-color: #1F2937 !important; color: #FFFFFF !important; border: 1px solid #374151 !important; font-weight: 600 !important; font-family: 'Rajdhani', sans-serif !important; text-transform: uppercase; letter-spacing: 1px; }}
+    .stButton button:hover {{ border-color: {C_ACCENT} !important; color: {C_ACCENT} !important; background-color: #111 !important; }}
+</style>
+""", unsafe_allow_html=True)
 
 # --- 3. MAIN APP ---
 try:
@@ -40,10 +39,8 @@ try:
     
     with st.sidebar:
         st.markdown("<div style='text-align:center; margin-bottom: 20px;'>", unsafe_allow_html=True)
-        try:
-            st.image("raptors-ttfl-min.png", use_container_width=True)
-        except:
-            st.warning("Image raptors-ttfl-min.png not found")
+        try: st.image("raptors-ttfl-min.png", use_container_width=True)
+        except: pass
         st.markdown("</div>", unsafe_allow_html=True)
         
         st.markdown("<div style='font-family:Rajdhani; font-weight:700; color:#AAA; margin-bottom:5px; font-size:0.9rem; letter-spacing:1px'>📅 PÉRIODE ACTIVE</div>", unsafe_allow_html=True)

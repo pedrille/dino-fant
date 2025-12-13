@@ -5,7 +5,7 @@ import unicodedata
 from streamlit_gsheets import GSheetsConnection
 from src.utils import normalize_month
 
-@st.cache_data(ttl=0, show_spinner=False)
+@st.cache_data(ttl=600, show_spinner=False)
 def load_data():
     conn = st.connection("gsheets", type=GSheetsConnection)
     if "SPREADSHEET_URL" not in st.secrets:

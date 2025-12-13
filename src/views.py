@@ -1,0 +1,644 @@
+
+import streamlit as st
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
+import numpy as np
+from src.config import *
+from src.ui import kpi_card, section_title, send_discord_webhook
+from src.utils import get_uniform_color, render_gauge
+from src.stats import compute_stats
+
+def render_dashboard(day_df, full_stats, latest_pick, team_avg_per_pick, team_streak_nc, df):
+    section_title("RAPTORS <span class='highlight'>DASHBOARD</span>", f"Daily Briefing • Pick #{int(latest_pick)}")
+    top = day_df.iloc[0]
+
+    # LOGIQUE MVP & BP & BONUS
+    val_suffix = ""
+    if 'IsBonus' in top and top['IsBonus']: val_suffix += " 🌟x2"
+    if 'IsBP' in top and top['IsBP']: val_suffix += " 🎯BP"
+
+    badges_html = val_suffix if val_suffix else "&nbsp;"
+    sub_html = f"<div><div style='font-size:1.4rem; font-weight:800'>{int(top['Score'])} PTS</div><div style='font-size:0.9rem; color:#999; font-weight:600; margin-top:4px'>{badges_html}</div></div>"
+
+    # 5 COLONNES POUR LE DASHBOARD
+    c1, c2, c3, c4, c5 = st.columns(5)
+
+    with c1:
+        st.markdown(f"""<div class="glass-card kpi-dashboard-fixed" style="text-align:center"><div class="kpi-label">MVP DU SOIR</div><div class="kpi-num" style="color:{C_GOLD}">{top['Player']}</div><div class="kpi-sub" style="color:{C_ACCENT}">{sub_html}</div></div>""", unsafe_allow_html=True)
+
+    total_day = day_df['Score'].sum()
+    with c2: kpi_card("TOTAL TEAM SOIR", int(total_day), "POINTS", is_fixed=True)
+
+    team_daily_avg = day_df['Score'].mean()
+    diff_perf = ((team_daily_avg - team_avg_per_pick) / team_avg_per_pick) * 100
+    perf_col = C_GREEN if diff_perf > 0 else "#F87171"
+    with c3: kpi_card("PERF. TEAM SOIR", f"{diff_perf:+.1f}%", "VS MOY. PÉRIODE", perf_col, is_fixed=True)
+
+    col_streak = C_GREEN if team_streak_nc > 0 else C_RED
+    with c4: kpi_card("SÉRIE TEAM NO-CARROT", f"{team_streak_nc}", "JOURS CONSÉCUTIFS", col_streak, is_fixed=True)
+
+    leader = full_stats.sort_values('Total', ascending=False).iloc[0]
+    with c5: kpi_card("LEADER PÉRIODE", leader['Player'], f"TOTAL: {int(leader['Total'])}", C_ACCENT, is_fixed=True)
+
+    day_merged = pd.merge(day_df, full_stats[['Player', 'Moyenne']], on='Player')
+    day_merged['Delta'] = day_merged['Score'] - day_merged['Moyenne']
+    top_clutch = day_merged.sort_values('Delta', ascending=False).head(3)
+
+    c_perf, c_clutch = st.columns([2, 1])
+    with c_perf:
+        st.markdown("<h3 style='margin-bottom:10px; margin-top:0; color:#FFF; font-family:Rajdhani; font-weight:700'>📊 SCORES DU SOIR</h3>", unsafe_allow_html=True)
+        day_df['BarColor'] = day_df['Score'].apply(get_uniform_color)
+        fig = px.bar(day_df, x='Player', y='Score', text='Score', color='BarColor', color_discrete_map="identity")
+        fig.update_traces(textposition='outside', marker_line_width=0, textfont_size=14, textfont_family="Rajdhani", cliponaxis=False)
+        fig.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA', 'family': 'Inter'}, yaxis=dict(showgrid=False, visible=False), xaxis=dict(title=None, tickfont=dict(size=14, family='Rajdhani', weight=600)), height=350, showlegend=False, margin=dict(l=0, r=0, t=0, b=0))
+        st.plotly_chart(fig, use_container_width=True)
+
+    with c_clutch:
+        st.markdown("<h3 style='margin-bottom:10px; margin-top:0; color:#FFF; font-family:Rajdhani; font-weight:700'>⚡ CLUTCH DU SOIR</h3>", unsafe_allow_html=True)
+        st.markdown("<div class='chart-desc'>Joueurs ayant le plus dépassé leur moyenne habituelle ce soir.</div>", unsafe_allow_html=True)
+        for i, row in enumerate(top_clutch.itertuples()):
+            st.markdown(f"""<div class='glass-card' style='margin-bottom:10px; padding:12px'><div style='display:flex; justify-content:space-between; align-items:center'><div><div style='font-weight:700; color:{C_TEXT}'>{row.Player}</div><div style='font-size:0.75rem; color:#666'>Moy: {row.Moyenne:.1f}</div></div><div style='text-align:right'><div style='font-size:1.2rem; font-weight:800; color:{C_GREEN}'>+{row.Delta:.1f}</div><div style='font-size:0.8rem; color:#888'>{int(row.Score)} pts</div></div></div></div>""", unsafe_allow_html=True)
+
+    st.markdown("<div style='margin-bottom:30px'></div>", unsafe_allow_html=True)
+    st.markdown("<h3 style='color:#FFF; font-family:Rajdhani; font-weight:700; margin-bottom:20px'>🏆 ANALYSE & CLASSEMENTS</h3>", unsafe_allow_html=True)
+    c_gen, c_form, c_text = st.columns(3)
+    medals = {0: "🥇", 1: "🥈", 2: "🥉"}
+
+    df_minus_last = df[df['Pick'] < latest_pick].groupby('Player')['Score'].sum().rank(ascending=False)
+    current_ranks = full_stats.set_index('Player')['Total'].rank(ascending=False)
+
+    with c_gen:
+        st.markdown(f"<div class='glass-card' style='height:100%'><div style='color:{C_ACCENT}; font-family:Rajdhani; font-weight:700; margin-bottom:5px'>🏆 TOP 5 PÉRIODE</div><div class='chart-desc'>Classement de la période sélectionnée.</div>", unsafe_allow_html=True)
+        top_5_season = full_stats.sort_values('Total', ascending=False).head(5).reset_index()
+        for i, r in top_5_season.iterrows():
+            medal = medals.get(i, f"{i+1}")
+            prev_rank = df_minus_last.get(r['Player'], i+1)
+            curr_rank = current_ranks.get(r['Player'], i+1)
+            diff = prev_rank - curr_rank
+            evo = f"<span style='color:{C_GREEN}; font-size:0.8rem'>▲{int(diff)}</span>" if diff > 0 else (f"<span style='color:{C_RED}; font-size:0.8rem'>▼{int(abs(diff))}</span>" if diff < 0 else "<span style='color:#444; font-size:0.8rem'>=</span>")
+            st.markdown(f"<div style='display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:6px'><div style='display:flex; align-items:center; gap:10px'><div style='font-size:1.2rem; width:20px'>{medal}</div><div style='font-family:Rajdhani; font-weight:600; font-size:1rem; color:#FFF'>{r['Player']}</div></div><div style='text-align:right'><span style='font-family:Rajdhani; font-weight:700; color:{C_ACCENT}'>{int(r['Total'])}</span> {evo}</div></div>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    with c_form:
+        st.markdown(f"<div class='glass-card' style='height:100%'><div style='color:{C_GREEN}; font-family:Rajdhani; font-weight:700; margin-bottom:5px'>🔥 TOP 5 FORME (15J)</div><div class='chart-desc'>Meilleures moyennes sur les 15 derniers picks.</div>", unsafe_allow_html=True)
+        top_5_form = full_stats.sort_values('Last15', ascending=False).head(5).reset_index()
+        for i, r in top_5_form.iterrows():
+            medal = medals.get(i, f"{i+1}")
+            st.markdown(f"<div style='display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:6px'><div style='display:flex; align-items:center; gap:10px'><div style='font-size:1.2rem; width:20px'>{medal}</div><div style='font-family:Rajdhani; font-weight:600; font-size:1rem; color:#FFF'>{r['Player']}</div></div><div style='font-family:Rajdhani; font-weight:700; color:{C_GREEN}'>{r['Last15']:.1f}</div></div>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    with c_text:
+        st.markdown(f"""
+        <div class='glass-card' style='height:100%'>
+            <div style='color:{C_TEXT}; font-family:Rajdhani; font-weight:700; margin-bottom:5px'>🎨 TEXTURE DES PICKS</div>
+            <div class='chart-desc'>Rouge < 20 | Gris 20-39 | Vert 40+.</div>
+        """ , unsafe_allow_html=True)
+
+        bins = [-1, 19, 39, 200]
+        labels = ['< 20', '20-39', '40+']
+        day_df['Range'] = pd.cut(day_df['Score'], bins=bins, labels=labels)
+        dist_counts = day_df['Range'].value_counts().reset_index()
+        dist_counts.columns = ['Range', 'Count']
+
+        color_map = {'< 20': C_RED, '20-39': "#374151", '40+': C_GREEN}
+
+        fig_donut = px.pie(dist_counts, values='Count', names='Range', hole=0.4, color='Range', color_discrete_map=color_map)
+        fig_donut.update_layout(showlegend=False, margin=dict(t=10, b=10, l=10, r=10), height=220, paper_bgcolor='rgba(0,0,0,0)')
+        fig_donut.update_traces(textposition='inside', textinfo='label+value', textfont_size=14)
+        st.plotly_chart(fig_donut, use_container_width=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+def render_team_hq(df, latest_pick, team_rank, team_history, team_avg_per_pick, total_bp_team):
+    section_title("TEAM <span class='highlight'>HQ</span>", "Vue d'ensemble de l'effectif")
+    total_pts_season = df['Score'].sum()
+    daily_agg = df.groupby('Pick')['Score'].sum()
+    best_night = daily_agg.max(); worst_night = daily_agg.min(); avg_night = daily_agg.mean()
+
+    total_nukes_team = len(df[df['Score'] >= 50])
+    total_carrots_team = len(df[df['Score'] < 20])
+    safe_zone_team = len(df[df['Score'] > 35])
+
+    total_bonus_played = len(df[df['IsBonus'] == True])
+    current_rank_disp = f"#{int(team_rank)}" if team_rank > 0 else "-"
+    best_rank_ever = f"#{min(team_history)}" if len(team_history) > 0 else "-"
+    bonus_df = df[df['IsBonus'] == True]
+    avg_bonus_team = bonus_df['Score'].mean() if not bonus_df.empty else 0
+    daily_totals = df.groupby('Pick')['Score'].sum()
+    avg_team_15 = daily_totals[daily_totals.index > (latest_pick - 15)].mean() if len(daily_totals) > 15 else daily_totals.mean()
+
+    k1, k2, k3, k4 = st.columns(4)
+    with k1: kpi_card("TOTAL PÉRIODE", int(total_pts_season), "POINTS CUMULÉS", C_GOLD)
+    with k2: kpi_card("MOYENNE / PICK", f"{team_avg_per_pick:.1f}", "PAR JOUEUR", "#FFF")
+    with k3: kpi_card("MOYENNE ÉQUIPE / SOIR", f"{int(avg_night)}", "TOTAL COLLECTIF", C_BLUE)
+
+    diff_dyn_team = ((avg_team_15 - avg_night) / avg_night) * 100
+    col_dyn_team = C_GREEN if diff_dyn_team > 0 else C_RED
+    with k4: kpi_card("DYNAMIQUE 15J", f"{diff_dyn_team:+.1f}%", "VS MOY. PÉRIODE", col_dyn_team)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    c_grid, c_rec = st.columns([3, 1], gap="medium")
+    with c_grid:
+        g1, g2, g3 = st.columns(3, gap="medium")
+        with g1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(latest_pick)}</div><div class='stat-mini-lbl'>MATCHS JOUÉS</div></div>", unsafe_allow_html=True)
+        with g2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_ACCENT}'>{current_rank_disp}</div><div class='stat-mini-lbl'>CLASSEMENT ACTUEL</div></div>", unsafe_allow_html=True)
+        with g3: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_GOLD}'>{best_rank_ever}</div><div class='stat-mini-lbl'>BEST RANK EVER</div></div>", unsafe_allow_html=True)
+
+        st.markdown("<div style='height:15px'></div>", unsafe_allow_html=True)
+
+        g4, g5, g6 = st.columns(3, gap="medium")
+        with g4: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_BLUE}'>{safe_zone_team}</div><div class='stat-mini-lbl'>SAFE ZONE (> 35 PTS)</div></div>", unsafe_allow_html=True)
+        with g5: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_GREEN}'>{total_nukes_team}</div><div class='stat-mini-lbl'>NUKES (> 50 PTS)</div></div>", unsafe_allow_html=True)
+        with g6: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_RED}'>{total_carrots_team}</div><div class='stat-mini-lbl'>CAROTTES (< 20 PTS)</div></div>", unsafe_allow_html=True)
+
+        st.markdown("<div style='height:15px'></div>", unsafe_allow_html=True)
+
+        g7, g8, g9 = st.columns(3, gap="medium")
+        with g7: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_PURPLE}'>{total_bp_team}</div><div class='stat-mini-lbl'>TOTAL BEST PICKS 🎯</div></div>", unsafe_allow_html=True)
+        with g8: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_BONUS}'>{total_bonus_played}</div><div class='stat-mini-lbl'>BONUS JOUÉS 🌟</div></div>", unsafe_allow_html=True)
+        with g9: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{avg_bonus_team:.1f}</div><div class='stat-mini-lbl'>MOYENNE SOUS BONUS</div></div>", unsafe_allow_html=True)
+
+    with c_rec:
+        st.markdown(f"""<div class="glass-card" style="height:100%; display:flex; flex-direction:column; justify-content:center; padding:25px;"><div style="text-align:center; margin-bottom:20px; font-family:Rajdhani; font-weight:700; font-size:1.1rem; color:#AAA; letter-spacing:1px; border-bottom:1px solid #333; padding-bottom:10px;">RECORDS & MOYENNE</div><div class="hq-card-row"><div class="hq-lbl">🚀 RECORD</div><div class="hq-val" style="color:{C_GREEN}">{int(best_night)}</div></div><div class="hq-card-row"><div class="hq-lbl">⚖️ MOYENNE</div><div class="hq-val">{int(avg_night)}</div></div><div class="hq-card-row"><div class="hq-lbl">🧱 PLANCHER</div><div class="hq-val" style="color:{C_ACCENT}">{int(worst_night)}</div></div></div>""", unsafe_allow_html=True)
+
+    st.markdown("<div style='margin-bottom:30px'></div>", unsafe_allow_html=True)
+
+    st.markdown("### 🏁 LA COURSE AU TITRE (EVOLUTION)")
+    st.markdown("<div class='chart-desc'>Cliquez sur ▶️ pour lancer la course. L'animation est fluide et gérée par le navigateur.</div>", unsafe_allow_html=True)
+
+    if not df.empty:
+        pivoted = df.pivot_table(index='Pick', columns='Player', values='Score', aggfunc='sum').fillna(0)
+        cum_df = pivoted.cumsum()
+        race_df = cum_df.reset_index().melt(id_vars='Pick', var_name='Player', value_name='Total')
+        race_df = race_df.sort_values('Pick')
+        global_max = race_df['Total'].max() * 1.1
+
+        fig_race = px.bar(
+            race_df,
+            x="Total",
+            y="Player",
+            color="Player",
+            text="Total",
+            orientation='h',
+            animation_frame="Pick",
+            animation_group="Player",
+            range_x=[0, global_max],
+            color_discrete_map=PLAYER_COLORS
+        )
+
+        fig_race.update_layout(
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)',
+            font={'color': '#AAA', 'family': 'Rajdhani'},
+            xaxis=dict(visible=False, range=[0, global_max]),
+            yaxis=dict(title=None, tickfont=dict(size=14, weight=700)),
+            height=500,
+            margin=dict(l=0, r=50, t=0, b=0),
+            showlegend=False,
+            yaxis_categoryorder='total ascending'
+        )
+        try:
+            fig_race.layout.updatemenus[0].buttons[0].args[1]["frame"]["duration"] = 150
+            fig_race.layout.updatemenus[0].buttons[0].args[1]["transition"]["duration"] = 100
+            fig_race.layout.sliders[0].currentvalue = {"prefix": "PICK #", "font": {"size": 20, "color": C_ACCENT}}
+            fig_race.layout.sliders[0].pad = {"t": 50}
+        except: pass
+
+        fig_race.update_traces(textposition='outside', marker_line_width=0, textfont_size=14, textfont_color="#FFF")
+        st.plotly_chart(fig_race, use_container_width=True)
+
+    st.markdown("<div style='height: 40px;'></div>", unsafe_allow_html=True)
+
+    st.markdown("### 🔥 HEATMAP")
+    st.markdown(f"<div class='chart-desc'>Rouge < 35 | Gris 35-45 (Neutre) | Vert > 45.</div>", unsafe_allow_html=True)
+
+    heat_filter = st.selectbox("📅 Filtrer la Heatmap", ["VUE GLOBALE"] + list(df['Month'].unique()), key='heat_filter')
+
+    if heat_filter == "VUE GLOBALE": df_heat = df
+    else: df_heat = df[df['Month'] == heat_filter]
+
+    heatmap_data = df_heat.pivot_table(index='Player', columns='Pick', values='Score', aggfunc='sum')
+    custom_colors = [[0.0, '#EF4444'], [0.43, '#1F2937'], [0.56, '#1F2937'], [1.0, '#10B981']]
+
+    fig_heat = px.imshow(heatmap_data, labels=dict(x="Pick", y="Player", color="Score"), x=heatmap_data.columns, y=heatmap_data.index, color_continuous_scale=custom_colors, zmin=0, zmax=80, aspect="auto")
+    fig_heat.update_traces(xgap=1, ygap=1)
+    fig_heat.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, height=500, xaxis={'showgrid': False}, yaxis={'showgrid': False})
+    st.plotly_chart(fig_heat, use_container_width=True)
+
+    st.markdown("### 📊 DATA ROOM")
+    # Note: passing full_stats here is assumed
+    # Need to pass full_stats to this function or compute locally?
+    # It is cleaner to pass it. Added to args.
+    # Wait, team_hq does not have full_stats in arg list above.
+    # I should add it.
+
+def render_player_lab(df, full_stats):
+    section_title("PLAYER <span class='highlight'>LAB</span>", "Deep Dive Analytics")
+    st.markdown("<div class='widget-title'>👤 SÉLECTION DU JOUEUR</div>", unsafe_allow_html=True)
+    sel_player = st.selectbox("Recherche", sorted(df['Player'].unique()), label_visibility="collapsed")
+
+    p_color = PLAYER_COLORS.get(sel_player, "#333")
+    st.markdown(f"""
+    <div style="background-color: {p_color}; padding: 15px; border-radius: 12px; margin-bottom: 25px; text-align: center; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 4px 15px rgba(0,0,0,0.3);">
+        <h2 style="color: white; margin:0; font-family:'Rajdhani'; font-weight:800; font-size:2rem; text-shadow: 0 2px 4px rgba(0,0,0,0.5); text-transform:uppercase; letter-spacing:2px;">🔭 ZOOM SUR {sel_player}</h2>
+    </div>
+    """, unsafe_allow_html=True)
+
+    p_data = full_stats[full_stats['Player'] == sel_player].iloc[0]
+    p_hist_all = df[df['Player'] == sel_player]
+
+    sorted_team = full_stats.sort_values('Total', ascending=False).reset_index(drop=True)
+    internal_rank = sorted_team[sorted_team['Player'] == sel_player].index[0] + 1
+    nb_players = len(sorted_team)
+    form_15 = p_data['Last15']
+    diff_form = ((form_15 - p_data['Moyenne']) / p_data['Moyenne']) * 100
+    sign = "+" if diff_form > 0 else ""
+    color_diff = C_GREEN if diff_form > 0 else "#F87171"
+    z_val = p_data['CurrentNoCarrot']
+    z_col = C_GREEN if z_val > 3 else (C_RED if z_val == 0 else "#FFF")
+    rank_col = C_GOLD if internal_rank == 1 else (C_SILVER if internal_rank == 2 else (C_BRONZE if internal_rank == 3 else "#FFF"))
+
+    c1, c2, c3, c4, c5 = st.columns(5)
+    with c1: kpi_card("TOTAL POINTS", int(p_data['Total']), "PÉRIODE")
+    with c2: kpi_card("MOYENNE", f"{p_data['Moyenne']:.1f}", "PTS / PICK")
+    with c3: kpi_card("SÉRIE NO-CAROTTE", f"{int(z_val)}", "MATCHS (>20 PTS)", z_col)
+    with c4: kpi_card("CLASSEMENT", f"#{internal_rank}", f"SUR {nb_players}", rank_col)
+    with c5: kpi_card("BEST SCORE", int(p_data['Best']), "RECORD PÉRIODE", C_GOLD)
+
+    st.markdown("<div style='margin-top:20px; margin-bottom:5px; color:#888; font-size:0.8rem; text-transform:uppercase; letter-spacing:1px; text-align:center'>HISTORIQUE MATCHS</div>", unsafe_allow_html=True)
+    all_season_picks = p_hist_all.sort_values('Pick', ascending=True)
+
+    if not all_season_picks.empty:
+        html_picks = "<div class='match-row' style='width:100%'>"
+        desc_picks = p_hist_all.sort_values('Pick', ascending=False)
+        for _, r in desc_picks.iterrows():
+            sc = r['Score']
+            if r['IsBonus']:
+                bg = C_GOLD; txt_col = "#000000"; border = f"2px solid {C_GOLD}"
+            else:
+                bg = get_uniform_color(r['Score'])
+                txt_col = "#FFF"; border = "1px solid rgba(255,255,255,0.1)"
+
+            pill_content = f"<div class='mp-score'>{int(sc)}</div>"
+            if r.get('IsBP', False):
+                pill_content += "<div class='mp-icon'>🎯</div>"
+
+            html_picks += f"<div class='match-pill' style='background:{bg}; color:{txt_col}; border:{border}' title='Pick #{r['Pick']}'>{pill_content}</div>"
+        html_picks += "</div>"
+        st.markdown(html_picks, unsafe_allow_html=True)
+    else:
+        st.info("Pas encore assez de matchs joués.")
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    col_grid, col_top5 = st.columns([3, 1], gap="medium")
+
+    with col_grid:
+        r1c1, r1c2, r1c3 = st.columns(3, gap="small")
+        with r1c1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(p_data['ReliabilityPct'])}%</div><div class='stat-mini-lbl'>FIABILITÉ (> 20 PTS)</div></div>", unsafe_allow_html=True)
+        with r1c2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{p_data['Last15']:.1f}</div><div class='stat-mini-lbl'>MOYENNE 15 JOURS</div></div>", unsafe_allow_html=True)
+        with r1c3: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{color_diff}'>{sign}{diff_form:.1f}%</div><div class='stat-mini-lbl'>DYNAMIQUE 15J</div></div>", unsafe_allow_html=True)
+
+        st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
+
+        r2c1, r2c2, r2c3 = st.columns(3, gap="small")
+        with r2c1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{p_data['Moyenne_Raw']:.1f}</div><div class='stat-mini-lbl'>MOYENNE PURE</div></div>", unsafe_allow_html=True)
+        with r2c2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(p_data['Best_Raw'])}</div><div class='stat-mini-lbl'>MEILLEUR SCORE SEC</div></div>", unsafe_allow_html=True)
+        with r2c3: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val'>{int(p_data['Worst'])}</div><div class='stat-mini-lbl'>PIRE SCORE</div></div>", unsafe_allow_html=True)
+
+        st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
+
+        r3c1, r3c2, r3c3 = st.columns(3, gap="small")
+        with r3c1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_BLUE}'>{int(p_data['Count35'])}</div><div class='stat-mini-lbl'>SAFE ZONE (> 35 PTS)</div></div>", unsafe_allow_html=True)
+        with r3c2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_GREEN}'>{int(p_data['Nukes'])}</div><div class='stat-mini-lbl'>NUKES (> 50 PTS)</div></div>", unsafe_allow_html=True)
+        with r3c3: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_RED}'>{int(p_data['Carottes'])}</div><div class='stat-mini-lbl'>CAROTTES (< 20 PTS)</div></div>", unsafe_allow_html=True)
+
+        st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
+
+        r4c1, r4c2, r4c3 = st.columns(3, gap="small")
+        with r4c1: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_PURPLE}'>{int(p_data['BP_Count'])}</div><div class='stat-mini-lbl'>TOTAL BEST PICKS 🎯</div></div>", unsafe_allow_html=True)
+        with r4c2: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_GOLD}'>{int(p_data['Alpha_Count'])}</div><div class='stat-mini-lbl'>MVP DU SOIR</div></div>", unsafe_allow_html=True)
+        with r4c3: st.markdown(f"<div class='stat-box-mini'><div class='stat-mini-val' style='color:{C_BONUS}'>{p_data['Avg_Bonus']:.1f}</div><div class='stat-mini-lbl'>MOYENNE SOUS BONUS 🌟</div></div>", unsafe_allow_html=True)
+
+    with col_top5:
+        st.markdown("#### 🌟 TOP 5 PICKS")
+        st.markdown("<div class='chart-desc'>Meilleurs scores de la période.</div>", unsafe_allow_html=True)
+        top_5 = p_hist_all.sort_values('Score', ascending=False).head(5)
+        for i, r in top_5.reset_index().iterrows():
+            rank_num = i + 1
+            border_col = C_GOLD if rank_num == 1 else (C_SILVER if rank_num == 2 else (C_BRONZE if rank_num == 3 else "#444"))
+            tags = []
+            if r['IsBonus']: tags.append("🌟 x2")
+            if r.get('IsBP', False): tags.append("🎯 BP")
+            tags_html = f"<div class='tp-tags'>{' '.join(tags)}</div>" if tags else ""
+            html_card = f"""<div class="top-pick-card" style="border-left: 4px solid {border_col}"><div class="tp-rank-badge" style="border-color:{border_col}; color:{border_col}">{rank_num}</div><div class="tp-content"><div class="tp-date">Pick #{r['Pick']}</div>{tags_html}</div><div class="tp-score-big">{int(r['Score'])}</div></div>"""
+            st.markdown(html_card, unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown("<h3 style='margin-bottom:10px'>📡 PROFIL ATHLÉTIQUE</h3>", unsafe_allow_html=True)
+
+    c_radar_graph, c_radar_legend = st.columns([2, 1], gap="large")
+    with c_radar_graph:
+        max_avg = full_stats['Moyenne'].max(); max_best = full_stats['Best'].max(); max_last10 = full_stats['Last10'].max(); max_nukes = full_stats['Nukes'].max()
+        reg_score = 100 - ((p_data['StdDev'] / full_stats['StdDev'].max()) * 100)
+        r_vals = [(p_data['Moyenne'] / max_avg) * 100, (p_data['Best'] / max_best) * 100, (p_data['Last10'] / max_last10) * 100, reg_score, (p_data['Nukes'] / (max_nukes if max_nukes > 0 else 1)) * 100]
+        r_cats = ['SCORING', 'CEILING', 'FORME', 'RÉGULARITÉ', 'CLUTCH']
+        fig_radar = go.Figure(data=go.Scatterpolar(r=r_vals + [r_vals[0]], theta=r_cats + [r_cats[0]], fill='toself', line_color=C_ACCENT, fillcolor="rgba(206, 17, 65, 0.3)"))
+        fig_radar.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 100], showticklabels=False, linecolor='#333'), bgcolor='rgba(0,0,0,0)'), paper_bgcolor='rgba(0,0,0,0)', font=dict(color='white', size=14, family="Rajdhani"), margin=dict(t=20, b=20, l=40, r=40), height=400)
+        st.plotly_chart(fig_radar, use_container_width=True)
+
+    with c_radar_legend:
+        st.markdown("""<div class='legend-box'><div class='legend-item'><div class='legend-title'>SCORING</div><div class='legend-desc'>Volume de points moyen sur la période.</div></div><div class='legend-item'><div class='legend-title'>CEILING (PLAFOND)</div><div class='legend-desc'>Record personnel (Potentiel max sur un match).</div></div><div class='legend-item'><div class='legend-title'>FORME</div><div class='legend-desc'>Dynamique actuelle sur les 10 derniers matchs.</div></div><div class='legend-item'><div class='legend-title'>RÉGULARITÉ</div><div class='legend-desc'>Capacité à éviter les gros écarts de score.</div></div><div class='legend-item'><div class='legend-title'>CLUTCH</div><div class='legend-desc'>Fréquence des très gros scores (> 50 points).</div></div></div>""", unsafe_allow_html=True)
+
+    c_dist, c_trend = st.columns(2, gap="medium")
+    with c_dist:
+        if not p_hist_all.empty:
+            st.markdown("#### 📊 DISTRIBUTION DES SCORES", unsafe_allow_html=True)
+            fig_hist = px.histogram(p_hist_all, x="Score", nbins=15, color_discrete_sequence=[C_ACCENT], text_auto=True)
+            fig_hist.update_traces(marker_line_color='white', marker_line_width=1, opacity=0.8)
+            fig_hist.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, margin=dict(l=0, r=0, t=10, b=0), height=250, xaxis_title=None, yaxis_title=None, bargap=0.1)
+            st.plotly_chart(fig_hist, use_container_width=True)
+
+    with c_trend:
+        if not p_hist_all.empty:
+            st.markdown("#### 📈 TENDANCE (15 DERNIERS MATCHS)", unsafe_allow_html=True)
+            last_15_data = p_hist_all.sort_values('Pick').tail(15)
+            if not last_15_data.empty:
+                fig_trend = px.line(last_15_data, x="Pick", y="Score", markers=True)
+                fig_trend.update_traces(line_color=C_GOLD, marker_color=C_ACCENT, marker_size=8)
+                fig_trend.add_hline(y=p_data['Moyenne'], line_dash="dot", line_color=C_TEXT, annotation_text="Moy. Période", annotation_position="bottom right")
+                fig_trend.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, margin=dict(l=0, r=0, t=10, b=0), height=250, xaxis_title=None, yaxis_title=None)
+                st.plotly_chart(fig_trend, use_container_width=True)
+
+    if not p_hist_all.empty:
+        st.markdown("#### 🏔️ PARCOURS PÉRIODE", unsafe_allow_html=True)
+        team_season_avg = df['Score'].mean()
+        fig_evol = px.line(p_hist_all, x="Pick", y="Score", markers=True)
+        fig_evol.update_traces(line_color=C_BLUE, line_width=2, marker_size=4)
+        fig_evol.add_hline(y=p_data['Moyenne'], line_dash="dot", line_color=C_TEXT, annotation_text="Moy. Joueur", annotation_position="top left")
+        fig_evol.add_hline(y=team_season_avg, line_dash="dash", line_color=C_ORANGE, annotation_text="Moy. Team", annotation_position="bottom right", annotation_font_color=C_ORANGE)
+        fig_evol.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, margin=dict(l=0, r=0, t=30, b=0), height=300, xaxis_title="Pick #", yaxis_title="Points TTFL", legend=dict(font=dict(color="#E5E7EB")))
+        st.plotly_chart(fig_evol, use_container_width=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown("<h3 style='margin-bottom:15px'>⚔️ DUEL : LE COMPARATEUR</h3>", unsafe_allow_html=True)
+
+    dc1, dc2 = st.columns(2)
+    with dc1: p1_sel = st.selectbox("Joueur A", sorted(df['Player'].unique()), index=0, key="p1_comp")
+    with dc2: p2_sel = st.selectbox("Joueur B", sorted(df['Player'].unique()), index=1, key="p2_comp")
+
+    if p1_sel and p2_sel:
+        stat1 = full_stats[full_stats['Player'] == p1_sel].iloc[0]
+        stat2 = full_stats[full_stats['Player'] == p2_sel].iloc[0]
+        st.markdown(f"<div class='glass-card'><div style='display:flex; justify-content:space-between; border-bottom:1px solid rgba(255,255,255,0.05); padding:8px 0;'><div style='width:30%; text-align:left; font-family:Rajdhani; font-weight:700; color:#FFF'>{stat1['Total']:.0f}</div><div style='width:40%; text-align:center; font-size:0.8rem; color:#AAA; letter-spacing:1px;'>POINTS TOTAL</div><div style='width:30%; text-align:right; font-family:Rajdhani; font-weight:700; color:#FFF'>{stat2['Total']:.0f}</div></div></div>", unsafe_allow_html=True)
+
+def render_bonus_x2(df):
+    section_title("BONUS <span class='highlight'>ZONE</span>", "Analyse de Rentabilité")
+    df_bonus = df[df['IsBonus'] == True].copy()
+    df_bonus['RealGain'] = df_bonus['Score'] - df_bonus['ScoreVal']
+
+    available_months = df['Month'].unique().tolist()
+    sel_month = st.selectbox("Filtrer par Mois", ["Tous"] + [m for m in available_months if m != "Inconnu"])
+    if sel_month != "Tous": df_bonus_disp = df_bonus[df_bonus['Month'] == sel_month]
+    else: df_bonus_disp = df_bonus
+
+    if df_bonus_disp.empty:
+        st.info("Aucun bonus trouvé.")
+    else:
+        nb_bonus = len(df_bonus_disp)
+        avg_bonus = df_bonus_disp['Score'].mean()
+        total_gain = df_bonus_disp['RealGain'].sum()
+        success_rate = (len(df_bonus_disp[df_bonus_disp['Score'] >= 50]) / nb_bonus * 100) if nb_bonus > 0 else 0
+        best_bonus = df_bonus_disp['Score'].max()
+
+        k1, k2, k3, k4, k5 = st.columns(5)
+        with k1: kpi_card("TOTAL", nb_bonus, "BONUS JOUÉS 🌟", C_BONUS)
+        with k2: kpi_card("MOYENNE", f"{avg_bonus:.1f}", "PTS / BONUS", "#FFF")
+        with k3: kpi_card("GAIN RÉEL", f"+{int(total_gain)}", "PTS AJOUTÉS", C_GREEN)
+        with k4: kpi_card("RENTABILITÉ", f"{int(success_rate)}%", "SCORES > 50 PTS", C_PURPLE)
+        with k5: kpi_card("RECORD", int(best_bonus), "MAX SCORE", C_GOLD)
+
+        st.markdown("<br>", unsafe_allow_html=True)
+        c_chart1, c_chart2 = st.columns([2, 3], gap="medium")
+        with c_chart1:
+            st.markdown("#### 💰 IMPACT MENSUEL (GAINS RÉELS)")
+            monthly_gain = df_bonus.groupby('Month')['RealGain'].sum().reset_index()
+            fig_m = px.bar(monthly_gain, x='Month', y='RealGain', text='RealGain', color='RealGain', color_continuous_scale='Teal')
+            fig_m.update_traces(texttemplate='+%{text}', textposition='outside')
+            fig_m.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, xaxis=dict(title=None), yaxis=dict(showgrid=False, visible=False), height=300, showlegend=False, coloraxis_showscale=False)
+            st.plotly_chart(fig_m, use_container_width=True)
+        with c_chart2:
+            st.markdown("#### 🎯 SCORES BONUS PAR JOUEUR")
+            fig_strip = px.strip(df_bonus_disp, x="Player", y="Score", color="Player", color_discrete_map=PLAYER_COLORS, stripmode='overlay')
+            fig_strip.update_traces(marker=dict(size=12, line=dict(width=1, color='White'), opacity=0.9))
+            fig_strip.add_hline(y=50, line_dash="dash", line_color="#666", annotation_text="Seuil (50)", annotation_position="bottom right")
+            fig_strip.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, height=300, xaxis=dict(title=None), yaxis=dict(title="Score Total", range=[0, df_bonus_disp['Score'].max() + 10]), showlegend=False)
+            st.plotly_chart(fig_strip, use_container_width=True)
+
+        st.markdown("### 📜 HISTORIQUE DÉTAILLÉ")
+        st.dataframe(df_bonus_disp[['Pick', 'Player', 'Month', 'ScoreVal', 'Score', 'RealGain']].sort_values('Pick', ascending=False), hide_index=True, use_container_width=True)
+
+def render_no_carrot(df, team_streak_nc, full_stats):
+    section_title("ANTI <span class='highlight'>CARROTE</span>", "Objectif Fiabilité & Constance")
+    max_streak_team = 0
+    curr_str = 0
+    sorted_picks_asc = sorted(df['Pick'].unique())
+    for p_id in sorted_picks_asc:
+        d_min = df[df['Pick'] == p_id]['Score'].min()
+        if d_min >= 20: curr_str += 1
+        else:
+            if curr_str > max_streak_team: max_streak_team = curr_str
+            curr_str = 0
+    if curr_str > max_streak_team: max_streak_team = curr_str
+
+    iron_man_curr = full_stats.sort_values('CurrentNoCarrot', ascending=False).iloc[0]
+
+    k1, k2, k3 = st.columns(3)
+    with k1: kpi_card("SÉRIE TEAM EN COURS", f"{team_streak_nc}", "JOURS SANS CAROTTE", C_GREEN if team_streak_nc > 0 else C_RED)
+    with k2: kpi_card("RECORD PÉRIODE TEAM", f"{max_streak_team}", "JOURS CONSÉCUTIFS", C_GOLD)
+    with k3: kpi_card("IRON MAN (ACTUEL)", iron_man_curr['Player'], f"{int(iron_man_curr['CurrentNoCarrot'])} MATCHS SUITE", C_BLUE)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    c_graph, c_list = st.columns([2, 1], gap="large")
+    with c_graph:
+        st.markdown("#### 📉 ZONE DE DANGER (CAROTTES PAR SOIR)")
+        carrot_counts = df[df['Score'] < 20].groupby('Pick').size().reset_index(name='Carottes')
+        all_picks = pd.DataFrame({'Pick': sorted(df['Pick'].unique())})
+        carrot_chart = pd.merge(all_picks, carrot_counts, on='Pick', how='left').fillna(0)
+        carrot_chart['Color'] = carrot_chart['Carottes'].apply(lambda x: "#374151" if x == 0 else C_RED)
+        fig_car = px.bar(carrot_chart, x='Pick', y='Carottes')
+        fig_car.update_traces(marker_color=carrot_chart['Color'])
+        fig_car.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, xaxis=dict(showgrid=False), yaxis=dict(showgrid=True, gridcolor='#222', title="Nb Carottes"), height=350)
+        st.plotly_chart(fig_car, use_container_width=True)
+
+    with c_list:
+        st.markdown("#### 🛡️ SÉRIES EN COURS (JOUEURS)")
+        sorted_reliability = full_stats.sort_values('CurrentNoCarrot', ascending=False)[['Player', 'CurrentNoCarrot']]
+        for i, r in sorted_reliability.iterrows():
+            val = int(r['CurrentNoCarrot'])
+            col_bar = C_GREEN if val >= 10 else (C_BLUE if val >= 5 else C_TEXT)
+            width = min(100, val * 2)
+            st.markdown(f"<div style='margin-bottom:8px;'><div style='display:flex; justify-content:space-between; font-size:0.9rem; font-weight:600; color:{C_TEXT}'><span>{r['Player']}</span><span style='color:{col_bar}'>{val}</span></div><div style='width:100%; background:#222; height:6px; border-radius:3px; margin-top:2px;'><div style='width:{width}%; background:{col_bar}; height:100%; border-radius:3px;'></div></div></div>", unsafe_allow_html=True)
+
+def render_trends(df, latest_pick):
+    section_title("TENDANCES", "Analyse de la forme récente (15 derniers jours)")
+    df_15 = df[df['Pick'] > (latest_pick - 15)]
+    team_daily_15 = df_15.groupby('Pick')['Score'].sum()
+    avg_15_team = team_daily_15.mean()
+    team_daily_season = df.groupby('Pick')['Score'].sum()
+    season_avg_team = team_daily_season.mean()
+    team_trend_diff = ((avg_15_team - season_avg_team) / season_avg_team) * 100
+    best_form_player = df_15.groupby('Player')['Score'].mean().idxmax()
+    best_form_val = df_15.groupby('Player')['Score'].mean().max()
+    avg_15_indiv = df_15['Score'].mean()
+    max_team_15 = team_daily_15.max()
+
+    k1, k2, k3, k4, k5 = st.columns(5)
+    with k1: kpi_card("MOYENNE TEAM (15J)", f"{avg_15_team:.0f}", "POINTS / SOIR", C_BLUE)
+    with k2: kpi_card("MOYENNE / PICK (15J)", f"{avg_15_indiv:.1f}", "INDIVIDUEL", "#FFF")
+    col_trend = C_GREEN if team_trend_diff > 0 else C_RED
+    with k3: kpi_card("DYNAMIQUE", f"{'+' if team_trend_diff > 0 else ''}{team_trend_diff:.1f}%", "VS PÉRIODE", col_trend)
+    with k4: kpi_card("PLAFOND TEAM (15J)", int(max_team_15), "MEILLEUR SOIR", C_GOLD)
+    with k5: kpi_card("MVP (15J)", best_form_player, f"{best_form_val:.1f} PTS", C_ACCENT)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown("#### 📉 ÉVOLUTION DU SCORE D'ÉQUIPE (15 DERNIERS JOURS)")
+    fig_team_15 = px.line(team_daily_15, markers=True)
+    fig_team_15.update_traces(line_color=C_ACCENT, line_width=3, marker_size=8)
+    fig_team_15.add_hline(y=season_avg_team, line_dash="dot", line_color=C_TEXT, annotation_text=f"Moyenne ({int(season_avg_team)})", annotation_position="bottom right")
+    fig_team_15.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, xaxis=dict(showgrid=False, title=None), yaxis=dict(showgrid=True, gridcolor='#222', title="Points Totaux"), height=350, showlegend=False)
+    st.plotly_chart(fig_team_15, use_container_width=True)
+
+    player_season_avg = df.groupby('Player')['Score'].mean()
+    player_15_avg = df[df['Pick'] > (latest_pick - 15)].groupby('Player')['Score'].mean()
+    delta_df = pd.DataFrame({'Season': player_season_avg, 'Last15': player_15_avg})
+    delta_df['Delta'] = delta_df['Last15'] - delta_df['Season']
+    delta_df = delta_df.dropna()
+    hot_players = delta_df[delta_df['Delta'] > 0].sort_values('Delta', ascending=False).head(5)
+    cold_players = delta_df[delta_df['Delta'] < 0].sort_values('Delta', ascending=True).head(5)
+
+    c_hot, c_cold = st.columns(2, gap="large")
+    with c_hot:
+        st.markdown(f"<div class='trend-box'><div class='hot-header'>🔥 EN FEU</div>", unsafe_allow_html=True)
+        if hot_players.empty: st.info("Personne.")
+        else:
+            for p, row in hot_players.iterrows():
+                st.markdown(f"<div class='trend-card-row'><div class='trend-name'>{p}</div><div style='text-align:right'><div class='trend-val' style='color:{C_GREEN}'>{row['Last15']:.1f}</div><div class='trend-delta' style='color:{C_GREEN}'>+{row['Delta']:.1f}</div></div></div>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+    with c_cold:
+        st.markdown(f"<div class='trend-box'><div class='cold-header'>❄️ DANS LE DUR</div>", unsafe_allow_html=True)
+        if cold_players.empty: st.info("Personne.")
+        else:
+            for p, row in cold_players.iterrows():
+                st.markdown(f"<div class='trend-card-row'><div class='trend-name'>{p}</div><div style='text-align:right'><div class='trend-val' style='color:{C_RED}'>{row['Last15']:.1f}</div><div class='trend-delta' style='color:{C_RED}'>{row['Delta']:.1f}</div></div></div>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+def render_hall_of_fame(df_full_history, bp_map, daily_max_map):
+    section_title("HALL OF <span class='highlight'>FAME</span>", "Records & Trophées")
+    st.markdown("<h3 style='margin-bottom:15px; font-family:Rajdhani; color:#AAA;'>🏆 RAPTORS SEASON TROPHIES</h3>", unsafe_allow_html=True)
+    trophy_cols = st.columns(4)
+    season_keys = [k for k in SEASONS_CONFIG.keys() if "SAISON COMPLÈTE" not in k]
+    real_latest_pick = df_full_history['Pick'].max() if not df_full_history.empty else 0
+
+    for i, s_name in enumerate(season_keys):
+        s_start, s_end = SEASONS_CONFIG[s_name]
+        short_name = s_name.split(':')[0].replace("PART ", "P")
+        full_title = s_name.split(':')[1].split('(')[0].strip()
+        details = SEASONS_DETAILS[i]
+        dates_txt = details["dates"]
+
+        is_finished = real_latest_pick > s_end
+        is_active = s_start <= real_latest_pick <= s_end
+
+        card_bg = "rgba(255,255,255,0.02)"
+        border_col = "#333"
+        title_col = "#666"
+        icon = "🔒"
+        player_name = "VERROUILLÉ"
+        score_val = "-"
+
+        if real_latest_pick >= s_start:
+            df_part = df_full_history[(df_full_history['Pick'] >= s_start) & (df_full_history['Pick'] <= s_end)]
+            if not df_part.empty:
+                leader = df_part.groupby('Player')['Score'].sum().sort_values(ascending=False).head(1)
+                if not leader.empty:
+                    player_name = leader.index[0]
+                    score_val = f"{int(leader.values[0])} pts"
+            if is_finished:
+                card_bg = "linear-gradient(145deg, rgba(255, 215, 0, 0.1) 0%, rgba(0,0,0,0.4) 100%)"
+                border_col = C_GOLD; title_col = C_GOLD; icon = "👑"
+            elif is_active:
+                card_bg = "linear-gradient(145deg, rgba(59, 130, 246, 0.1) 0%, rgba(0,0,0,0.4) 100%)"
+                border_col = C_BLUE; title_col = C_BLUE; icon = "🔥"
+
+        with trophy_cols[i]:
+            st.markdown(f"""<div style="background:{card_bg}; border:1px solid {border_col}; border-radius:10px; padding:15px; text-align:center; height:100%; position:relative;"><div style="font-size:0.7rem; color:#888;">{short_name}</div><div style="font-family:Rajdhani; font-weight:700; color:{title_col}; font-size:0.9rem;">{full_title}</div><div style="font-size:1.5rem; margin-bottom:5px;">{icon}</div><div style="font-family:Rajdhani; font-weight:800; color:#FFF; font-size:1.1rem;">{player_name}</div><div style="font-size:0.8rem; color:{title_col};">{score_val}</div></div>""", unsafe_allow_html=True)
+
+    st.markdown("<div style='height: 50px;'></div>", unsafe_allow_html=True)
+    st.markdown("<h3 style='margin-bottom:10px; font-family:Rajdhani; color:#AAA;'>🏛️ RECORDS GLOBAUX SAISON</h3>", unsafe_allow_html=True)
+
+    full_stats_global = compute_stats(df_full_history, bp_map, daily_max_map)
+    phoenix_list = []
+    deck_list = []
+    for p in df_full_history['Player'].unique():
+        p_df = df_full_history[df_full_history['Player'] == p].sort_values('Pick')
+        scores = p_df['Score'].values
+        max_phoenix_val = 0
+        for i in range(1, len(scores)):
+            if scores[i-1] < 20 and scores[i] > max_phoenix_val: max_phoenix_val = scores[i]
+        phoenix_list.append({'Player': p, 'PhoenixScore': max_phoenix_val})
+        if len(scores) >= 7:
+            r_sum = pd.Series(scores).rolling(window=7).sum().max()
+            deck_list.append({'Player': p, 'DeckScore': r_sum})
+        else: deck_list.append({'Player': p, 'DeckScore': 0})
+
+    phoenix_winner = pd.DataFrame(phoenix_list).sort_values('PhoenixScore', ascending=False).iloc[0]
+    deck_winner = pd.DataFrame(deck_list).sort_values('DeckScore', ascending=False).iloc[0]
+
+    sniper = full_stats_global.sort_values('Moyenne', ascending=False).iloc[0]
+    pure_avg = full_stats_global.sort_values('Moyenne_Raw', ascending=False).iloc[0]
+    sniper_bp = full_stats_global.sort_values('BP_Count', ascending=False).iloc[0]
+
+    hof_list = [
+        {"title": "THE GOAT", "icon": "🏆", "color": C_GOLD, "player": sniper['Player'], "val": f"{sniper['Moyenne']:.1f}", "unit": "PTS MOYENNE"},
+        {"title": "REAL MVP", "icon": "💎", "color": C_PURE, "player": pure_avg['Player'], "val": f"{pure_avg['Moyenne_Raw']:.1f}", "unit": "PTS MOYENNE (BRUT)"},
+        {"title": "THE SNIPER", "icon": "🎯", "color": C_PURPLE, "player": sniper_bp['Player'], "val": int(sniper_bp['BP_Count']), "unit": "BEST PICKS"},
+        {"title": "KING OF DECKS", "icon": "🃏", "color": "#8B5CF6", "player": deck_winner['Player'], "val": int(deck_winner['DeckScore']), "unit": "PTS (7 MATCHS)"},
+        {"title": "THE PHOENIX", "icon": "🐣", "color": "#F97316", "player": phoenix_winner['Player'], "val": int(phoenix_winner['PhoenixScore']), "unit": "PTS REBOND"}
+    ]
+
+    rows = [hof_list[i:i+2] for i in range(0, len(hof_list), 2)]
+    for row_cards in rows:
+        cols = st.columns(2)
+        for i, card in enumerate(row_cards):
+            with cols[i]:
+                st.markdown(f"""<div class="glass-card" style="position:relative; overflow:hidden; margin-bottom:10px"><div style="position:absolute; right:-10px; top:-10px; font-size:5rem; opacity:0.05; pointer-events:none">{card['icon']}</div><div class="hof-badge" style="color:{card['color']}; border:1px solid {card['color']}">{card['icon']} {card['title']}</div><div style="display:flex; justify-content:space-between; align-items:flex-end;"><div><div class="hof-player">{card['player']}</div></div><div><div class="hof-stat" style="color:{card['color']}">{card['val']}</div><div class="hof-unit">{card['unit']}</div></div></div></div>""", unsafe_allow_html=True)
+
+def render_admin(day_df, latest_pick):
+    section_title("ADMIN <span class='highlight'>PANEL</span>", "Accès Restreint")
+    if "admin_access" not in st.session_state: st.session_state["admin_access"] = False
+    if not st.session_state["admin_access"]:
+        c1, c2, c3 = st.columns([1, 2, 1])
+        with c2:
+            st.markdown("<div class='glass-card'><h4>🔒 ZONE SÉCURISÉE</h4>", unsafe_allow_html=True)
+            pwd = st.text_input("Mot de passe", type="password", key="admin_pwd")
+            if st.button("DÉVERROUILLER"):
+                if "ADMIN_PASSWORD" in st.secrets and pwd == st.secrets["ADMIN_PASSWORD"]:
+                    st.session_state["admin_access"] = True; st.rerun()
+                else: st.error("⛔ Accès refusé")
+            st.markdown("</div>", unsafe_allow_html=True)
+    else:
+        c1, c2 = st.columns(2)
+        with c1:
+            st.markdown("<div class='glass-card'><h4>🔄 DONNÉES</h4>", unsafe_allow_html=True)
+            if st.button("FORCER LA MISE À JOUR", type="secondary"): st.cache_data.clear(); st.rerun()
+            st.markdown("</div>", unsafe_allow_html=True)
+        with c2:
+            st.markdown("<div class='glass-card'><h4>📡 DISCORD</h4>", unsafe_allow_html=True)
+            if st.button("🚀 ENVOYER RAPPORT", type="primary"):
+                res = send_discord_webhook(day_df, latest_pick, "https://raptorsttfl-dashboard.streamlit.app/")
+                if res == "success": st.success("✅ Envoyé !")
+                else: st.error(f"Erreur : {res}")
+            st.markdown("</div>", unsafe_allow_html=True)
+        if st.button("🔒 VERROUILLER"): st.session_state["admin_access"] = False; st.rerun()

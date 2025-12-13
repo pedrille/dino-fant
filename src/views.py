@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -228,11 +227,7 @@ def render_team_hq(df, latest_pick, team_rank, team_history, team_avg_per_pick, 
 
     st.markdown("### 📊 DATA ROOM")
     # Note: passing full_stats here is assumed
-    # Need to pass full_stats to this function or compute locally?
-    # It is cleaner to pass it. Added to args.
-    # Wait, team_hq does not have full_stats in arg list above.
-    # I should add it.
-
+    
 def render_player_lab(df, full_stats):
     section_title("PLAYER <span class='highlight'>LAB</span>", "Deep Dive Analytics")
     st.markdown("<div class='widget-title'>👤 SÉLECTION DU JOUEUR</div>", unsafe_allow_html=True)
@@ -547,9 +542,11 @@ def render_hall_of_fame(df_full_history, bp_map, daily_max_map):
         full_title = s_name.split(':')[1].split('(')[0].strip()
         details = SEASONS_DETAILS[i]
         dates_txt = details["dates"]
+        desc_txt = details["desc"]
 
         is_finished = real_latest_pick > s_end
         is_active = s_start <= real_latest_pick <= s_end
+        is_future = real_latest_pick < s_start
 
         card_bg = "rgba(255,255,255,0.02)"
         border_col = "#333"
@@ -558,7 +555,7 @@ def render_hall_of_fame(df_full_history, bp_map, daily_max_map):
         player_name = "VERROUILLÉ"
         score_val = "-"
 
-        if real_latest_pick >= s_start:
+        if not is_future:
             df_part = df_full_history[(df_full_history['Pick'] >= s_start) & (df_full_history['Pick'] <= s_end)]
             if not df_part.empty:
                 leader = df_part.groupby('Player')['Score'].sum().sort_values(ascending=False).head(1)
@@ -617,7 +614,11 @@ def render_hall_of_fame(df_full_history, bp_map, daily_max_map):
 
 def render_admin(day_df, latest_pick):
     section_title("ADMIN <span class='highlight'>PANEL</span>", "Accès Restreint")
-    if "admin_access" not in st.session_state: st.session_state["admin_access"] = False
+    
+    # Initialisation de l'état de session pour l'accès admin
+    if "admin_access" not in st.session_state: 
+        st.session_state["admin_access"] = False
+
     if not st.session_state["admin_access"]:
         c1, c2, c3 = st.columns([1, 2, 1])
         with c2:
@@ -625,20 +626,32 @@ def render_admin(day_df, latest_pick):
             pwd = st.text_input("Mot de passe", type="password", key="admin_pwd")
             if st.button("DÉVERROUILLER"):
                 if "ADMIN_PASSWORD" in st.secrets and pwd == st.secrets["ADMIN_PASSWORD"]:
-                    st.session_state["admin_access"] = True; st.rerun()
-                else: st.error("⛔ Accès refusé")
+                    st.session_state["admin_access"] = True
+                    st.rerun()
+                else:
+                    st.error("⛔ Accès refusé")
             st.markdown("</div>", unsafe_allow_html=True)
     else:
         c1, c2 = st.columns(2)
         with c1:
             st.markdown("<div class='glass-card'><h4>🔄 DONNÉES</h4>", unsafe_allow_html=True)
-            if st.button("FORCER LA MISE À JOUR", type="secondary"): st.cache_data.clear(); st.rerun()
+            if st.button("FORCER LA MISE À JOUR", type="secondary"): 
+                st.cache_data.clear()
+                st.rerun()
             st.markdown("</div>", unsafe_allow_html=True)
+        
         with c2:
             st.markdown("<div class='glass-card'><h4>📡 DISCORD</h4>", unsafe_allow_html=True)
             if st.button("🚀 ENVOYER RAPPORT", type="primary"):
-                res = send_discord_webhook(day_df, latest_pick, "https://raptorsttfl-dashboard.streamlit.app/")
-                if res == "success": st.success("✅ Envoyé !")
-                else: st.error(f"Erreur : {res}")
+                # URL de l'app pour le lien dans le message Discord
+                app_url = "https://raptorsttfl-dashboard.streamlit.app/"
+                res = send_discord_webhook(day_df, latest_pick, app_url)
+                if res == "success": 
+                    st.success("✅ Envoyé !")
+                else: 
+                    st.error(f"Erreur : {res}")
             st.markdown("</div>", unsafe_allow_html=True)
-        if st.button("🔒 VERROUILLER"): st.session_state["admin_access"] = False; st.rerun()
+        
+        if st.button("🔒 VERROUILLER"): 
+            st.session_state["admin_access"] = False
+            st.rerun()

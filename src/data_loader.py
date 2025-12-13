@@ -1,5 +1,5 @@
-
 import pandas as pd
+import numpy as np  # <--- C'était la ligne manquante !
 import streamlit as st
 import unicodedata
 from streamlit_gsheets import GSheetsConnection

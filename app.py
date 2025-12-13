@@ -1,25 +1,13 @@
 import streamlit as st
+from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from streamlit_option_menu import option_menu
+import numpy as np
+import requests
 import streamlit.components.v1 as components
 import random
-
-# --- MODULE IMPORTS ---
-from src.config import (
-    SEASONS_CONFIG, SEASONS_DETAILS, PLAYER_COLORS,
-    C_BG, C_ACCENT, C_TEXT, C_GOLD, C_SILVER, C_BRONZE,
-    C_GREEN, C_BLUE, C_PURPLE, C_ALPHA, C_IRON, C_BONUS,
-    C_PURE, C_ORANGE, C_RED, C_ALIEN
-)
-from src.ui import (
-    inject_custom_css, kpi_card, section_title,
-    render_gauge, get_uniform_color
-)
-from src.data_loader import load_data
-from src.stats import compute_stats, get_comparative_stats
-from src.utils import send_discord_webhook
 
 # --- 1. CONFIGURATION & ASSETS ---
 st.set_page_config(
@@ -29,10 +17,653 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- 2. CSS PREMIUM ---
-inject_custom_css()
+# ✅ LIEN DE L'IMAGE DISCORD (RAW)
+DISCORD_AVATAR_URL = "https://raw.githubusercontent.com/pedrille/dino-fant/main/basketball_discord.png"
 
-# --- 3. MAIN APP ---
+# --- CONFIG COULEURS JOUEURS (IDENTITÉ VISUELLE) ---
+PLAYER_COLORS = {
+    "Pedrille": "#CE1141",     # Raptors Red
+    "Tomus06": "#FFD700",      # Gold
+    "Mims22": "#10B981",       # Emerald Green
+    "MadDawgs": "#3B82F6",     # Royal Blue
+    "Gabeur": "#8B5CF6",       # Violet
+    "HoodieRigone": "#F97316", # Orange
+    "iAmDjuu25": "#06B6D4",    # Cyan
+    "Luoshtgin": "#EC4899",    # Pink
+    "Mendosaaaa": "#84CC16",   # Lime
+    "Duduge21": "#6366F1",     # Indigo
+    "Inconnu": "#9CA3AF"
+}
+
+# --- CONFIG PUNCHLINES (ANTI-PACERS) ---
+PACERS_PUNCHLINES = [
+    "Un bon Pacer est un Pacer sous carotte 🥕",
+    "PACERS : Petit Animal Chétif Et Rarement Stylé 🐁",
+    "Les Pacers gèrent leur avance comme Doc Rivers gère un 3-1 📉",
+    "Info : Les Pacers mangent les kiwis avec la peau 🥝",
+    "Les Pacers c'est les Clippers : beaucoup de bruit, zéro bague 💍",
+    "Si on change quelques lettres à Pacers, ça donne 'Trompette' 🎺",
+    "PACER : Personne Ayant une Chatte EnoRme 🐱",
+    "Stat du jour : 100% des Pacers portent des chaussettes avec des sandales 🧦",
+    "L'effectif des Pacers est aussi solide que les genoux de Derrick Rose 🌹💔",
+    "Définition de Pacers : 'Groupe de personnes ayant beaucoup de chance' 🍀",
+    "Les Pacers sont une erreur de casting, comme Marvin Bagley devant Luka 🇸🇮",
+    "Sondage : Les Pacers préfèrent les raisins secs aux pépites de chocolat 🍪",
+    "PACERS : Pas Assez Compétents Et Réellement Surcotés 📉",
+    "Le classement est formel : Les Pacers trichent (source : tkt) 🕵️‍♂️",
+    "Ball Don't Lie : Les Pacers vont finir par payer l'addition 🗣️",
+    "Info : Les Pacers applaudissent quand l'avion atterrit 👏✈️",
+    "Les Pacers sont aussi aimés que Dillon Brooks 🐻",
+    "Pacers ? Connais pas. Ça se mange ? 🍔",
+    "Les Pacers font plus de briques que Westbrook un soir de pleine lune 🌕",
+    "Un Pacer ne fait pas de Best Pick, il fait un 'Pick par erreur' 🤷‍♂️",
+    "Le QI Basket des Pacers est inférieur au temps de jeu de Thanasis 🇬🇷",
+    "Insolite : 100% des Pacers mettent de la pizza sur leur ananas 🍍",
+    "Les Pacers passeront le 2ème tour quand Embiid le passera (jamais) 🚑",
+    "Les Pacers c'est comme les éclairs au café... C'est de la m**** ☕",
+    "Les Pacers croient que 'Tanking' est le nom d'un joueur chinois 🇨🇳",
+    "Si on retourne le classement, les Pacers sont enfin à leur vraie place 🙃"
+]
+
+# --- CONFIG SAISONS (SPRINTS V22.0) ---
+# Bornes exactes basées sur le calendrier 2025-2026
+SEASONS_CONFIG = {
+    "🏆 SAISON COMPLÈTE": (1, 165),
+    "🍂 PART 1: THE OPENING RUN (Oct - Thanksgiving)": (1, 37),
+    "❄️ PART 2: WINTER WAR (Nov - NYE)": (38, 70),
+    "🎆 PART 3: NEW YEAR BATTLE (Jan - All-Star)": (71, 113),
+    "💍 PART 4: THE FINAL PUSH (Post All-Star)": (114, 165)
+}
+
+# --- CONFIG SAISONS (SPRINTS V22.0) ---
+# ... (ton SEASONS_CONFIG existant) ...
+
+# --- AJOUTER JUSTE EN DESSOUS ---
+SEASONS_DETAILS = [
+    {
+        "dates": "21 Oct - 26 Nov 2025",
+        "desc": "De l'Opening Night à la veille de Thanksgiving.",
+        "icon": "🍂"
+    },
+    {
+        "dates": "28 Nov - 31 Dec 2025",
+        "desc": "Du lendemain de Thanksgiving au Réveillon (inclut Christmas Day).",
+        "icon": "❄️"
+    },
+    {
+        "dates": "01 Jan - 12 Fev 2026",
+        "desc": "Début 2026 jusqu'à la coupure du All-Star Break.",
+        "icon": "🎆"
+    },
+    {
+        "dates": "19 Fev - 12 Avr 2026",
+        "desc": "Reprise post All-Star jusqu'à la fin de la saison régulière.",
+        "icon": "💍"
+    }
+]
+
+# Palette de couleurs (Globales UI)
+C_BG = "#050505"
+C_ACCENT = "#CE1141" # Raptors Red
+C_TEXT = "#E5E7EB"
+C_GOLD = "#FFD700"
+C_SILVER = "#C0C0C0"
+C_BRONZE = "#CD7F32"
+C_GREEN = "#10B981"
+C_BLUE = "#3B82F6"
+C_PURPLE = "#8B5CF6"
+C_ALPHA = "#F472B6"
+C_IRON = "#A1A1AA"
+C_BONUS = "#06B6D4"
+C_PURE = "#14B8A6"
+C_ORANGE = "#F97316"
+C_RED = "#EF4444"
+C_DARK_GREY = "#1F2937"
+C_GREY_BAR = "#374151"
+C_ALIEN = "#84CC16"
+
+# --- FONCTION COULEUR UNIFIÉE ---
+def get_uniform_color(score):
+    if score < 20: return "#EF4444"   # C_RED (< 20)
+    elif score < 40: return "#374151" # GRIS-MID  (20-39)
+    else: return "#10B981"            # C_GREEN (40+)
+
+# --- 2. CSS PREMIUM ---
+st.markdown(f"""
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Rajdhani:wght@500;600;700;800&display=swap');
+    .stApp {{ background-color: {C_BG}; color: {C_TEXT}; font-family: 'Inter', sans-serif; }}
+    section[data-testid="stSidebar"] {{ background-color: #000000 !important; border-right: 1px solid #222; }}
+    section[data-testid="stSidebar"] img {{ pointer-events: none; }}
+    div[data-testid="stSidebarNav"] {{ display: none; }}
+    .nav-link {{ font-family: 'Rajdhani', sans-serif !important; font-weight: 700 !important; text-transform: uppercase !important; letter-spacing: 1px !important; }}
+    h1, h2, h3 {{ font-family: 'Rajdhani', sans-serif; text-transform: uppercase; margin: 0; }}
+    h1 {{ font-size: 3rem; font-weight: 800; background: linear-gradient(90deg, #FFF, #888); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }}
+    .sub-header {{ font-size: 0.9rem; color: #666; letter-spacing: 1.5px; margin-bottom: 25px; font-weight: 500; }}
+
+    /* --- FIX SELECTBOX LABEL COLOR --- */
+    .stSelectbox label {{ color: #E5E7EB !important; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; font-size: 0.8rem; }}
+
+    /* --- FIX UI DASHBOARD : CLASSE GENERIQUE --- */
+    .glass-card {{
+        background: linear-gradient(145deg, rgba(25,25,25,0.6) 0%, rgba(10,10,10,0.8) 100%);
+        backdrop-filter: blur(20px);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 16px;
+        padding: 24px;
+        margin-bottom: 20px;
+        box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
+    }}
+
+    /* --- NOUVELLE CLASSE SPECIFIQUE POUR LE HAUT DU DASHBOARD --- */
+    .kpi-dashboard-fixed {{
+        height: 190px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+    }}
+
+    .trend-section-title {{ font-family: 'Rajdhani'; font-size: 1.2rem; font-weight: 700; color: #FFF; margin-bottom: 5px; border-left: 4px solid #555; padding-left: 10px; }}
+    .trend-section-desc {{ font-size: 0.8rem; color: #888; margin-bottom: 15px; padding-left: 14px; font-style: italic; }}
+    .trend-box {{ background: rgba(255,255,255,0.03); border-radius: 12px; padding: 15px; border: 1px solid rgba(255,255,255,0.05); height: 100%; }}
+    .hot-header {{ color: {C_ACCENT}; border-bottom: 1px solid rgba(206, 17, 65, 0.3); padding-bottom: 8px; margin-bottom: 10px; font-weight: 700; font-family: 'Rajdhani'; font-size: 1.1rem; display:flex; align-items:center; gap:8px; }}
+    .cold-header {{ color: {C_BLUE}; border-bottom: 1px solid rgba(59, 130, 246, 0.3); padding-bottom: 8px; margin-bottom: 10px; font-weight: 700; font-family: 'Rajdhani'; font-size: 1.1rem; display:flex; align-items:center; gap:8px; }}
+    .t-row {{ display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.03); }}
+    .t-row:last-child {{ border-bottom: none; }}
+    .t-val {{ font-family: 'Rajdhani'; font-weight: 700; font-size: 1.2rem; text-align: right; }}
+    .t-sub {{ font-size: 0.7rem; color: #666; display: block; margin-top: 2px; text-align: right; }}
+    .t-name {{ font-weight: 500; color: #DDD; font-size: 0.95rem; }}
+    .hof-badge {{ display: inline-block; padding: 4px 12px; border-radius: 6px; font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; background: rgba(255,255,255,0.05); }}
+    .hof-player {{ font-family: 'Rajdhani'; font-size: 1.6rem; font-weight: 700; color: #FFF; }}
+    .hof-stat {{ font-family: 'Rajdhani'; font-size: 2.2rem; font-weight: 800; text-align: right; line-height: 1; }}
+    .hof-unit {{ font-size: 0.7rem; color: #666; text-align: right; font-weight: 600; text-transform: uppercase; }}
+    .kpi-label {{ color: #888; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px; }}
+    /* CORRECTION TAILLE DE POLICE ADAPTATIVE */
+    .kpi-num {{
+        font-family: 'Rajdhani';
+        font-weight: 800;
+        /* Avant : 2.8rem (trop gros) */
+        /* Maintenant : s'adapte entre 1.6rem et 2.2rem selon l'écran */
+        font-size: clamp(1.6rem, 2vw, 2.2rem);
+        line-height: 1.1;
+        color: #FFF;
+        /* Empêche les césures moches au milieu des mots */
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }}
+
+    /* --- TOOLTIP INFO SAISON --- */
+    .season-info-icon {{
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        font-size: 1rem;
+        color: rgba(255, 255, 255, 0.3);
+        cursor: help;
+        z-index: 10;
+        transition: color 0.3s;
+    }}
+    .season-info-icon:hover {{
+        color: #FFF;
+    }}
+
+    .season-tooltip {{
+        visibility: hidden;
+        width: 220px;
+        background-color: rgba(10, 10, 10, 0.95);
+        color: #EEE;
+        text-align: left;
+        border-radius: 8px;
+        padding: 12px;
+        position: absolute;
+        z-index: 100;
+        top: 35px; /* Apparaît sous l'icône */
+        right: 0;
+        border: 1px solid #444;
+        font-family: 'Inter', sans-serif;
+        font-size: 0.75rem;
+        line-height: 1.4;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.8);
+        opacity: 0;
+        transition: opacity 0.3s;
+        pointer-events: none; /* Evite de cliquer dessus par erreur */
+    }}
+
+    .season-info-icon:hover .season-tooltip {{
+        visibility: visible;
+        opacity: 1;
+    }}
+
+    .st-label {{ color: #CCC; font-weight:700; display:block; margin-bottom:2px; }}
+
+    /* TEAM HQ & GRILLES */
+    .stat-box-mini {{
+        background: rgba(255,255,255,0.03);
+        border:1px solid rgba(255,255,255,0.05);
+        border-radius:12px;
+        padding: 20px 10px;
+        text-align:center;
+        height:100%;
+        display:flex;
+        flex-direction:column;
+        justify-content:center;
+        margin-bottom: 0px;
+    }}
+    .stat-mini-val {{ font-family:'Rajdhani'; font-weight:700; font-size:1.8rem; color:#FFF; line-height:1; }}
+    .stat-mini-lbl {{ font-size:0.75rem; color:#888; text-transform:uppercase; margin-top:8px; letter-spacing:1px; }}
+    .stat-mini-sub {{ font-size:0.7rem; font-weight:600; margin-top:4px; color:#555; }}
+
+    /* Player Lab - Match Pills FIXED CENTERING WITH TARGET BELOW */
+    .match-pill {{
+        flex: 0 0 auto;
+        min-width: 40px;
+        height: 48px;
+        border-radius: 6px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        font-family: 'Rajdhani';
+        font-weight: 700;
+        font-size: 0.9rem;
+        color: #FFF;
+        margin: 0 2px;
+        line-height: 1;
+        padding-top: 2px;
+    }}
+    .mp-score {{ font-size: 1rem; }}
+    .mp-icon {{ font-size: 0.6rem; margin-top: 2px; opacity: 0.9; }}
+
+    .match-row {{
+        display: flex;
+        flex-direction: row-reverse;
+        overflow-x: auto;
+        gap: 4px;
+        padding-bottom: 8px;
+        width: 100%;
+        justify-content: flex-start;
+    }}
+
+    /* Boutons Streamlit Fix */
+    .stButton button {{
+        background-color: #1F2937 !important;
+        color: #FFFFFF !important;
+        border: 1px solid #374151 !important;
+        font-weight: 600 !important;
+        font-family: 'Rajdhani', sans-serif !important;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }}
+    .stButton button:hover {{
+        border-color: {C_ACCENT} !important;
+        color: {C_ACCENT} !important;
+        background-color: #111 !important;
+    }}
+
+    .stPlotlyChart {{ width: 100% !important; }}
+    div[data-testid="stDataFrame"] {{ border: none !important; }}
+    [data-testid="stSidebarUserContent"] {{ padding-top: 2rem; }}
+
+    /* Records Card Adjustment */
+    .hq-card-row {{ display:flex; justify-content:space-between; padding:12px 0; border-bottom:1px solid rgba(255,255,255,0.1); }}
+    .hq-card-row:last-child {{ border-bottom:none; }}
+    .hq-val {{ font-family:'Rajdhani'; font-weight:800; font-size:1.8rem; color:#FFF; }}
+    .hq-lbl {{ font-size:0.8rem; color:#AAA; text-transform:uppercase; display:flex; align-items:center; gap:8px; }}
+
+    .chart-desc {{ font-size:0.8rem; color:#888; margin-bottom:10px; font-style:italic; }}
+    .gauge-container {{ width: 100%; background-color: #222; border-radius: 10px; margin-bottom: 15px; }}
+    .gauge-fill {{ height: 10px; border-radius: 10px; transition: width 1s ease-in-out; }}
+    .gauge-label {{ display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 4px; color: #DDD; }}
+
+    /* TOP 5 PICKS STYLING - NEW V2 DESIGN FIXED */
+    .top-pick-card {{
+        display: flex;
+        align-items: center;
+        background: linear-gradient(90deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.01) 100%);
+        border: 1px solid rgba(255,255,255,0.05);
+        padding: 10px 15px;
+        margin-bottom: 8px;
+        border-radius: 8px;
+        transition: all 0.2s;
+    }}
+    .top-pick-card:hover {{ background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.1); transform: translateX(5px); }}
+
+    .tp-rank-badge {{
+        font-family: 'Rajdhani'; font-weight: 800; font-size: 1rem;
+        width: 30px; height: 30px;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: 50%;
+        background: #222; border: 2px solid #444; color: #FFF;
+        margin-right: 12px;
+        flex-shrink: 0;
+    }}
+
+    .tp-content {{ flex-grow: 1; overflow: hidden; }}
+    .tp-date {{ font-size: 0.75rem; color: #888; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 2px; }}
+    .tp-tags {{ font-size: 0.7rem; color: {C_BONUS}; font-weight: 600; }}
+
+    /* Correction ici : flex-shrink: 0 et margin-left pour forcer l'affichage */
+    .tp-score-big {{
+        font-family: 'Rajdhani';
+        font-weight: 800;
+        font-size: 1.8rem;
+        color: #FFF;
+        line-height: 1;
+        margin-left: 15px;
+        flex-shrink: 0;
+        min-width: 60px;
+        text-align: right;
+    }}
+
+    /* RADAR LEGEND CUSTOM */
+    .legend-box {{
+        display: flex; flex-direction: column; justify-content: center; height: 100%;
+        padding-left: 20px; border-left: 1px solid #333;
+    }}
+    .legend-item {{ margin-bottom: 15px; }}
+    .legend-title {{ color: {C_ACCENT}; font-family: 'Rajdhani'; font-weight: 700; font-size: 1rem; margin-bottom: 2px; }}
+    .legend-desc {{ color: #888; font-size: 0.8rem; line-height: 1.3; }}
+
+    /* Widget Title Custom */
+    .widget-title {{ font-family: 'Rajdhani'; font-weight: 700; text-transform: uppercase; color: #AAA; letter-spacing: 1px; margin-bottom: 5px; }}
+
+    /* TRENDS PAGE STYLING */
+    .trend-card-row {{
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.05);
+    }}
+    .trend-card-row:last-child {{ border: none; }}
+    .trend-name {{ font-weight: 500; color: #DDD; }}
+    .trend-val {{ font-family: 'Rajdhani'; font-weight: 700; font-size: 1.1rem; }}
+    .trend-delta {{ font-size: 0.8rem; margin-left: 8px; font-weight: 600; }}
+</style>
+""", unsafe_allow_html=True)
+
+# --- 3. DATA ENGINE ---
+@st.cache_data(ttl=0, show_spinner=False)
+def load_data():
+    conn = st.connection("gsheets", type=GSheetsConnection)
+    try:
+        if "SPREADSHEET_URL" not in st.secrets: return None, None, None, None, [], 0, {}
+
+        # A. VALEURS
+        df_valeurs = conn.read(spreadsheet=st.secrets["SPREADSHEET_URL"], worksheet="Valeurs", header=None, ttl=0).astype(str)
+        month_row = df_valeurs.iloc[0]
+        pick_row_idx = 2
+        picks_series = pd.to_numeric(df_valeurs.iloc[pick_row_idx, 1:], errors='coerce')
+
+        pick_to_month = {}
+        current_month = "Inconnu"
+        for col_idx in range(1, len(month_row)):
+            val_month = str(month_row[col_idx]).strip()
+            if val_month and val_month.lower() != 'nan' and val_month != '': current_month = val_month
+            pick_val = pd.to_numeric(df_valeurs.iloc[pick_row_idx, col_idx], errors='coerce')
+            if pd.notna(pick_val) and pick_val > 0: pick_to_month[int(pick_val)] = current_month
+
+        bp_row = df_valeurs[df_valeurs[0].str.contains("Score BP", na=False)]
+        bp_series = pd.to_numeric(bp_row.iloc[0, 1:], errors='coerce') if not bp_row.empty else pd.Series()
+        df_players = df_valeurs.iloc[pick_row_idx+1:pick_row_idx+50].copy().rename(columns={0: 'Player'})
+        stop = ["Team Raptors", "Score BP", "Classic", "BP", "nan", "Moyenne", "Somme"]
+        df_players = df_players[~df_players['Player'].isin(stop)].dropna(subset=['Player'])
+        df_players['Player'] = df_players['Player'].str.strip()
+
+        valid_map = {idx: int(val) for idx, val in picks_series.items() if pd.notna(val) and val > 0}
+        cols = ['Player'] + list(valid_map.keys())
+        cols = [c for c in cols if c in df_players.columns]
+        df_clean = df_players[cols].copy().rename(columns=valid_map)
+        df_long = df_clean.melt(id_vars=['Player'], var_name='Pick', value_name='ScoreRaw')
+
+        # --- LOGIQUE DE PARSING SCORE AVEC '!' ---
+        df_long['IsBP'] = df_long['ScoreRaw'].str.contains('!', na=False)
+        df_long['IsBonus'] = df_long['ScoreRaw'].str.contains(r'\*', na=False)
+        df_long['ScoreClean'] = df_long['ScoreRaw'].str.replace(r'[\*!]', '', regex=True)
+
+        df_long['ScoreVal'] = pd.to_numeric(df_long['ScoreClean'], errors='coerce')
+        df_long['Score'] = np.where(df_long['IsBonus'], df_long['ScoreVal'] * 2, df_long['ScoreVal'])
+        df_long['Pick'] = pd.to_numeric(df_long['Pick'], errors='coerce')
+        final_df = df_long.dropna(subset=['Score', 'Pick'])
+        final_df['Player'] = final_df['Player'].str.strip()
+        final_df['Month'] = final_df['Pick'].map(pick_to_month).fillna("Inconnu")
+
+        bp_map = {int(picks_series[idx]): val for idx, val in bp_series.items() if idx in valid_map}
+        daily_max_map = final_df.groupby('Pick')['Score'].max().to_dict()
+
+        daily_stats = final_df.groupby('Pick')['Score'].agg(['mean', 'std']).reset_index()
+        daily_stats.rename(columns={'mean': 'DailyMean', 'std': 'DailyStd'}, inplace=True)
+        final_df = pd.merge(final_df, daily_stats, on='Pick', how='left')
+        final_df['ZScore'] = np.where(final_df['DailyStd'] > 0, (final_df['Score'] - final_df['DailyMean']) / final_df['DailyStd'], 0)
+
+        # B. STATS (Uniquement pour historique classement)
+        # OPTIMISATION : On ne scanne plus pour les BP individuels ici
+        df_stats = conn.read(spreadsheet=st.secrets["SPREADSHEET_URL"], worksheet="Stats_Raptors_FR", header=None, ttl=0)
+        team_rank_history = []
+        team_current_rank = 0
+
+        # Récupération Historique Rang
+        start_row_rank = -1
+        col_start_rank = -1
+        for r_idx, row in df_stats.iterrows():
+            for c_idx, val in enumerate(row):
+                if str(val).strip() == "Classement":
+                    start_row_rank = r_idx; col_start_rank = c_idx; break
+            if start_row_rank != -1: break
+        if start_row_rank != -1:
+            for i in range(start_row_rank+1, start_row_rank+30):
+                if i >= len(df_stats): break
+                p_name = str(df_stats.iloc[i, col_start_rank]).strip()
+                if "Team Raptors" in p_name:
+                    hist_vals = df_stats.iloc[i, col_start_rank+1:col_start_rank+25].values
+                    valid_history = []
+                    for x in hist_vals:
+                        try:
+                            clean_x = str(x).replace(',', '').replace(' ', '')
+                            val = float(clean_x)
+                            if val > 0: valid_history.append(int(val))
+                        except: pass
+                    if valid_history:
+                        team_current_rank = valid_history[-1]
+                        team_rank_history = valid_history
+                    break
+
+        return final_df, team_current_rank, bp_map, team_rank_history, daily_max_map
+
+    except: return pd.DataFrame(), 0, {}, [], {}
+
+# OPTIMISATION : CACHING STATS CALCULATION
+@st.cache_data(ttl=300, show_spinner=False)
+def compute_stats(df, bp_map, daily_max_map):
+    stats = []
+    if df.empty: return pd.DataFrame()
+    latest_pick = df['Pick'].max()
+    season_avgs = df.groupby('Player')['Score'].mean()
+    season_avgs_raw = df.groupby('Player')['ScoreVal'].mean()
+    df_15 = df[df['Pick'] > (latest_pick - 15)]
+    avg_15 = df_15.groupby('Player')['Score'].mean()
+    df_10 = df[df['Pick'] > (latest_pick - 10)]
+    avg_10 = df_10.groupby('Player')['Score'].mean()
+    trend_data = {}
+    for p, d in df.sort_values('Pick').groupby('Player'): trend_data[p] = d['Score'].tail(20).tolist()
+
+    for p in df['Player'].unique():
+        d = df[df['Player'] == p].sort_values('Pick')
+        scores = d['Score'].values
+        scores_raw = d['ScoreVal'].values
+        picks = d['Pick'].values
+        bonuses = d['IsBonus'].values
+        z_scores = d['ZScore'].values
+
+        bonus_data = d[d['IsBonus'] == True]
+        scores_with_bonus = bonus_data['Score'].values
+        scores_without_bonus = d[d['IsBonus'] == False]['Score'].values
+        avg_with_bonus = scores_with_bonus.mean() if len(scores_with_bonus) > 0 else 0
+        avg_without_bonus = scores_without_bonus.mean() if len(scores_without_bonus) > 0 else 0
+        best_with_bonus = scores_with_bonus.max() if len(scores_with_bonus) > 0 else 0
+        best_without_bonus = scores_without_bonus.max() if len(scores_without_bonus) > 0 else 0
+
+        current_no_carrot_streak = 0
+        for s in reversed(scores):
+            if s >= 20: current_no_carrot_streak += 1
+            else: break
+
+        max_no_carrot = 0
+        current_count = 0
+        for s in scores:
+            if s >= 20:
+                current_count += 1
+                if current_count > max_no_carrot: max_no_carrot = current_count
+            else:
+                current_count = 0
+
+        max_alien_streak = 0
+        current_alien = 0
+        for s in scores:
+            if s >= 60:
+                current_alien += 1
+                if current_alien > max_alien_streak: max_alien_streak = current_alien
+            else:
+                current_alien = 0
+
+        try:
+            vals, counts = np.unique(scores, return_counts=True)
+            max_count_idx = np.argmax(counts)
+            mode_score = vals[max_count_idx]
+            mode_count = counts[max_count_idx]
+        except:
+            mode_score = 0
+            mode_count = 0
+
+        spread = scores.max() - scores.min()
+
+        # ... après spread = ...
+
+        # CALCUL TENDANCE 7 DERNIERS MATCHS
+        scores_last_7 = d['Score'].tail(7)
+        avg_last_7 = scores_last_7.mean() if len(scores_last_7) > 0 else 0
+        diff_7 = avg_last_7 - scores.mean()
+
+        if diff_7 >= 1: trend_icon = "↗️"
+        elif diff_7 <= -1: trend_icon = "↘️"
+        else: trend_icon = "➡️"
+
+        # ... continue vers stats.append ...
+
+        streak_30 = 0
+        for s in reversed(scores):
+            if s >= 30: streak_30 += 1
+            else: break
+        last_5 = scores[-5:]
+        last5_avg = last_5.mean() if len(scores) >= 5 else scores.mean()
+        momentum = last5_avg - scores.mean()
+
+        # OPTIMISATION : Calcul automatique des BP depuis les '!'
+        bp_count = d['IsBP'].sum()
+
+        alpha_count = 0; bonus_points_gained = 0; bonus_scores_list = []
+
+        for i, (pick_num, score) in enumerate(zip(picks, scores)):
+            if pick_num in daily_max_map and score >= daily_max_map[pick_num] and score > 0: alpha_count += 1
+            if bonuses[i]:
+                gain = score - scores_raw[i]
+                bonus_points_gained += gain
+                bonus_scores_list.append(score)
+
+        best_bonus = max(bonus_scores_list) if bonus_scores_list else 0
+        worst_bonus = min(bonus_scores_list) if bonus_scores_list else 0
+        avg_bonus_score = np.mean(bonus_scores_list) if bonus_scores_list else 0
+        s_avg = season_avgs.get(p, 0)
+        s_avg_raw = season_avgs_raw.get(p, 0)
+        l15_avg = avg_15.get(p, s_avg)
+        l10_avg = avg_10.get(p, s_avg)
+        progression_pct = ((l15_avg - s_avg) / s_avg) * 100 if s_avg > 0 else 0
+        reliability_pct = ((len(scores) - len(scores[scores < 20])) / len(scores)) * 100
+        avg_z = np.mean(z_scores) if len(z_scores) > 0 else 0
+
+        count_20_30 = len(scores[(scores >= 20) & (scores <= 30)])
+
+        stats.append({
+            'Player': p, 'Total': scores.sum(), 'Moyenne': scores.mean(), 'Moyenne_Raw': s_avg_raw,
+            'StdDev': scores.std(), 'Best': scores.max(), 'Best_Raw': scores_raw.max(),
+            'Worst': scores.min(), 'Worst_Raw': scores_raw.min(), 'Last': scores[-1],
+            'LastIsBonus': bonuses[-1] if len(bonuses) > 0 else False, 'Last5': last5_avg, 'Last10': l10_avg, 'Last15': l15_avg,
+            'Streak30': streak_30, 'Count30': len(scores[scores >= 30]), 'Count40': len(scores[scores >= 40]),
+            'Count35': len(scores[scores > 35]), 'Count2030': count_20_30,
+            'Carottes': len(scores[scores < 20]), 'Nukes': len(scores[scores >= 50]),
+            'BP_Count': bp_count, 'Alpha_Count': alpha_count,
+            'Bonus_Gained': bonus_points_gained, 'Best_Bonus': best_bonus, 'Worst_Bonus': worst_bonus,
+            'Avg_Bonus': avg_bonus_score, 'Momentum': momentum, 'Games': len(scores),
+            'ProgressionPct': progression_pct, 'ReliabilityPct': reliability_pct, 'AvgZ': avg_z,
+            'Trend': trend_data.get(p, []), 'AvgWithBonus': avg_with_bonus, 'AvgWithoutBonus': avg_without_bonus, 'BonusPlayed': len(scores_with_bonus),
+            'CurrentNoCarrot': current_no_carrot_streak, 'MaxNoCarrot': max_no_carrot, 'ModeScore': mode_score, 'ModeCount': mode_count, 'Spread': spread,
+            'Trend7Icon': trend_icon,
+            'MaxAlien': max_alien_streak
+        })
+    return pd.DataFrame(stats)
+
+def get_comparative_stats(df, current_pick, lookback=15):
+    start_pick = max(1, current_pick - lookback)
+    current_stats = df.groupby('Player')['Score'].agg(['sum', 'mean'])
+    current_stats['rank'] = current_stats['sum'].rank(ascending=False)
+    df_past = df[df['Pick'] <= start_pick]
+    if df_past.empty: return pd.DataFrame()
+    past_stats = df_past.groupby('Player')['Score'].agg(['sum', 'mean'])
+    past_stats['rank'] = past_stats['sum'].rank(ascending=False)
+    stats_delta = pd.DataFrame(index=current_stats.index)
+    stats_delta['mean_diff'] = current_stats['mean'] - past_stats['mean']
+    stats_delta['rank_diff'] = past_stats['rank'] - current_stats['rank']
+    return stats_delta
+
+def render_gauge(label, value, color):
+    return f"""
+    <div class="gauge-container">
+        <div class="gauge-label"><span>{label}</span><span>{int(value)}%</span></div>
+        <div style="width:100%; background:#333; height:8px; border-radius:4px; overflow:hidden">
+            <div style="width:{value}%; background:{color}; height:100%"></div>
+        </div>
+    </div>
+    """
+
+# --- 4. DISCORD ---
+def send_discord_webhook(day_df, pick_num, url_app):
+    if "DISCORD_WEBHOOK" not in st.secrets: return "missing_secret"
+    webhook_url = st.secrets["DISCORD_WEBHOOK"]
+    top_3 = day_df.head(3).reset_index(drop=True)
+    podium_text = ""
+    medals = ["🥇", "🥈", "🥉"]
+    for i, row in top_3.iterrows():
+        bonus_icon = " 🌟x2" if row['IsBonus'] else ""
+        bp_icon = " 🎯BP" if row.get('IsBP', False) else ""
+        podium_text += f"{medals[i]} **{row['Player']}** • {int(row['Score'])} pts{bonus_icon}{bp_icon}\n"
+
+    avg_score = int(day_df['Score'].mean())
+    random_quote = random.choice(PACERS_PUNCHLINES)
+    footer_text = "Pensée du jour • " + random_quote
+
+    data = {
+        "username": "RaptorsTTFL Dashboard",
+        "avatar_url": DISCORD_AVATAR_URL,
+        "embeds": [{
+            "title": f"🏀 RECAP DU PICK #{int(pick_num)}",
+            "description": f"Les matchs sont terminés, voici les scores de l'équipe !\n\n📊 **MOYENNE TEAM :** {avg_score} pts",
+            "color": 13504833,
+            "fields": [{"name": "🏆 LE PODIUM", "value": podium_text, "inline": False}, {"name": "", "value": f"👉 [Voir le Dashboard complet]({url_app})", "inline": False}],
+            "footer": {"text": footer_text}
+        }]
+    }
+    try: requests.post(webhook_url, json=data); return "success"
+    except Exception as e: return str(e)
+
+# --- 5. UI COMPONENTS ---
+# FIX DASHBOARD MVP: New Line for Badges + FIX UI 2 (Gestion du vide) + FIX UI 3 (Fixe Hauteur uniquement sur Dashboard)
+def kpi_card(label, value, sub, color="#FFF", is_fixed=False):
+    # Si is_fixed est True (pour le haut du dashboard), on ajoute la classe spécifique
+    style_class = "glass-card kpi-dashboard-fixed" if is_fixed else "glass-card"
+    st.markdown(f"""<div class="{style_class}" style="text-align:center"><div class="kpi-label">{label}</div><div class="kpi-num" style="color:{color}">{value}</div><div class="kpi-sub" style="color:{C_ACCENT}">{sub}</div></div>""", unsafe_allow_html=True)
+
+def section_title(title, subtitle):
+    st.markdown(f"<h1>{title}</h1><div class='sub-header'>{subtitle}</div>", unsafe_allow_html=True)
+
+# --- 6. MAIN APP ---
 try:
     # UX BOOSTER
     components.html("""
@@ -57,10 +688,7 @@ try:
     # --- SÉLECTEUR TEMPOREL (SIDEBAR) ---
     with st.sidebar:
         st.markdown("<div style='text-align:center; margin-bottom: 20px;'>", unsafe_allow_html=True)
-        try:
-            st.image("raptors-ttfl-min.png", use_container_width=True)
-        except:
-            st.warning("Image raptors-ttfl-min.png not found")
+        st.image("raptors-ttfl-min.png", use_container_width=True)
         st.markdown("</div>", unsafe_allow_html=True)
         
         # SÉLECTEUR DE PÉRIODE

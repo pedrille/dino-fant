@@ -1,104 +1,104 @@
-import streamlit as st
-from streamlit_gsheets import GSheetsConnection
 import pandas as pd
-import numpy as np
+import streamlit as st
+import unicodedata
 
-# --- 3. DATA ENGINE ---
-# OPTIMIZATION: Updated TTL to 600s (10 minutes)
-@st.cache_data(ttl=600, show_spinner=False)
-def load_data():
-    conn = st.connection("gsheets", type=GSheetsConnection)
+# Mapping des mois pour la conversion
+MONTH_MAPPING = {
+    'janvier': 'January', 'fevrier': 'February', 'mars': 'March', 'avril': 'April',
+    'mai': 'May', 'juin': 'June', 'juillet': 'July', 'aout': 'August',
+    'septembre': 'September', 'octobre': 'October', 'novembre': 'November', 'decembre': 'December'
+}
+
+def normalize_month(month_str):
+    """
+    Normalise une chaîne de caractères représentant un mois (en français).
+    Supprime les accents et met en minuscules.
+    Ex: 'décembre' -> 'decembre', 'Février' -> 'fevrier'
+    """
+    if not isinstance(month_str, str):
+        return month_str
+
+    # Mettre en minuscule
+    s = month_str.lower().strip()
+
+    # Supprimer les accents
+    # NFD décompose les caractères (ex: é -> e + accent aigu)
+    # On garde ensuite seulement les caractères qui ne sont pas des marques de combinaison (Mn)
+    s = ''.join(
+        c for c in unicodedata.normalize('NFD', s)
+        if unicodedata.category(c) != 'Mn'
+    )
+
+    return s
+
+@st.cache_data
+def load_data(csv_url):
+    """
+    Charge les données depuis une URL CSV Google Sheets.
+    Gère le parsing des dates en français et la conversion numérique.
+    """
     try:
-        if "SPREADSHEET_URL" not in st.secrets: return None, None, None, None, [], 0, {}
+        # Lecture du CSV
+        df = pd.read_csv(csv_url)
 
-        # A. VALEURS
-        df_valeurs = conn.read(spreadsheet=st.secrets["SPREADSHEET_URL"], worksheet="Valeurs", header=None, ttl=0).astype(str)
-        month_row = df_valeurs.iloc[0]
-        pick_row_idx = 2
-        picks_series = pd.to_numeric(df_valeurs.iloc[pick_row_idx, 1:], errors='coerce')
+        # Nettoyage des noms de colonnes (strip espaces)
+        df.columns = df.columns.str.strip()
 
-        pick_to_month = {}
-        current_month = "Inconnu"
-        for col_idx in range(1, len(month_row)):
-            val_month = str(month_row[col_idx]).strip()
-            if val_month and val_month.lower() != 'nan' and val_month != '':
-                # Normalisation des mois (accents) pour matcher les clés statiques
-                # Replaces é->e, û->u (e.g. Décembre -> Decembre)
-                val_month = val_month.capitalize().replace("\303\251", "e").replace("é", "e").replace("\303\273", "u").replace("û", "u")
-                current_month = val_month
-            pick_val = pd.to_numeric(df_valeurs.iloc[pick_row_idx, col_idx], errors='coerce')
-            if pd.notna(pick_val) and pick_val > 0: pick_to_month[int(pick_val)] = current_month
+        # Conversion de la colonne 'Date' en datetime
+        if 'Date' in df.columns:
+            # On s'assure que tout est string
+            df['Date_str'] = df['Date'].astype(str)
 
-        bp_row = df_valeurs[df_valeurs[0].str.contains("Score BP", na=False)]
-        bp_series = pd.to_numeric(bp_row.iloc[0, 1:], errors='coerce') if not bp_row.empty else pd.Series()
-        df_players = df_valeurs.iloc[pick_row_idx+1:pick_row_idx+50].copy().rename(columns={0: 'Player'})
-        stop = ["Team Raptors", "Score BP", "Classic", "BP", "nan", "Moyenne", "Somme"]
-        df_players = df_players[~df_players['Player'].isin(stop)].dropna(subset=['Player'])
-        df_players['Player'] = df_players['Player'].str.strip()
+            # Fonction locale pour parser la date "24 octobre 2024"
+            def parse_french_date(date_str):
+                try:
+                    parts = date_str.split() # ['24', 'octobre', '2024']
+                    if len(parts) >= 3:
+                        day = parts[0]
+                        month_raw = parts[1]
+                        year = parts[2]
 
-        valid_map = {idx: int(val) for idx, val in picks_series.items() if pd.notna(val) and val > 0}
-        cols = ['Player'] + list(valid_map.keys())
-        cols = [c for c in cols if c in df_players.columns]
-        df_clean = df_players[cols].copy().rename(columns=valid_map)
-        df_long = df_clean.melt(id_vars=['Player'], var_name='Pick', value_name='ScoreRaw')
+                        # Normalisation du mois (ex: 'décembre' -> 'decembre')
+                        month_norm = normalize_month(month_raw)
 
-        # --- LOGIQUE DE PARSING SCORE AVEC '!' ---
-        df_long['IsBP'] = df_long['ScoreRaw'].str.contains('!', na=False)
-        df_long['IsBonus'] = df_long['ScoreRaw'].str.contains(r'\*', na=False)
-        df_long['ScoreClean'] = df_long['ScoreRaw'].str.replace(r'[\*!]', '', regex=True)
+                        # Traduction
+                        month_en = MONTH_MAPPING.get(month_norm, month_norm)
 
-        df_long['ScoreVal'] = pd.to_numeric(df_long['ScoreClean'], errors='coerce')
-        df_long['Score'] = np.where(df_long['IsBonus'], df_long['ScoreVal'] * 2, df_long['ScoreVal'])
-        df_long['Pick'] = pd.to_numeric(df_long['Pick'], errors='coerce')
-        final_df = df_long.dropna(subset=['Score', 'Pick'])
-        final_df['Player'] = final_df['Player'].str.strip()
-        final_df['Month'] = final_df['Pick'].map(pick_to_month).fillna("Inconnu")
+                        date_en = f"{day} {month_en} {year}"
+                        return pd.to_datetime(date_en, format='%d %B %Y', errors='coerce')
+                    return pd.NaT
+                except:
+                    return pd.NaT
 
-        bp_map = {int(picks_series[idx]): val for idx, val in bp_series.items() if idx in valid_map}
-        daily_max_map = final_df.groupby('Pick')['Score'].max().to_dict()
+            df['Date'] = df['Date_str'].apply(parse_french_date)
 
-        daily_stats = final_df.groupby('Pick')['Score'].agg(['mean', 'std']).reset_index()
-        daily_stats.rename(columns={'mean': 'DailyMean', 'std': 'DailyStd'}, inplace=True)
-        final_df = pd.merge(final_df, daily_stats, on='Pick', how='left')
-        final_df['ZScore'] = np.where(final_df['DailyStd'] > 0, (final_df['Score'] - final_df['DailyMean']) / final_df['DailyStd'], 0)
+            # Extraction du mois (nom complet en français pour l'affichage si besoin, ou on garde le timestamp)
+            # Pour l'app, on utilise souvent df['Mois'] qui est une string 'octobre', 'novembre', etc.
+            # Si la colonne 'Mois' n'existe pas ou est vide, on peut la recréer depuis la date.
+            # Mais ici, le CSV semble déjà avoir une colonne 'Mois' ?
+            # Vérifions. Si 'Mois' existe, on la garde. Sinon on la déduit.
+            # Le code original utilisait la colonne 'Mois' du CSV.
+            pass
 
-        # B. STATS (Uniquement pour historique classement)
-        # OPTIMISATION : On ne scanne plus pour les BP individuels ici
-        df_stats = conn.read(spreadsheet=st.secrets["SPREADSHEET_URL"], worksheet="Stats_Raptors_FR", header=None, ttl=0)
-        team_rank_history = []
-        team_current_rank = 0
+        # Conversion des colonnes numériques
+        # Les colonnes de stats TTFL sont : 'Score TTFL', 'Moyenne', 'Best Pick', 'Rank', etc.
+        # Identifions les colonnes qui doivent être numériques
+        numeric_cols = ['Score TTFL', 'Moyenne', 'Best Pick', 'Rank', 'Total', 'Matchs joués']
 
-        # Récupération Historique Rang
-        start_row_rank = -1
-        col_start_rank = -1
-        for r_idx, row in df_stats.iterrows():
-            for c_idx, val in enumerate(row):
-                if str(val).strip() == "Classement":
-                    start_row_rank = r_idx; col_start_rank = c_idx; break
-            if start_row_rank != -1: break
-        if start_row_rank != -1:
-            for i in range(start_row_rank+1, start_row_rank+30):
-                if i >= len(df_stats): break
-                p_name = str(df_stats.iloc[i, col_start_rank]).strip()
-                if "Team Raptors" in p_name:
-                    hist_vals = df_stats.iloc[i, col_start_rank+1:col_start_rank+25].values
-                    valid_history = []
-                    for x in hist_vals:
-                        try:
-                            clean_x = str(x).replace(',', '').replace(' ', '')
-                            val = float(clean_x)
-                            if val > 0: valid_history.append(int(val))
-                        except: pass
-                    if valid_history:
-                        team_current_rank = valid_history[-1]
-                        team_rank_history = valid_history
-                    break
+        for col in df.columns:
+            # Si la colonne est censée être numérique ou contient des nombres
+            # On tente une conversion
+            if col in numeric_cols or df[col].dtype == object:
+                # On remplace les virgules par des points si c'est du string
+                if df[col].dtype == object:
+                     # On force en string d'abord pour éviter les erreurs sur des mixed types
+                     df[col] = df[col].astype(str).str.replace(',', '.', regex=False)
 
-        return final_df, team_current_rank, bp_map, team_rank_history, daily_max_map
+                # On convertit en numeric
+                df[col] = pd.to_numeric(df[col], errors='ignore')
+
+        return df
 
     except Exception as e:
-        # Improved error handling for debugging
-        # In a real app, you might want to log this or show a friendly message
-        st.error(f"Erreur lors du chargement des données : {str(e)}")
-        # Return empty structures to avoid app crash
-        return pd.DataFrame(), 0, {}, [], {}
+        st.error(f"Erreur lors du chargement des données : {e}")
+        return pd.DataFrame()

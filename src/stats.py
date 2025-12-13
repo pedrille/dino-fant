@@ -30,7 +30,6 @@ def compute_stats(df, bp_map, daily_max_map):
         avg_with_bonus = scores_with_bonus.mean() if len(scores_with_bonus) > 0 else 0
         avg_without_bonus = scores_without_bonus.mean() if len(scores_without_bonus) > 0 else 0
 
-        # Streak calculations
         current_no_carrot_streak = 0
         for s in reversed(scores):
             if s >= 20: current_no_carrot_streak += 1

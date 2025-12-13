@@ -1,7 +1,7 @@
 
-import streamlit as st
 import pandas as pd
-import numpy as np
+import streamlit as st
+import unicodedata
 from streamlit_gsheets import GSheetsConnection
 from src.utils import normalize_month
 

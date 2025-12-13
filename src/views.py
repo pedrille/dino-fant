@@ -5,8 +5,8 @@ import plotly.express as px
 import plotly.graph_objects as go
 import numpy as np
 from src.config import *
-from src.ui import kpi_card, section_title, send_discord_webhook
-from src.utils import get_uniform_color, render_gauge
+from src.ui import kpi_card, section_title
+from src.utils import get_uniform_color, render_gauge, send_discord_webhook
 from src.stats import compute_stats
 
 def render_dashboard(day_df, full_stats, latest_pick, team_avg_per_pick, team_streak_nc, df):

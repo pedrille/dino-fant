@@ -6,8 +6,10 @@ import numpy as np
 
 # Imports internes (Architecture V2)
 from src.config import *
-from src.ui import kpi_card, section_title
-from src.utils import get_uniform_color, render_gauge, send_discord_webhook
+# CORRECTION ICI : render_gauge est importé depuis src.ui
+from src.ui import kpi_card, section_title, render_gauge
+# CORRECTION ICI : on ne demande plus render_gauge à src.utils
+from src.utils import get_uniform_color, send_discord_webhook
 from src.stats import compute_stats
 
 # --- 1. DASHBOARD ---
@@ -439,10 +441,7 @@ def render_bonus_x2(df):
         c_chart1, c_chart2 = st.columns([2, 3], gap="medium")
         with c_chart1:
             st.markdown("#### 💰 IMPACT MENSUEL (GAINS RÉELS)")
-            
-            # --- FIX : Suppression du reindex strict pour laisser apparaître les mois disponibles (ex: Decembre) ---
             monthly_gain = df_bonus.groupby('Month')['RealGain'].sum().reset_index()
-            
             fig_m = px.bar(monthly_gain, x='Month', y='RealGain', text='RealGain', color='RealGain', color_continuous_scale='Teal')
             fig_m.update_traces(texttemplate='+%{text}', textposition='outside')
             fig_m.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, xaxis=dict(title=None), yaxis=dict(showgrid=False, visible=False), height=300, showlegend=False, coloraxis_showscale=False)

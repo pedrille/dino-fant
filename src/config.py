@@ -1,21 +1,20 @@
-
-# --- CONFIGURATION & ASSETS ---
+# --- src/config.py ---
 
 # ✅ LIEN DE L'IMAGE DISCORD (RAW)
 DISCORD_AVATAR_URL = "https://raw.githubusercontent.com/pedrille/dino-fant/main/basketball_discord.png"
 
 # --- CONFIG COULEURS JOUEURS (IDENTITÉ VISUELLE) ---
 PLAYER_COLORS = {
-    "Pedrille": "#CE1141",     # Raptors Red
-    "Tomus06": "#FFD700",      # Gold
-    "Mims22": "#10B981",       # Emerald Green
-    "MadDawgs": "#3B82F6",     # Royal Blue
-    "Gabeur": "#8B5CF6",       # Violet
+    "Pedrille": "#CE1141",      # Raptors Red
+    "Tomus06": "#FFD700",       # Gold
+    "Mims22": "#10B981",        # Emerald Green
+    "MadDawgs": "#3B82F6",      # Royal Blue
+    "Gabeur": "#8B5CF6",        # Violet
     "HoodieRigone": "#F97316", # Orange
-    "iAmDjuu25": "#06B6D4",    # Cyan
-    "Luoshtgin": "#EC4899",    # Pink
-    "Mendosaaaa": "#84CC16",   # Lime
-    "Duduge21": "#6366F1",     # Indigo
+    "iAmDjuu25": "#06B6D4",     # Cyan
+    "Luoshtgin": "#EC4899",     # Pink
+    "Mendosaaaa": "#84CC16",    # Lime
+    "Duduge21": "#6366F1",      # Indigo
     "Inconnu": "#9CA3AF"
 }
 
@@ -50,7 +49,6 @@ PACERS_PUNCHLINES = [
 ]
 
 # --- CONFIG SAISONS (SPRINTS V22.0) ---
-# Bornes exactes basées sur le calendrier 2025-2026
 SEASONS_CONFIG = {
     "🏆 SAISON COMPLÈTE": (1, 165),
     "🍂 PART 1: THE OPENING RUN (Oct - Thanksgiving)": (1, 37),
@@ -59,7 +57,7 @@ SEASONS_CONFIG = {
     "💍 PART 4: THE FINAL PUSH (Post All-Star)": (114, 165)
 }
 
-# --- DETAILS SAISONS ---
+# --- DETAILS SAISONS (POUR LES TROPHÉES) ---
 SEASONS_DETAILS = [
     {
         "dates": "21 Oct - 26 Nov 2025",

@@ -3,11 +3,14 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import numpy as np
+
+# Imports internes (Architecture V2)
 from src.config import *
 from src.ui import kpi_card, section_title
 from src.utils import get_uniform_color, render_gauge, send_discord_webhook
 from src.stats import compute_stats
 
+# --- 1. DASHBOARD ---
 def render_dashboard(day_df, full_stats, latest_pick, team_avg_per_pick, team_streak_nc, df):
     section_title("RAPTORS <span class='highlight'>DASHBOARD</span>", f"Daily Briefing • Pick #{int(latest_pick)}")
     top = day_df.iloc[0]
@@ -108,6 +111,7 @@ def render_dashboard(day_df, full_stats, latest_pick, team_avg_per_pick, team_st
         st.plotly_chart(fig_donut, use_container_width=True)
         st.markdown("</div>", unsafe_allow_html=True)
 
+# --- 2. TEAM HQ ---
 def render_team_hq(df, latest_pick, team_rank, team_history, team_avg_per_pick, total_bp_team):
     section_title("TEAM <span class='highlight'>HQ</span>", "Vue d'ensemble de l'effectif")
     total_pts_season = df['Score'].sum()
@@ -226,8 +230,24 @@ def render_team_hq(df, latest_pick, team_rank, team_history, team_avg_per_pick, 
     st.plotly_chart(fig_heat, use_container_width=True)
 
     st.markdown("### 📊 DATA ROOM")
-    # Note: passing full_stats here is assumed
-    
+    st.dataframe(
+        full_stats[['Player', 'Trend7Icon', 'Trend', 'Total', 'Moyenne', 'BP_Count', 'Nukes', 'Carottes', 'Bonus_Gained']].sort_values('Total', ascending=False),
+        hide_index=True, 
+        use_container_width=True, 
+        column_config={
+            "Player": st.column_config.TextColumn("Joueur", width="medium"),
+            "Trend7Icon": st.column_config.TextColumn("7J", width="small", help="Tendance 7 derniers matchs"),
+            "Trend": st.column_config.LineChartColumn("Forme (20j)", width="medium", y_min=0, y_max=80),
+            "Total": st.column_config.ProgressColumn("Total Pts", format="%d", min_value=0, max_value=full_stats['Total'].max()),
+            "Moyenne": st.column_config.NumberColumn("Moyenne", format="%.1f"),
+            "Carottes": st.column_config.NumberColumn("🥕", help="Scores < 20"),
+            "Nukes": st.column_config.NumberColumn("☢️", help="Scores > 50"),
+            "BP_Count": st.column_config.NumberColumn("🎯", help="Best Picks"),
+            "Bonus_Gained": st.column_config.NumberColumn("⚗️", help="Pts Bonus Gagnés")
+        }
+    )
+
+# --- 3. PLAYER LAB ---
 def render_player_lab(df, full_stats):
     section_title("PLAYER <span class='highlight'>LAB</span>", "Deep Dive Analytics")
     st.markdown("<div class='widget-title'>👤 SÉLECTION DU JOUEUR</div>", unsafe_allow_html=True)
@@ -388,6 +408,7 @@ def render_player_lab(df, full_stats):
         stat2 = full_stats[full_stats['Player'] == p2_sel].iloc[0]
         st.markdown(f"<div class='glass-card'><div style='display:flex; justify-content:space-between; border-bottom:1px solid rgba(255,255,255,0.05); padding:8px 0;'><div style='width:30%; text-align:left; font-family:Rajdhani; font-weight:700; color:#FFF'>{stat1['Total']:.0f}</div><div style='width:40%; text-align:center; font-size:0.8rem; color:#AAA; letter-spacing:1px;'>POINTS TOTAL</div><div style='width:30%; text-align:right; font-family:Rajdhani; font-weight:700; color:#FFF'>{stat2['Total']:.0f}</div></div></div>", unsafe_allow_html=True)
 
+# --- 4. BONUS X2 ---
 def render_bonus_x2(df):
     section_title("BONUS <span class='highlight'>ZONE</span>", "Analyse de Rentabilité")
     df_bonus = df[df['IsBonus'] == True].copy()
@@ -418,7 +439,10 @@ def render_bonus_x2(df):
         c_chart1, c_chart2 = st.columns([2, 3], gap="medium")
         with c_chart1:
             st.markdown("#### 💰 IMPACT MENSUEL (GAINS RÉELS)")
+            
+            # --- FIX : Suppression du reindex strict pour laisser apparaître les mois disponibles (ex: Decembre) ---
             monthly_gain = df_bonus.groupby('Month')['RealGain'].sum().reset_index()
+            
             fig_m = px.bar(monthly_gain, x='Month', y='RealGain', text='RealGain', color='RealGain', color_continuous_scale='Teal')
             fig_m.update_traces(texttemplate='+%{text}', textposition='outside')
             fig_m.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, xaxis=dict(title=None), yaxis=dict(showgrid=False, visible=False), height=300, showlegend=False, coloraxis_showscale=False)
@@ -434,6 +458,7 @@ def render_bonus_x2(df):
         st.markdown("### 📜 HISTORIQUE DÉTAILLÉ")
         st.dataframe(df_bonus_disp[['Pick', 'Player', 'Month', 'ScoreVal', 'Score', 'RealGain']].sort_values('Pick', ascending=False), hide_index=True, use_container_width=True)
 
+# --- 5. NO CARROT ---
 def render_no_carrot(df, team_streak_nc, full_stats):
     section_title("ANTI <span class='highlight'>CARROTE</span>", "Objectif Fiabilité & Constance")
     max_streak_team = 0
@@ -476,6 +501,7 @@ def render_no_carrot(df, team_streak_nc, full_stats):
             width = min(100, val * 2)
             st.markdown(f"<div style='margin-bottom:8px;'><div style='display:flex; justify-content:space-between; font-size:0.9rem; font-weight:600; color:{C_TEXT}'><span>{r['Player']}</span><span style='color:{col_bar}'>{val}</span></div><div style='width:100%; background:#222; height:6px; border-radius:3px; margin-top:2px;'><div style='width:{width}%; background:{col_bar}; height:100%; border-radius:3px;'></div></div></div>", unsafe_allow_html=True)
 
+# --- 6. TRENDS ---
 def render_trends(df, latest_pick):
     section_title("TENDANCES", "Analyse de la forme récente (15 derniers jours)")
     df_15 = df[df['Pick'] > (latest_pick - 15)]
@@ -529,6 +555,7 @@ def render_trends(df, latest_pick):
                 st.markdown(f"<div class='trend-card-row'><div class='trend-name'>{p}</div><div style='text-align:right'><div class='trend-val' style='color:{C_RED}'>{row['Last15']:.1f}</div><div class='trend-delta' style='color:{C_RED}'>{row['Delta']:.1f}</div></div></div>", unsafe_allow_html=True)
         st.markdown("</div>", unsafe_allow_html=True)
 
+# --- 7. HALL OF FAME ---
 def render_hall_of_fame(df_full_history, bp_map, daily_max_map):
     section_title("HALL OF <span class='highlight'>FAME</span>", "Records & Trophées")
     st.markdown("<h3 style='margin-bottom:15px; font-family:Rajdhani; color:#AAA;'>🏆 RAPTORS SEASON TROPHIES</h3>", unsafe_allow_html=True)
@@ -596,13 +623,56 @@ def render_hall_of_fame(df_full_history, bp_map, daily_max_map):
     sniper = full_stats_global.sort_values('Moyenne', ascending=False).iloc[0]
     pure_avg = full_stats_global.sort_values('Moyenne_Raw', ascending=False).iloc[0]
     sniper_bp = full_stats_global.sort_values('BP_Count', ascending=False).iloc[0]
+    alpha_dog = full_stats_global.sort_values('Alpha_Count', ascending=False).iloc[0]
+    peak = full_stats_global.sort_values('Best', ascending=False).iloc[0]
+    pure_peak = full_stats_global.sort_values('Best_Raw', ascending=False).iloc[0]
+    nuke = full_stats_global.sort_values('Nukes', ascending=False).iloc[0]
+    heavy = full_stats_global.sort_values('Count40', ascending=False).iloc[0]
+    alchemist = full_stats_global.sort_values('Bonus_Gained', ascending=False).iloc[0]
+    rock = full_stats_global.sort_values('Count30', ascending=False).iloc[0]
+    torche = full_stats_global.sort_values('Last15', ascending=False).iloc[0]
+    progression = full_stats_global.sort_values('ProgressionPct', ascending=False).iloc[0]
+    zen_master = full_stats_global.sort_values('ReliabilityPct', ascending=False).iloc[0]
+    intouch = full_stats_global.sort_values('Streak30', ascending=False).iloc[0]
+    metronome = full_stats_global.sort_values('StdDev', ascending=True).iloc[0]
+    iron_wall = full_stats_global.sort_values('Worst', ascending=False).iloc[0]
+    maniac = full_stats_global.sort_values('ModeCount', ascending=False).iloc[0]
+    iron_man = full_stats_global.sort_values('MaxNoCarrot', ascending=False).iloc[0]
+    albatross = full_stats_global.sort_values('Spread', ascending=False).iloc[0]
+    alien = full_stats_global.sort_values('MaxAlien', ascending=False).iloc[0]
+    bad_business = full_stats_global.sort_values('Bonus_Gained', ascending=True).iloc[0]
+    has_bonus = full_stats_global[full_stats_global['Worst_Bonus'] > 0]
+    crash_test = has_bonus.sort_values('Worst_Bonus', ascending=True).iloc[0] if not has_bonus.empty else full_stats_global.iloc[0]
+    brick_layer = full_stats_global.sort_values('Worst_Raw', ascending=True).iloc[0]
+    lapin = full_stats_global.sort_values('Carottes', ascending=False).iloc[0]
 
     hof_list = [
-        {"title": "THE GOAT", "icon": "🏆", "color": C_GOLD, "player": sniper['Player'], "val": f"{sniper['Moyenne']:.1f}", "unit": "PTS MOYENNE"},
-        {"title": "REAL MVP", "icon": "💎", "color": C_PURE, "player": pure_avg['Player'], "val": f"{pure_avg['Moyenne_Raw']:.1f}", "unit": "PTS MOYENNE (BRUT)"},
-        {"title": "THE SNIPER", "icon": "🎯", "color": C_PURPLE, "player": sniper_bp['Player'], "val": int(sniper_bp['BP_Count']), "unit": "BEST PICKS"},
-        {"title": "KING OF DECKS", "icon": "🃏", "color": "#8B5CF6", "player": deck_winner['Player'], "val": int(deck_winner['DeckScore']), "unit": "PTS (7 MATCHS)"},
-        {"title": "THE PHOENIX", "icon": "🐣", "color": "#F97316", "player": phoenix_winner['Player'], "val": int(phoenix_winner['PhoenixScore']), "unit": "PTS REBOND"}
+        {"title": "THE GOAT", "icon": "🏆", "color": C_GOLD, "player": sniper['Player'], "val": f"{sniper['Moyenne']:.1f}", "unit": "PTS MOYENNE (TOTAL)", "desc": "Meilleure moyenne générale de la saison (Bonus incl.)"},
+        {"title": "REAL MVP", "icon": "💎", "color": C_PURE, "player": pure_avg['Player'], "val": f"{pure_avg['Moyenne_Raw']:.1f}", "unit": "PTS MOYENNE (BRUT)", "desc": "Meilleure moyenne sans compter les bonus"},
+        {"title": "THE SNIPER", "icon": "🎯", "color": C_PURPLE, "player": sniper_bp['Player'], "val": int(sniper_bp['BP_Count']), "unit": "BEST PICKS", "desc": "Le plus de Best Picks trouvés"},
+        {"title": "ALPHA DOG", "icon": "🐺", "color": C_ALPHA, "player": alpha_dog['Player'], "val": int(alpha_dog['Alpha_Count']), "unit": "TOPS TEAM", "desc": "Le plus souvent meilleur scoreur de l'équipe"},
+        {"title": "THE CEILING", "icon": "🏔️", "color": "#FB7185", "player": peak['Player'], "val": int(peak['Best']), "unit": "PTS MAX", "desc": "Record absolu sur un match (Bonus inclus)"},
+        {"title": "PURE SCORER", "icon": "🏀", "color": "#7C3AED", "player": pure_peak['Player'], "val": int(pure_peak['Best_Raw']), "unit": "PTS MAX (BRUT)", "desc": "Record absolu sur un match (Sans bonus)"},
+        {"title": "KING OF DECKS", "icon": "🃏", "color": "#8B5CF6", "player": deck_winner['Player'], "val": int(deck_winner['DeckScore']), "unit": "PTS (7 MATCHS)", "desc": "Meilleur cumul sur 7 matchs consécutifs"},
+        {"title": "THE PHOENIX", "icon": "🐣", "color": "#F97316", "player": phoenix_winner['Player'], "val": int(phoenix_winner['PhoenixScore']), "unit": "PTS REBOND", "desc": "Meilleur score réalisé le lendemain d'une carotte"},
+        {"title": "THE ALCHEMIST", "icon": "⚗️", "color": C_BONUS, "player": alchemist['Player'], "val": int(alchemist['Bonus_Gained']), "unit": "PTS BONUS", "desc": "Le plus de points gagnés grâce aux bonus"},
+        {"title": "NUCLEAR", "icon": "☢️", "color": C_ACCENT, "player": nuke['Player'], "val": int(nuke['Nukes']), "unit": "BOMBS", "desc": "Le plus de scores > 50 pts"},
+        {"title": "HEAVY HITTER", "icon": "🥊", "color": "#DC2626", "player": heavy['Player'], "val": int(heavy['Count40']), "unit": "PICKS > 40", "desc": "Le plus de scores > 40 pts"},
+        {"title": "THE ROCK", "icon": "🛡️", "color": C_GREEN, "player": rock['Player'], "val": int(rock['Count30']), "unit": "MATCHS", "desc": "Le plus de scores dans la Safe Zone (> 30 pts)"},
+        {"title": "HUMAN TORCH", "icon": "🔥", "color": "#BE123C", "player": torche['Player'], "val": f"{torche['Last15']:.1f}", "unit": "PTS / 15J", "desc": "Meilleure forme actuelle (Moyenne 15j)"},
+        {"title": "RISING STAR", "icon": "🚀", "color": "#34D399", "player": progression['Player'], "val": f"+{progression['ProgressionPct']:.1f}%", "unit": "PROGRESSION", "desc": "Plus grosse progression (Moyenne 15j vs Saison)"},
+        {"title": "ZEN MASTER", "icon": "🧘", "color": "#38BDF8", "player": zen_master['Player'], "val": f"{int(zen_master['ReliabilityPct'])}%", "unit": "FIABILITÉ", "desc": "Plus haut taux de fiabilité (Moins de carottes)"},
+        {"title": "UNSTOPPABLE", "icon": "⚡", "color": "#F59E0B", "player": intouch['Player'], "val": int(intouch['Streak30']), "unit": "SERIE", "desc": "Plus longue série consécutive > 30 pts"},
+        {"title": "THE METRONOME", "icon": "⏰", "color": C_IRON, "player": metronome['Player'], "val": f"{metronome['StdDev']:.1f}", "unit": "ECART TYPE", "desc": "Le joueur le plus régulier (Faible variation)"},
+        {"title": "THE MANIAC", "icon": "🤪", "color": "#D946EF", "player": maniac['Player'], "val": f"{maniac['ModeScore']}", "unit": f"{maniac['ModeCount']} FOIS", "desc": "Le score le plus souvent répété par ce joueur"},
+        {"title": "IRON WALL", "icon": "🧱", "color": "#78350F", "player": iron_wall['Player'], "val": int(iron_wall['Worst']), "unit": "PIRE SCORE", "desc": "Le 'Pire score' le plus élevé (Plancher haut)"},
+        {"title": "THE ALBATROSS", "icon": "🦅", "color": "#2DD4BF", "player": albatross['Player'], "val": int(albatross['Spread']), "unit": "AMPLITUDE", "desc": "Plus grand écart entre le record et le pire score"},
+        {"title": "IRON MAN", "icon": "🤖", "color": "#4F46E5", "player": iron_man['Player'], "val": int(iron_man['MaxNoCarrot']), "unit": "MATCHS", "desc": "Plus longue série historique sans carotte (< 20 pts)"},
+        {"title": "THE ALIEN", "icon": "👽", "color": C_ALIEN, "player": alien['Player'], "val": int(alien['MaxAlien']), "unit": "MATCHS", "desc": "Plus longue série de matchs consécutifs à +60 pts"},
+        {"title": "CRASH TEST", "icon": "💥", "color": C_RED, "player": crash_test['Player'], "val": int(crash_test['Worst_Bonus']), "unit": "PTS MIN (X2)", "desc": "Le pire score réalisé avec un bonus actif"},
+        {"title": "BAD BUSINESS", "icon": "💸", "color": "#9CA3AF", "player": bad_business['Player'], "val": int(bad_business['Bonus_Gained']), "unit": "PTS BONUS", "desc": "Le moins de points gagnés grâce aux bonus"},
+        {"title": "THE BRICK", "icon": "🏗️", "color": "#6B7280", "player": brick_layer['Player'], "val": int(brick_layer['Worst_Raw']), "unit": "PTS MIN (BRUT)", "desc": "Le pire score brut enregistré"},
+        {"title": "THE FARMER", "icon": "🥕", "color": C_ORANGE, "player": lapin['Player'], "val": int(lapin['Carottes']), "unit": "CAROTTES", "desc": "Le plus grand nombre de carottes (< 20 pts)"}
     ]
 
     rows = [hof_list[i:i+2] for i in range(0, len(hof_list), 2)]
@@ -610,15 +680,12 @@ def render_hall_of_fame(df_full_history, bp_map, daily_max_map):
         cols = st.columns(2)
         for i, card in enumerate(row_cards):
             with cols[i]:
-                st.markdown(f"""<div class="glass-card" style="position:relative; overflow:hidden; margin-bottom:10px"><div style="position:absolute; right:-10px; top:-10px; font-size:5rem; opacity:0.05; pointer-events:none">{card['icon']}</div><div class="hof-badge" style="color:{card['color']}; border:1px solid {card['color']}">{card['icon']} {card['title']}</div><div style="display:flex; justify-content:space-between; align-items:flex-end;"><div><div class="hof-player">{card['player']}</div></div><div><div class="hof-stat" style="color:{card['color']}">{card['val']}</div><div class="hof-unit">{card['unit']}</div></div></div></div>""", unsafe_allow_html=True)
+                st.markdown(f"""<div class="glass-card" style="position:relative; overflow:hidden; margin-bottom:10px"><div style="position:absolute; right:-10px; top:-10px; font-size:5rem; opacity:0.05; pointer-events:none">{card['icon']}</div><div class="hof-badge" style="color:{card['color']}; border:1px solid {card['color']}">{card['icon']} {card['title']}</div><div style="display:flex; justify-content:space-between; align-items:flex-end;"><div><div class="hof-player">{card['player']}</div><div style="font-size:0.8rem; color:#888; margin-top:4px">{card['desc']}</div></div><div><div class="hof-stat" style="color:{card['color']}">{card['val']}</div><div class="hof-unit">{card['unit']}</div></div></div></div>""", unsafe_allow_html=True)
 
+# --- 8. ADMIN ---
 def render_admin(day_df, latest_pick):
     section_title("ADMIN <span class='highlight'>PANEL</span>", "Accès Restreint")
-    
-    # Initialisation de l'état de session pour l'accès admin
-    if "admin_access" not in st.session_state: 
-        st.session_state["admin_access"] = False
-
+    if "admin_access" not in st.session_state: st.session_state["admin_access"] = False
     if not st.session_state["admin_access"]:
         c1, c2, c3 = st.columns([1, 2, 1])
         with c2:
@@ -626,32 +693,20 @@ def render_admin(day_df, latest_pick):
             pwd = st.text_input("Mot de passe", type="password", key="admin_pwd")
             if st.button("DÉVERROUILLER"):
                 if "ADMIN_PASSWORD" in st.secrets and pwd == st.secrets["ADMIN_PASSWORD"]:
-                    st.session_state["admin_access"] = True
-                    st.rerun()
-                else:
-                    st.error("⛔ Accès refusé")
+                    st.session_state["admin_access"] = True; st.rerun()
+                else: st.error("⛔ Accès refusé")
             st.markdown("</div>", unsafe_allow_html=True)
     else:
         c1, c2 = st.columns(2)
         with c1:
             st.markdown("<div class='glass-card'><h4>🔄 DONNÉES</h4>", unsafe_allow_html=True)
-            if st.button("FORCER LA MISE À JOUR", type="secondary"): 
-                st.cache_data.clear()
-                st.rerun()
+            if st.button("FORCER LA MISE À JOUR", type="secondary"): st.cache_data.clear(); st.rerun()
             st.markdown("</div>", unsafe_allow_html=True)
-        
         with c2:
             st.markdown("<div class='glass-card'><h4>📡 DISCORD</h4>", unsafe_allow_html=True)
             if st.button("🚀 ENVOYER RAPPORT", type="primary"):
-                # URL de l'app pour le lien dans le message Discord
-                app_url = "https://raptorsttfl-dashboard.streamlit.app/"
-                res = send_discord_webhook(day_df, latest_pick, app_url)
-                if res == "success": 
-                    st.success("✅ Envoyé !")
-                else: 
-                    st.error(f"Erreur : {res}")
+                res = send_discord_webhook(day_df, latest_pick, "https://raptorsttfl-dashboard.streamlit.app/")
+                if res == "success": st.success("✅ Envoyé !")
+                else: st.error(f"Erreur : {res}")
             st.markdown("</div>", unsafe_allow_html=True)
-        
-        if st.button("🔒 VERROUILLER"): 
-            st.session_state["admin_access"] = False
-            st.rerun()
+        if st.button("🔒 VERROUILLER"): st.session_state["admin_access"] = False; st.rerun()

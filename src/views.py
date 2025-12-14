@@ -15,7 +15,6 @@ def render_dashboard(day_df, full_stats, latest_pick, team_avg_per_pick, team_st
     section_title("RAPTORS <span class='highlight'>DASHBOARD</span>", f"Daily Briefing • Pick #{int(latest_pick)}")
     top = day_df.iloc[0]
 
-    # ALIGNEMENT CORRECT DU SCORE ET DES BADGES
     val_suffix = ""
     if 'IsBonus' in top and top['IsBonus']: val_suffix += " 🌟x2"
     if 'IsBP' in top and top['IsBP']: val_suffix += " 🎯BP"
@@ -50,10 +49,7 @@ def render_dashboard(day_df, full_stats, latest_pick, team_avg_per_pick, team_st
         day_df['BarColor'] = day_df['Score'].apply(get_uniform_color)
         fig = px.bar(day_df, x='Player', y='Score', text='Score', color='BarColor', color_discrete_map="identity")
         fig.update_traces(textposition='outside', marker_line_width=0, textfont_size=14, textfont_family="Rajdhani", cliponaxis=False)
-        
-        # AJOUT LIGNE MOYENNE SAISON TEAM
         fig.add_hline(y=team_avg_per_pick, line_dash="dot", line_color=C_TEXT, annotation_text="Moy. Team", annotation_position="top right")
-        
         fig.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA', 'family': 'Inter'}, yaxis=dict(showgrid=False, visible=False), xaxis=dict(title=None, tickfont=dict(size=14, family='Rajdhani', weight=600)), height=350, showlegend=False, margin=dict(l=0, r=0, t=0, b=0))
         st.plotly_chart(fig, use_container_width=True)
 
@@ -350,6 +346,52 @@ def render_player_lab(df, full_stats):
             tags_html = f"<div class='tp-tags'>{' '.join(tags)}</div>" if tags else ""
             html_card = f"""<div class="top-pick-card" style="border-left: 4px solid {border_col}"><div class="tp-rank-badge" style="border-color:{border_col}; color:{border_col}">{rank_num}</div><div class="tp-content"><div class="tp-date">Pick #{r['Pick']}</div>{tags_html}</div><div class="tp-score-big">{int(r['Score'])}</div></div>"""
             st.markdown(html_card, unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown("<h3 style='margin-bottom:10px'>📡 PROFIL ATHLÉTIQUE</h3>", unsafe_allow_html=True)
+
+    c_radar_graph, c_radar_legend = st.columns([2, 1], gap="large")
+    with c_radar_graph:
+        max_avg = full_stats['Moyenne'].max(); max_best = full_stats['Best'].max(); max_last10 = full_stats['Last10'].max(); max_nukes = full_stats['Nukes'].max()
+        reg_score = 100 - ((p_data['StdDev'] / full_stats['StdDev'].max()) * 100)
+        r_vals = [(p_data['Moyenne'] / max_avg) * 100, (p_data['Best'] / max_best) * 100, (p_data['Last10'] / max_last10) * 100, reg_score, (p_data['Nukes'] / (max_nukes if max_nukes > 0 else 1)) * 100]
+        r_cats = ['SCORING', 'CEILING', 'FORME', 'RÉGULARITÉ', 'CLUTCH']
+        fig_radar = go.Figure(data=go.Scatterpolar(r=r_vals + [r_vals[0]], theta=r_cats + [r_cats[0]], fill='toself', line_color=C_ACCENT, fillcolor="rgba(206, 17, 65, 0.3)"))
+        fig_radar.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 100], showticklabels=False, linecolor='#333'), bgcolor='rgba(0,0,0,0)'), paper_bgcolor='rgba(0,0,0,0)', font=dict(color='white', size=14, family="Rajdhani"), margin=dict(t=20, b=20, l=40, r=40), height=400)
+        st.plotly_chart(fig_radar, use_container_width=True)
+
+    with c_radar_legend:
+        st.markdown("""<div class='legend-box'><div class='legend-item'><div class='legend-title'>SCORING</div><div class='legend-desc'>Volume de points moyen sur la période.</div></div><div class='legend-item'><div class='legend-title'>CEILING (PLAFOND)</div><div class='legend-desc'>Record personnel (Potentiel max sur un match).</div></div><div class='legend-item'><div class='legend-title'>FORME</div><div class='legend-desc'>Dynamique actuelle sur les 10 derniers matchs.</div></div><div class='legend-item'><div class='legend-title'>RÉGULARITÉ</div><div class='legend-desc'>Capacité à éviter les gros écarts de score.</div></div><div class='legend-item'><div class='legend-title'>CLUTCH</div><div class='legend-desc'>Fréquence des très gros scores (> 50 points).</div></div></div>""", unsafe_allow_html=True)
+
+    c_dist, c_trend = st.columns(2, gap="medium")
+    with c_dist:
+        if not p_hist_all.empty:
+            st.markdown("#### 📊 DISTRIBUTION DES SCORES", unsafe_allow_html=True)
+            fig_hist = px.histogram(p_hist_all, x="Score", nbins=15, color_discrete_sequence=[C_ACCENT], text_auto=True)
+            fig_hist.update_traces(marker_line_color='white', marker_line_width=1, opacity=0.8)
+            fig_hist.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, margin=dict(l=0, r=0, t=10, b=0), height=250, xaxis_title=None, yaxis_title=None, bargap=0.1)
+            st.plotly_chart(fig_hist, use_container_width=True)
+
+    with c_trend:
+        if not p_hist_all.empty:
+            st.markdown("#### 📈 TENDANCE (15 DERNIERS MATCHS)", unsafe_allow_html=True)
+            last_15_data = p_hist_all.sort_values('Pick').tail(15)
+            if not last_15_data.empty:
+                fig_trend = px.line(last_15_data, x="Pick", y="Score", markers=True)
+                fig_trend.update_traces(line_color=C_GOLD, marker_color=C_ACCENT, marker_size=8)
+                fig_trend.add_hline(y=p_data['Moyenne'], line_dash="dot", line_color=C_TEXT, annotation_text="Moy. Période", annotation_position="bottom right")
+                fig_trend.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, margin=dict(l=0, r=0, t=10, b=0), height=250, xaxis_title=None, yaxis_title=None)
+                st.plotly_chart(fig_trend, use_container_width=True)
+
+    if not p_hist_all.empty:
+        st.markdown("#### 🏔️ PARCOURS PÉRIODE", unsafe_allow_html=True)
+        team_season_avg = df['Score'].mean()
+        fig_evol = px.line(p_hist_all, x="Pick", y="Score", markers=True)
+        fig_evol.update_traces(line_color=C_BLUE, line_width=2, marker_size=4)
+        fig_evol.add_hline(y=p_data['Moyenne'], line_dash="dot", line_color=C_TEXT, annotation_text="Moy. Joueur", annotation_position="top left")
+        fig_evol.add_hline(y=team_season_avg, line_dash="dash", line_color=C_ORANGE, annotation_text="Moy. Team", annotation_position="bottom right", annotation_font_color=C_ORANGE)
+        fig_evol.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, margin=dict(l=0, r=0, t=30, b=0), height=300, xaxis_title="Pick #", yaxis_title="Points TTFL", legend=dict(font=dict(color="#E5E7EB")))
+        st.plotly_chart(fig_evol, use_container_width=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
     st.markdown("<h3 style='margin-bottom:15px'>⚔️ DUEL : LE COMPARATEUR</h3>", unsafe_allow_html=True)
@@ -794,31 +836,6 @@ def render_hall_of_fame(df_full_history, bp_map, daily_max_map):
             with cols[i]:
                 st.markdown(f"""<div class="glass-card" style="position:relative; overflow:hidden; margin-bottom:10px"><div style="position:absolute; right:-10px; top:-10px; font-size:5rem; opacity:0.05; pointer-events:none">{card['icon']}</div><div class="hof-badge" style="color:{card['color']}; border:1px solid {card['color']}">{card['icon']} {card['title']}</div><div style="display:flex; justify-content:space-between; align-items:flex-end;"><div><div class="hof-player">{card['player']}</div><div style="font-size:0.8rem; color:#888; margin-top:4px">{card['desc']}</div></div><div><div class="hof-stat" style="color:{card['color']}">{card['val']}</div><div class="hof-unit">{card['unit']}</div></div></div></div>""", unsafe_allow_html=True)
 
-# --- 8. ADMIN ---
+# --- 8. ADMIN (RETIRED) ---
 def render_admin(day_df, latest_pick):
-    section_title("ADMIN <span class='highlight'>PANEL</span>", "Accès Restreint")
-    if "admin_access" not in st.session_state: st.session_state["admin_access"] = False
-    if not st.session_state["admin_access"]:
-        c1, c2, c3 = st.columns([1, 2, 1])
-        with c2:
-            st.markdown("<div class='glass-card'><h4>🔒 ZONE SÉCURISÉE</h4>", unsafe_allow_html=True)
-            pwd = st.text_input("Mot de passe", type="password", key="admin_pwd")
-            if st.button("DÉVERROUILLER"):
-                if "ADMIN_PASSWORD" in st.secrets and pwd == st.secrets["ADMIN_PASSWORD"]:
-                    st.session_state["admin_access"] = True; st.rerun()
-                else: st.error("⛔ Accès refusé")
-            st.markdown("</div>", unsafe_allow_html=True)
-    else:
-        c1, c2 = st.columns(2)
-        with c1:
-            st.markdown("<div class='glass-card'><h4>🔄 DONNÉES</h4>", unsafe_allow_html=True)
-            if st.button("FORCER LA MISE À JOUR", type="secondary"): st.cache_data.clear(); st.rerun()
-            st.markdown("</div>", unsafe_allow_html=True)
-        with c2:
-            st.markdown("<div class='glass-card'><h4>📡 DISCORD</h4>", unsafe_allow_html=True)
-            if st.button("🚀 ENVOYER RAPPORT", type="primary"):
-                res = send_discord_webhook(day_df, latest_pick, "https://raptorsttfl-dashboard.streamlit.app/")
-                if res == "success": st.success("✅ Envoyé !")
-                else: st.error(f"Erreur : {res}")
-            st.markdown("</div>", unsafe_allow_html=True)
-        if st.button("🔒 VERROUILLER"): st.session_state["admin_access"] = False; st.rerun()
+    pass

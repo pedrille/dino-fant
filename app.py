@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import time
 from streamlit_option_menu import option_menu
 import streamlit.components.v1 as components
 
@@ -325,6 +326,23 @@ try:
         # 4. Création du sélecteur avec la liste épurée
         selected_season_name = st.selectbox("Période", options_saisons, index=default_ix, label_visibility="collapsed", key="season_selector")
         
+        # BOUTON REFRESH INTELLIGENT (ANTI-SPAM 60s)
+        st.write("---")
+        if 'last_refresh_time' not in st.session_state:
+            st.session_state['last_refresh_time'] = 0
+
+        if st.button("🔄 ACTUALISER LES DONNÉES", use_container_width=True):
+            current_time = time.time()
+            if current_time - st.session_state['last_refresh_time'] > 60:
+                st.cache_data.clear()
+                st.session_state['last_refresh_time'] = current_time
+                st.toast("✅ Données mises à jour !", icon="🦖")
+                time.sleep(1) # Petit délai pour l'UX
+                st.rerun()
+            else:
+                wait_time = 60 - int(current_time - st.session_state['last_refresh_time'])
+                st.toast(f"⏳ Doucement ! Attendez encore {wait_time}s.", icon="✋")
+
         start_pick, end_pick = SEASONS_CONFIG[selected_season_name]
         
         latest_pick = 0 
@@ -342,8 +360,8 @@ try:
             else:
                 latest_pick = df['Pick'].max() if not df.empty else 0
 
-        # MENU NAVIGATION
-        menu = option_menu(menu_title=None, options=["Dashboard", "Team HQ", "Player Lab", "Bonus x2", "No-Carrot", "Trends", "Hall of Fame", "Admin"], icons=["grid-fill", "people-fill", "person-bounding-box", "lightning-charge-fill", "shield-check", "fire", "trophy-fill", "shield-lock"], default_index=0, styles={"container": {"padding": "0!important", "background-color": "#000000"}, "icon": {"color": "#666", "font-size": "1.1rem"}, "nav-link": {"font-family": "Rajdhani, sans-serif", "font-weight": "700", "font-size": "15px", "text-transform": "uppercase", "color": "#AAA", "text-align": "left", "margin": "5px 0px", "--hover-color": "#111"}, "nav-link-selected": {"background-color": C_ACCENT, "color": "#FFF", "icon-color": "#FFF", "box-shadow": "0px 4px 20px rgba(206, 17, 65, 0.4)"}})
+        # MENU NAVIGATION - ADMIN RETIRÉ
+        menu = option_menu(menu_title=None, options=["Dashboard", "Team HQ", "Player Lab", "Bonus x2", "No-Carrot", "Trends", "Hall of Fame"], icons=["grid-fill", "people-fill", "person-bounding-box", "lightning-charge-fill", "shield-check", "fire", "trophy-fill"], default_index=0, styles={"container": {"padding": "0!important", "background-color": "#000000"}, "icon": {"color": "#666", "font-size": "1.1rem"}, "nav-link": {"font-family": "Rajdhani, sans-serif", "font-weight": "700", "font-size": "15px", "text-transform": "uppercase", "color": "#AAA", "text-align": "left", "margin": "5px 0px", "--hover-color": "#111"}, "nav-link-selected": {"background-color": C_ACCENT, "color": "#FFF", "icon-color": "#FFF", "box-shadow": "0px 4px 20px rgba(206, 17, 65, 0.4)"}})
         st.markdown(f"""<div style='position: fixed; bottom: 30px; width: 100%; padding-left: 20px;'><div style='color:#444; font-size:10px; font-family:Rajdhani; letter-spacing:2px; text-transform:uppercase'>Pick Actuel #{int(latest_pick)}<br>War Room v22.0</div></div>""", unsafe_allow_html=True)
 
     # --- BANDEAU UI (AMÉLIORÉ) ---
@@ -406,7 +424,7 @@ try:
             views.render_player_lab(df, full_stats)
         
         elif menu == "Bonus x2":
-            # MODIFICATION : ON PASSE df_full_history POUR AVOIR LA SAISON COMPLETE PAR DEFAUT
+            # ON PASSE df_full_history POUR AVOIR LA SAISON COMPLETE PAR DEFAUT
             views.render_bonus_x2(df_full_history)
         
         elif menu == "No-Carrot":
@@ -418,8 +436,7 @@ try:
         elif menu == "Hall of Fame":
             views.render_hall_of_fame(df_full_history, bp_map, daily_max_map)
         
-        elif menu == "Admin":
-            views.render_admin(day_df, latest_pick)
+        # Admin removed
 
     else: 
         st.warning("⚠️ Aucune donnée trouvée.")

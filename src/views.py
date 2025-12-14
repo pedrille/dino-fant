@@ -846,7 +846,7 @@ def render_hall_of_fame(df_full_history, bp_map, daily_max_map):
             with cols[i]:
                 st.markdown(f"""<div class="glass-card" style="position:relative; overflow:hidden; margin-bottom:10px"><div style="position:absolute; right:-10px; top:-10px; font-size:5rem; opacity:0.05; pointer-events:none">{card['icon']}</div><div class="hof-badge" style="color:{card['color']}; border:1px solid {card['color']}">{card['icon']} {card['title']}</div><div style="display:flex; justify-content:space-between; align-items:flex-end;"><div><div class="hof-player">{card['player']}</div><div style="font-size:0.8rem; color:#888; margin-top:4px">{card['desc']}</div></div><div><div class="hof-stat" style="color:{card['color']}">{card['val']}</div><div class="hof-unit">{card['unit']}</div></div></div></div>""", unsafe_allow_html=True)
 
-# --- 8. WEEKLY REPORT (V23.2 FINAL - PARTAGE DISCORD UPDATED) ---
+# --- 8. WEEKLY REPORT (V24.0 FINAL - NO DATES) ---
 def render_weekly_report(df_full_history):
     section_title("WEEKLY <span class='highlight'>REPORT</span>", "Générateur de Rapport Premium")
     
@@ -873,12 +873,13 @@ def render_weekly_report(df_full_history):
         
         border_color = f"#{meta['color']:06x}"
         def clean_md(txt): return txt.replace("**", "<b>").replace("**", "</b>") if isinstance(txt, str) else txt
+        
         def fmt_list(lst, suffix=""):
             if not lst: return "Personne."
             items = [f"<b>{x[0]}</b> ({x[1]}{suffix})" for x in lst]
             return ", ".join(items)
 
-        # Podium
+        # HTML APLATI POUR EVITER LE BUG STREAMLIT
         podium_html = ""
         medals = ["🥇", "🥈", "🥉"]
         for p in data['podium']:
@@ -892,12 +893,10 @@ def render_weekly_report(df_full_history):
         for d in data['daily_mvp']:
             daily_html += f"<div style='margin-bottom:3px;'>{clean_md(d)}</div>"
 
-        # Analyse (Clean)
         analysis_html = ""
         if data['analysis']:
             for line in data['analysis']:
-                # Style compact et lisible
-                analysis_html += f"<div style='margin-bottom:4px;'>{clean_md(line)}</div>"
+                analysis_html += f"<div style='margin-bottom:6px; padding-left:8px; border-left:2px solid #555;'>{clean_md(line)}</div>"
         else:
             analysis_html = "Pas de dynamique majeure détectée."
         
@@ -907,7 +906,7 @@ def render_weekly_report(df_full_history):
         sunday_txt = fmt_list(lists['sunday'], " pts")
         diff_col = '#57F287' if '+' in stats['diff'] else '#ED4245'
 
-        # HTML FLAT
+        # BLOC HTML FINAL
         html_content = f"""<div style="background:#2f3136; border-left: 5px solid {border_color}; padding:20px; border-radius:8px; font-family:sans-serif; color:#dcddde; font-size: 0.95rem; line-height: 1.5;">
 <div style="margin-bottom:20px; border-bottom:1px solid #444; padding-bottom:15px; display:flex; justify-content:space-between; align-items:center;">
 <div><div style="font-weight:900; color:#FFF; font-size:1.4rem; letter-spacing:1px;">🦖 ROTW • DECK #{target_deck}</div><div style="color:#b9bbbe; font-size:0.9rem; margin-top:4px;">Raptors Of The Week - {meta['dates']}</div></div>
@@ -924,7 +923,7 @@ def render_weekly_report(df_full_history):
 <div><div style="font-weight:700; color:#FFF;">🌅 SUNDAY CLUTCH</div><div style="font-size:0.75rem; color:#888; font-style:italic; margin-bottom:4px;">Meilleur score sur le dernier pick du Deck.</div>{sunday_txt}</div>
 </div>
 <div style="margin-bottom:25px; background:rgba(0,0,0,0.2); padding:15px; border-radius:5px;"><div style="font-weight:700; color:#FFF; margin-bottom:2px;">📅 MVP PAR PICK</div><div style="font-size:0.75rem; color:#888; font-style:italic; margin-bottom:10px;">Le meilleur scoreur de chaque soirée.</div>{daily_html}</div>
-<div style="border-top:1px solid #444; padding-top:15px; margin-bottom:20px;"><div style="font-weight:700; color:#FFF; margin-bottom:2px;">🔬 ANALYSE & DYNAMIQUES</div><div style="font-size:0.75rem; color:#888; font-style:italic; margin-bottom:10px;">Deep Dive : Séries, Fiabilité & Sur-performance.</div><div style="font-size:0.9rem;">{analysis_html}</div></div>
+<div style="border-top:1px solid #444; padding-top:15px; margin-bottom:20px;"><div style="font-weight:700; color:#FFF; margin-bottom:2px;">🔬 ANALYSE & DYNAMIQUES</div><div style="font-size:0.75rem; color:#888; font-style:italic; margin-bottom:8px;">Focus sur les séries marquantes (vs Records).</div><div style="font-size:0.9rem;">{analysis_html}</div></div>
 <div style="background:rgba(255,255,255,0.05); padding:15px; border-radius:8px; display:flex; justify-content:space-around; align-items:center; text-align:center;">
 <div><div style="font-size:1.5rem; font-weight:900; color:#d4af37;">{stats['bp']}</div><div style="font-size:0.75rem; color:#AAA; font-weight:bold;">TEAM TOTAL BP 🎯</div></div>
 <div style="height:40px; width:1px; background:#444;"></div>
@@ -937,7 +936,6 @@ def render_weekly_report(df_full_history):
 
     with c2:
         st.markdown("### 📤 PARTAGE DISCORD")
-        
         st.markdown("""
         <div style="background:rgba(255,255,255,0.05); padding:15px; border-radius:10px; border:1px solid rgba(255,255,255,0.1)">
             <div style="font-weight:bold; color:#FFF; margin-bottom:10px">ℹ️ À PROPOS DU ROTW</div>
@@ -955,8 +953,5 @@ def render_weekly_report(df_full_history):
         if st.button("🚀 PUBLIER LE ROTW", type="primary", use_container_width=True):
             with st.spinner("Envoi en cours sur Discord..."):
                 res = send_weekly_report_discord(data, "https://raptorsttfl-dashboard.streamlit.app/")
-                if res == "success":
-                    st.success("✅ Rapport publié avec succès !")
-                    st.balloons()
-                else:
-                    st.error(f"Erreur d'envoi : {res}")
+                if res == "success": st.success("✅ Rapport publié avec succès !"); st.balloons()
+                else: st.error(f"Erreur d'envoi : {res}")

@@ -21,14 +21,11 @@ def compute_stats(df, bp_map, daily_max_map):
     df['RankAsc'] = daily_groups.rank(ascending=True, method='min')
     
     # 2. Identification du "Pire soir" pour The Savior
-    # On cherche le pick avec le total d'équipe le plus bas
     daily_sums = daily_groups.sum()
     worst_night_pick = daily_sums.idxmin() if not daily_sums.empty else -1
     
     # 3. Soloist : Soirs où un SEUL joueur a dépassé 40
-    # On compte combien de joueurs ont fait > 40 par pick
     over_40 = df[df['Score'] > 40].groupby('Pick')['Player'].count()
-    # On garde les picks où ce compte est exactement 1
     soloist_picks = over_40[over_40 == 1].index.tolist()
 
     # --- CALCULS PAR JOUEUR ---
@@ -69,7 +66,7 @@ def compute_stats(df, bp_map, daily_max_map):
         avg_with_bonus = scores_with_bonus.mean() if len(scores_with_bonus) > 0 else 0
         avg_without_bonus = scores_without_bonus.mean() if len(scores_without_bonus) > 0 else 0
         best_with_bonus = scores_with_bonus.max() if len(scores_with_bonus) > 0 else 0
-        best_without_bonus = scores_without_bonus.max() if len(scores_without_bonus) > 0 else 0 # Pure Scorer
+        best_without_bonus = scores_without_bonus.max() if len(scores_without_bonus) > 0 else 0 
         
         # --- 2. SÉRIES HISTORIQUES (Fonction Helper) ---
         def get_max_streak(val_list, threshold):
@@ -95,72 +92,52 @@ def compute_stats(df, bp_map, daily_max_map):
             else: break
 
         # Séries HoF
-        max_no_carrot = get_max_streak(scores, 20) # Iron Man
-        max_unstoppable = get_max_streak(scores, 40) # Unstoppable (>40)
-        max_alien_streak = get_max_streak(scores, 60) # The Alien
+        max_no_carrot = get_max_streak(scores, 20)
+        max_unstoppable = get_max_streak(scores, 40)
+        max_alien_streak = get_max_streak(scores, 60)
         
         # --- 3. LOGIQUES SPÉCIFIQUES HOF ---
-        
-        # Prime Time
         try: prime_time = d.groupby('Month')['Score'].mean().max()
         except: prime_time = 0
         
-        # Iron Lungs
         iron_lungs = scores_raw.sum()
-        
-        # The 6th Man
         sixth_man_count = len(scores[(scores >= 30) & (scores < 40)])
-        
-        # The Medalist (Top 3)
         medalist_count = np.sum(ranks_desc <= 3)
-        
-        # The Shield (Nb fois dernier - RankAsc == 1)
-        # On veut le MINIMUM de fois dernier, donc on compte les fois dernier
         last_place_count = np.sum(ranks_asc == 1)
         
-        # The Dominator (Score > Moyenne Team du jour)
         dominator_count = 0
         for pick_idx, sc in zip(picks, scores):
             if pick_idx in daily_means and sc > daily_means[pick_idx]:
                 dominator_count += 1
                 
-        # The Savior (Score lors de la pire nuit)
-        # On cherche si le joueur a joué la pire nuit et quel est son score
         savior_val = 0
         savior_match = d[d['Pick'] == worst_night_pick]
         if not savior_match.empty:
             savior_val = savior_match['Score'].iloc[0]
             
-        # The Soloist
-        # Compte les matchs où le pick est dans la liste "soloist_picks" ET le score > 40
         soloist_count = len(d[d['Pick'].isin(soloist_picks) & (d['Score'] > 40)])
         
-        # The Ghost (Score > 35 mais PAS Rank 1)
         ghost_count = 0
         for sc, rk in zip(scores, ranks_desc):
             if sc > 35 and rk > 1:
                 ghost_count += 1
                 
-        # Bad Luck (Max score sans BP)
-        non_bp_scores = scores[~is_bp_list]
-        bad_luck_score = non_bp_scores.max() if len(non_bp_scores) > 0 else 0
+        # CORRECTION BAD LUCK : Score BRUT max sans BP
+        non_bp_raw_scores = scores_raw[~is_bp_list]
+        bad_luck_score = non_bp_raw_scores.max() if len(non_bp_raw_scores) > 0 else 0
         
-        # The Braqueur (Min score avec BP)
         bp_scores_only = scores[is_bp_list]
-        braqueur_score = bp_scores_only.min() if len(bp_scores_only) > 0 else 999 # 999 par défaut si aucun BP
+        braqueur_score = bp_scores_only.min() if len(bp_scores_only) > 0 else 999 
         
-        # King of Decks
         deck_score = 0
         if len(scores) >= 7:
             deck_score = pd.Series(scores).rolling(window=7).sum().max()
             
-        # Phoenix
         phoenix_score = 0
         for i in range(1, len(scores)):
             if scores[i-1] < 20 and scores[i] > phoenix_score: 
                 phoenix_score = scores[i]
 
-        # Mode
         try:
             vals, counts = np.unique(scores, return_counts=True)
             max_count_idx = np.argmax(counts)
@@ -171,7 +148,6 @@ def compute_stats(df, bp_map, daily_max_map):
         spread = scores.max() - scores.min()
 
         # --- 4. EXPORT ---
-        # Calculs secondaires
         scores_last_7 = d['Score'].tail(7)
         avg_last_7 = scores_last_7.mean() if len(scores_last_7) > 0 else 0
         diff_7 = avg_last_7 - scores.mean() 
@@ -181,7 +157,6 @@ def compute_stats(df, bp_map, daily_max_map):
         last5_avg = last_5.mean() if len(scores) >= 5 else scores.mean()
         momentum = last5_avg - scores.mean()
         
-        # OPTIMISATION : BP Count
         bp_count = d['IsBP'].sum()
         
         alpha_count = 0; bonus_points_gained = 0; bonus_scores_list = []

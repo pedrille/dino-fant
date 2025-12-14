@@ -181,6 +181,7 @@ def compute_stats(df, bp_map, daily_max_map):
         last5_avg = last_5.mean() if len(scores) >= 5 else scores.mean()
         momentum = last5_avg - scores.mean()
         
+        # OPTIMISATION : BP Count
         bp_count = d['IsBP'].sum()
         
         alpha_count = 0; bonus_points_gained = 0; bonus_scores_list = []
@@ -259,3 +260,21 @@ def get_comparative_stats(df, current_pick, lookback=15):
     stats_delta['mean_diff'] = current_stats['mean'] - past_stats['mean']
     stats_delta['rank_diff'] = past_stats['rank'] - current_stats['rank'] 
     return stats_delta
+
+# --- NOUVELLE FONCTION POUR LE DUEL ---
+def get_head_to_head_stats(df, p1, p2):
+    # On filtre uniquement les données des deux joueurs
+    df_filtered = df[df['Player'].isin([p1, p2])]
+    
+    # On pivote pour avoir : Index=Pick, Colonnes=Joueurs, Valeur=Score
+    # dropna() permet de ne garder que les picks où LES DEUX ont joué
+    pivot = df_filtered.pivot_table(index='Pick', columns='Player', values='Score').dropna()
+    
+    if pivot.empty or p1 not in pivot.columns or p2 not in pivot.columns:
+        return 0, 0
+    
+    # Calcul des victoires
+    wins_p1 = (pivot[p1] > pivot[p2]).sum()
+    wins_p2 = (pivot[p2] > pivot[p1]).sum()
+    
+    return wins_p1, wins_p2

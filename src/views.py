@@ -8,7 +8,7 @@ import numpy as np
 from src.config import *
 from src.ui import kpi_card, section_title, render_gauge
 from src.utils import get_uniform_color, send_discord_webhook
-from src.stats import compute_stats
+from src.stats import compute_stats, get_head_to_head_stats
 
 # --- 1. DASHBOARD ---
 def render_dashboard(day_df, full_stats, latest_pick, team_avg_per_pick, team_streak_nc, df):
@@ -50,6 +50,10 @@ def render_dashboard(day_df, full_stats, latest_pick, team_avg_per_pick, team_st
         day_df['BarColor'] = day_df['Score'].apply(get_uniform_color)
         fig = px.bar(day_df, x='Player', y='Score', text='Score', color='BarColor', color_discrete_map="identity")
         fig.update_traces(textposition='outside', marker_line_width=0, textfont_size=14, textfont_family="Rajdhani", cliponaxis=False)
+        
+        # AJOUT LIGNE MOYENNE SAISON TEAM
+        fig.add_hline(y=team_avg_per_pick, line_dash="dot", line_color=C_TEXT, annotation_text="Moy. Team", annotation_position="top right")
+        
         fig.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA', 'family': 'Inter'}, yaxis=dict(showgrid=False, visible=False), xaxis=dict(title=None, tickfont=dict(size=14, family='Rajdhani', weight=600)), height=350, showlegend=False, margin=dict(l=0, r=0, t=0, b=0))
         st.plotly_chart(fig, use_container_width=True)
 
@@ -404,6 +408,9 @@ def render_player_lab(df, full_stats):
         stat1 = full_stats[full_stats['Player'] == p1_sel].iloc[0]
         stat2 = full_stats[full_stats['Player'] == p2_sel].iloc[0]
         
+        # CALCUL DIRECT DES DUELS
+        wins_p1, wins_p2 = get_head_to_head_stats(df, p1_sel, p2_sel)
+        
         def comp_row(label, v1, v2, format_str="{}", inverse=False):
             color1, color2 = "#FFF", "#FFF"
             if v1 != v2:
@@ -420,6 +427,15 @@ def render_player_lab(df, full_stats):
             """, unsafe_allow_html=True)
 
         st.markdown(f"<div class='glass-card'>", unsafe_allow_html=True)
+        # LIGNE SPECIALE DUEL (MISE EN AVANT)
+        st.markdown(f"""
+        <div style="display:flex; justify-content:space-between; border-bottom:1px solid rgba(255,255,255,0.1); padding:12px 0; margin-bottom:5px; background:rgba(255,255,255,0.02);">
+            <div style="width:30%; text-align:left; font-family:Rajdhani; font-weight:800; font-size:1.4rem; color:{C_GOLD if wins_p1 > wins_p2 else '#FFF'}">{wins_p1}</div>
+            <div style="width:40%; text-align:center; font-size:0.9rem; font-weight:700; color:{C_GOLD}; letter-spacing:1px; display:flex; flex-direction:column; justify-content:center;">VICTOIRES<br><span style="font-size:0.7rem; color:#888; font-weight:400">FACE À FACE</span></div>
+            <div style="width:30%; text-align:right; font-family:Rajdhani; font-weight:800; font-size:1.4rem; color:{C_GOLD if wins_p2 > wins_p1 else '#FFF'}">{wins_p2}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
         comp_row("POINTS TOTAL", stat1['Total'], stat2['Total'], "{:.0f}")
         comp_row("MOYENNE", stat1['Moyenne'], stat2['Moyenne'], "{:.1f}")
         comp_row("FORME (15J)", stat1['Last15'], stat2['Last15'], "{:.1f}")
@@ -432,11 +448,17 @@ def render_player_lab(df, full_stats):
 
 # --- 4. BONUS X2 ---
 def render_bonus_x2(df):
+    # MODIFICATION: On force l'utilisation de df_full_history passé en argument depuis app.py
+    # (Note: ici df est déjà df_full_history grâce au câblage dans app.py)
     section_title("BONUS <span class='highlight'>ZONE</span>", "Analyse de Rentabilité")
+    
     df_bonus = df[df['IsBonus'] == True].copy()
     
-    # Calcul du Gain Réel (Score Total - Score Brut)
+    # Calcul du Gain Réel
     df_bonus['RealGain'] = df_bonus['Score'] - df_bonus['ScoreVal']
+    
+    # Indicateur visuel de rentabilité (Rentable si score de base >= 40, donc score total >= 80)
+    df_bonus['Rentable'] = df_bonus['ScoreVal'].apply(lambda x: "✅" if x >= 40 else "❌")
 
     available_months = df['Month'].unique().tolist()
     sel_month = st.selectbox("Filtrer par Mois", ["Tous"] + [m for m in available_months if m != "Inconnu"])
@@ -466,15 +488,34 @@ def render_bonus_x2(df):
             monthly_gain = df_bonus.groupby('Month')['RealGain'].sum().reset_index()
             # Tri chronologique sécurisé
             month_order = ['octobre', 'novembre', 'decembre', 'janvier', 'fevrier', 'mars', 'avril']
-            # On ne garde que les mois présents dans les données pour éviter des erreurs
             existing_months = [m for m in month_order if m in monthly_gain['Month'].unique()]
             monthly_gain['Month'] = pd.Categorical(monthly_gain['Month'], categories=existing_months, ordered=True)
             monthly_gain = monthly_gain.sort_values('Month')
+            
+            # Calcul cumulé
+            monthly_gain['Cumul'] = monthly_gain['RealGain'].cumsum()
 
-            fig_m = px.bar(monthly_gain, x='Month', y='RealGain', text='RealGain', color='RealGain', color_continuous_scale='Teal')
-            fig_m.update_traces(texttemplate='+%{text}', textposition='outside')
-            fig_m.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, xaxis=dict(title=None), yaxis=dict(showgrid=False, visible=False), height=300, showlegend=False, coloraxis_showscale=False)
+            # Graphique combiné (Bar + Line)
+            fig_m = go.Figure()
+            fig_m.add_trace(go.Bar(
+                x=monthly_gain['Month'], 
+                y=monthly_gain['RealGain'],
+                name='Gain Mensuel',
+                marker_color='teal',
+                text=monthly_gain['RealGain'],
+                textposition='auto'
+            ))
+            fig_m.add_trace(go.Scatter(
+                x=monthly_gain['Month'],
+                y=monthly_gain['Cumul'],
+                name='Cumul Saison',
+                mode='lines+markers',
+                line=dict(color='#FCD34D', width=3)
+            ))
+            
+            fig_m.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, xaxis=dict(title=None), yaxis=dict(showgrid=False, visible=False), height=300, showlegend=True, legend=dict(orientation="h", y=1.1))
             st.plotly_chart(fig_m, use_container_width=True)
+            
         with c_chart2:
             st.markdown("#### 🎯 SCORES BONUS PAR JOUEUR")
             fig_strip = px.strip(df_bonus_disp, x="Player", y="Score", color="Player", color_discrete_map=PLAYER_COLORS, stripmode='overlay')
@@ -484,30 +525,31 @@ def render_bonus_x2(df):
             st.plotly_chart(fig_strip, use_container_width=True)
 
         st.markdown("### 📜 HISTORIQUE DÉTAILLÉ")
-        st.dataframe(df_bonus_disp[['Pick', 'Player', 'Month', 'ScoreVal', 'Score', 'RealGain']].sort_values('Pick', ascending=False), hide_index=True, use_container_width=True)
+        st.dataframe(
+            df_bonus_disp[['Pick', 'Player', 'Month', 'ScoreVal', 'Score', 'RealGain', 'Rentable']].sort_values('Pick', ascending=False), 
+            hide_index=True, 
+            use_container_width=True,
+            column_config={
+                "Rentable": st.column_config.TextColumn("Rentable", width="small")
+            }
+        )
 
 # --- 5. NO CARROT ---
 # CORRECTION: Ajout de l'argument df_full_history pour calculer l'Iron Man global
 def render_no_carrot(df, team_streak_nc, full_stats, df_full_history):
     section_title("ANTI <span class='highlight'>CARROTE</span>", "Objectif Fiabilité & Constance")
     
-    # 1. CALCULS SUR FULL HISTORY (POUR TOUT L'ONGLET)
-    # Pour garantir que cet onglet reflète la saison complète, on travaille principalement sur df_full_history
-    # Sauf pour "Série Team en cours" qui dépend du dernier pick joué (donc df filtré par load_data est ok, mais mieux vaut recalculer sur full)
-    
-    # Série Team (Active)
+    # 1. CALCULS SUR FULL HISTORY (Saison Complète)
     max_streak_team_hist = 0
     curr_str = 0
     sorted_picks_asc = sorted(df_full_history['Pick'].unique())
     
-    # Calcul série active
     team_streak_active = 0
     for p_id in sorted(df_full_history['Pick'].unique(), reverse=True):
         d_min = df_full_history[df_full_history['Pick'] == p_id]['Score'].min()
         if d_min >= 20: team_streak_active += 1
         else: break
             
-    # Calcul Record Historique Team
     for p_id in sorted_picks_asc:
         d_min = df_full_history[df_full_history['Pick'] == p_id]['Score'].min()
         if d_min >= 20: curr_str += 1
@@ -516,15 +558,12 @@ def render_no_carrot(df, team_streak_nc, full_stats, df_full_history):
             curr_str = 0
     if curr_str > max_streak_team_hist: max_streak_team_hist = curr_str
 
-    # Stats Joueurs (Sur Full History)
-    # On doit recalculer les stats joueurs sur df_full_history pour cet onglet
     full_stats_global = compute_stats(df_full_history, {}, {})
     
     iron_man_curr = full_stats_global.sort_values('CurrentNoCarrot', ascending=False).iloc[0]
     iron_man_all_time = full_stats_global.sort_values('MaxNoCarrot', ascending=False).iloc[0]
-    mister_clean = full_stats_global.sort_values('Carottes', ascending=True).iloc[0] # Le moins de carottes
+    mister_clean = full_stats_global.sort_values('Carottes', ascending=True).iloc[0]
 
-    # --- 5 COLONNES KPIS ---
     k1, k2, k3, k4, k5 = st.columns(5)
     with k1: kpi_card("SÉRIE TEAM EN COURS", f"{team_streak_active}", "JOURS SANS CAROTTE", C_GREEN if team_streak_active > 0 else C_RED)
     with k2: kpi_card("RECORD TEAM (HISTORIQUE)", f"{max_streak_team_hist}", "JOURS CONSÉCUTIFS", C_GOLD)
@@ -536,13 +575,27 @@ def render_no_carrot(df, team_streak_nc, full_stats, df_full_history):
     c_graph, c_list = st.columns([2, 1], gap="large")
     with c_graph:
         st.markdown("#### 📉 ZONE DE DANGER (CAROTTES PAR SOIR - SAISON)")
-        # Utilisation de df_full_history
         carrot_counts = df_full_history[df_full_history['Score'] < 20].groupby('Pick').size().reset_index(name='Carottes')
         all_picks = pd.DataFrame({'Pick': sorted(df_full_history['Pick'].unique())})
         carrot_chart = pd.merge(all_picks, carrot_counts, on='Pick', how='left').fillna(0)
         carrot_chart['Color'] = carrot_chart['Carottes'].apply(lambda x: "#374151" if x == 0 else C_RED)
+        
+        # Trouver le pire soir pour l'annotation
+        max_carrots = carrot_chart['Carottes'].max()
+        worst_day = carrot_chart[carrot_chart['Carottes'] == max_carrots].iloc[0]
+        
         fig_car = px.bar(carrot_chart, x='Pick', y='Carottes')
         fig_car.update_traces(marker_color=carrot_chart['Color'])
+        
+        # Ajout Annotation
+        if max_carrots > 0:
+            fig_car.add_annotation(
+                x=worst_day['Pick'], y=max_carrots,
+                text=f"Pire Soir: {int(max_carrots)} Carottes",
+                showarrow=True, arrowhead=1, ax=0, ay=-40,
+                font=dict(color="#FFF", size=12), bgcolor=C_RED
+            )
+            
         fig_car.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, xaxis=dict(showgrid=False), yaxis=dict(showgrid=True, gridcolor='#222', title="Nb Carottes"), height=350)
         st.plotly_chart(fig_car, use_container_width=True)
 

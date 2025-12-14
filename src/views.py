@@ -4,7 +4,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import numpy as np
 
-# Imports internes (Architecture V2)
+# Imports internes
 from src.config import *
 from src.ui import kpi_card, section_title, render_gauge
 from src.utils import get_uniform_color, send_discord_webhook
@@ -15,13 +15,13 @@ def render_dashboard(day_df, full_stats, latest_pick, team_avg_per_pick, team_st
     section_title("RAPTORS <span class='highlight'>DASHBOARD</span>", f"Daily Briefing • Pick #{int(latest_pick)}")
     top = day_df.iloc[0]
 
-    # LOGIQUE MVP & BP & BONUS
+    # LOGIQUE MVP & BP & BONUS (CORRECTION ALIGNEMENT: TOUT SUR LA MEME LIGNE)
     val_suffix = ""
     if 'IsBonus' in top and top['IsBonus']: val_suffix += " 🌟x2"
     if 'IsBP' in top and top['IsBP']: val_suffix += " 🎯BP"
 
-    badges_html = val_suffix if val_suffix else "&nbsp;"
-    sub_html = f"<div><div style='font-size:1.4rem; font-weight:800'>{int(top['Score'])} PTS</div><div style='font-size:0.9rem; color:#999; font-weight:600; margin-top:4px'>{badges_html}</div></div>"
+    # On formate le HTML pour que le suffixe soit dans le même conteneur que le score, mais un peu plus petit
+    sub_html = f"<div><span style='font-size:1.6rem; font-weight:800'>{int(top['Score'])} PTS</span> <span style='font-size:1rem; color:{C_GOLD}; font-weight:700'>{val_suffix}</span></div>"
 
     # 5 COLONNES POUR LE DASHBOARD
     c1, c2, c3, c4, c5 = st.columns(5)
@@ -112,7 +112,8 @@ def render_dashboard(day_df, full_stats, latest_pick, team_avg_per_pick, team_st
         st.markdown("</div>", unsafe_allow_html=True)
 
 # --- 2. TEAM HQ ---
-def render_team_hq(df, latest_pick, team_rank, team_history, team_avg_per_pick, total_bp_team):
+# CORRECTION: Ajout de l'argument full_stats
+def render_team_hq(df, latest_pick, team_rank, team_history, team_avg_per_pick, total_bp_team, full_stats):
     section_title("TEAM <span class='highlight'>HQ</span>", "Vue d'ensemble de l'effectif")
     total_pts_season = df['Score'].sum()
     daily_agg = df.groupby('Pick')['Score'].sum()
@@ -407,7 +408,6 @@ def render_player_lab(df, full_stats):
         stat1 = full_stats[full_stats['Player'] == p1_sel].iloc[0]
         stat2 = full_stats[full_stats['Player'] == p2_sel].iloc[0]
         
-        # --- RESTAURATION DE LA LOGIQUE DE COMPARAISON COMPLETE ---
         def comp_row(label, v1, v2, format_str="{}", inverse=False):
             color1, color2 = "#FFF", "#FFF"
             if v1 != v2:
@@ -440,7 +440,6 @@ def render_bonus_x2(df):
     df_bonus = df[df['IsBonus'] == True].copy()
     
     # Calcul du Gain Réel (Score Total - Score Brut)
-    # Ex: Score 98 (Bonus) - ScoreVal 49 = Gain 49
     df_bonus['RealGain'] = df_bonus['Score'] - df_bonus['ScoreVal']
 
     available_months = df['Month'].unique().tolist()
@@ -468,13 +467,12 @@ def render_bonus_x2(df):
         c_chart1, c_chart2 = st.columns([2, 3], gap="medium")
         with c_chart1:
             st.markdown("#### 💰 IMPACT MENSUEL (GAINS RÉELS)")
-            
-            # Aggrégation par somme des gains
             monthly_gain = df_bonus.groupby('Month')['RealGain'].sum().reset_index()
-            
-            # Tri chronologique des mois pour l'affichage
+            # Tri chronologique sécurisé
             month_order = ['octobre', 'novembre', 'decembre', 'janvier', 'fevrier', 'mars', 'avril']
-            monthly_gain['Month'] = pd.Categorical(monthly_gain['Month'], categories=month_order, ordered=True)
+            # On ne garde que les mois présents dans les données pour éviter des erreurs
+            existing_months = [m for m in month_order if m in monthly_gain['Month'].unique()]
+            monthly_gain['Month'] = pd.Categorical(monthly_gain['Month'], categories=existing_months, ordered=True)
             monthly_gain = monthly_gain.sort_values('Month')
 
             fig_m = px.bar(monthly_gain, x='Month', y='RealGain', text='RealGain', color='RealGain', color_continuous_scale='Teal')
@@ -493,7 +491,8 @@ def render_bonus_x2(df):
         st.dataframe(df_bonus_disp[['Pick', 'Player', 'Month', 'ScoreVal', 'Score', 'RealGain']].sort_values('Pick', ascending=False), hide_index=True, use_container_width=True)
 
 # --- 5. NO CARROT ---
-def render_no_carrot(df, team_streak_nc, full_stats):
+# CORRECTION: Ajout de l'argument df_full_history pour calculer l'Iron Man global
+def render_no_carrot(df, team_streak_nc, full_stats, df_full_history):
     section_title("ANTI <span class='highlight'>CARROTE</span>", "Objectif Fiabilité & Constance")
     max_streak_team = 0
     curr_str = 0
@@ -507,8 +506,12 @@ def render_no_carrot(df, team_streak_nc, full_stats):
     if curr_str > max_streak_team: max_streak_team = curr_str
 
     iron_man_curr = full_stats.sort_values('CurrentNoCarrot', ascending=False).iloc[0]
-    # Récupération du record All-Time via les stats calculées
-    iron_man_all_time = full_stats.sort_values('MaxNoCarrot', ascending=False).iloc[0]
+    
+    # --- CALCUL IRON MAN ALL-TIME ---
+    # On recalcule les stats sur tout l'historique pour avoir le vrai record
+    # Note : Cela peut être optimisé mais c'est le moyen le plus sûr d'avoir la donnée
+    full_stats_global = compute_stats(df_full_history, {}, {}) # maps vides car pas besoin ici
+    iron_man_all_time = full_stats_global.sort_values('MaxNoCarrot', ascending=False).iloc[0]
 
     # --- MODIFICATION: 4 COLONNES ---
     k1, k2, k3, k4 = st.columns(4)
@@ -579,22 +582,48 @@ def render_trends(df, latest_pick):
 
     c_hot, c_cold = st.columns(2, gap="large")
     with c_hot:
-        st.markdown(f"<div class='trend-box'><div class='hot-header'>🔥 EN FEU</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='trend-box'><div class='hot-header'>🔥 EN FEU (SUR-PERFORMANCE)</div><div style='font-size:0.8rem; color:#888; margin-bottom:10px'>Joueurs ayant le plus progressé sur 15j vs Moyenne Saison.</div>", unsafe_allow_html=True)
         if hot_players.empty: st.info("Personne.")
         else:
             for p, row in hot_players.iterrows():
                 st.markdown(f"<div class='trend-card-row'><div class='trend-name'>{p}</div><div style='text-align:right'><div class='trend-val' style='color:{C_GREEN}'>{row['Last15']:.1f}</div><div class='trend-delta' style='color:{C_GREEN}'>+{row['Delta']:.1f}</div></div></div>", unsafe_allow_html=True)
         st.markdown("</div>", unsafe_allow_html=True)
     with c_cold:
-        st.markdown(f"<div class='trend-box'><div class='cold-header'>❄️ DANS LE DUR</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='trend-box'><div class='cold-header'>❄️ DANS LE DUR (SOUS-PERFORMANCE)</div><div style='font-size:0.8rem; color:#888; margin-bottom:10px'>Joueurs en baisse de régime sur 15j vs Moyenne Saison.</div>", unsafe_allow_html=True)
         if cold_players.empty: st.info("Personne.")
         else:
             for p, row in cold_players.iterrows():
                 st.markdown(f"<div class='trend-card-row'><div class='trend-name'>{p}</div><div style='text-align:right'><div class='trend-val' style='color:{C_RED}'>{row['Last15']:.1f}</div><div class='trend-delta' style='color:{C_RED}'>{row['Delta']:.1f}</div></div></div>", unsafe_allow_html=True)
         st.markdown("</div>", unsafe_allow_html=True)
+        
+    st.markdown("<br>", unsafe_allow_html=True)
+    # --- MOMENTUM CHART (ALL PLAYERS 15 DAYS) - CORRECTION GRAPH MANQUANT ---
+    st.markdown("#### 📉 MOMENTUM (15 DERNIERS JOURS)")
+    st.markdown("<div class='chart-desc'>Trajectoire de tous les joueurs actifs sur la période.</div>", unsafe_allow_html=True)
+    
+    # Filter only players who played in last 15 days
+    active_players = df_15['Player'].unique()
+    momentum_data = df_15[df_15['Player'].isin(active_players)].sort_values('Pick')
+    
+    # COLORER LA LIGNE PAR JOUEUR
+    fig_mom = px.line(momentum_data, x='Pick', y='Score', color='Player', markers=True, color_discrete_map=PLAYER_COLORS)
+    
+    # FIX UI: LEGEND COLOR TOO DARK
+    fig_mom.update_layout(
+        plot_bgcolor='rgba(0,0,0,0)', 
+        paper_bgcolor='rgba(0,0,0,0)', 
+        font={'color': '#AAA'}, 
+        xaxis=dict(showgrid=False), 
+        yaxis=dict(showgrid=True, gridcolor='#222'), 
+        height=500,
+        legend=dict(orientation="h", y=-0.2, font=dict(color="#E5E7EB"))
+    )
+    st.plotly_chart(fig_mom, use_container_width=True)
 
 # --- 7. HALL OF FAME ---
 def render_hall_of_fame(df_full_history, bp_map, daily_max_map):
+    # (Le code du Hall of Fame reste identique à ma proposition précédente)
+    # Je le remets ici pour complétude
     section_title("HALL OF <span class='highlight'>FAME</span>", "Records & Trophées")
     st.markdown("<h3 style='margin-bottom:15px; font-family:Rajdhani; color:#AAA;'>🏆 RAPTORS SEASON TROPHIES</h3>", unsafe_allow_html=True)
     trophy_cols = st.columns(4)
@@ -641,9 +670,6 @@ def render_hall_of_fame(df_full_history, bp_map, daily_max_map):
     st.markdown("<h3 style='margin-bottom:10px; font-family:Rajdhani; color:#AAA;'>🏛️ RECORDS GLOBAUX SAISON</h3>", unsafe_allow_html=True)
 
     full_stats_global = compute_stats(df_full_history, bp_map, daily_max_map)
-    
-    # ... (Le code de tri et d'affichage des 32 cartes reste identique à ta version validée précédente) ...
-    # Je réintègre ici tout le bloc de tri et d'affichage pour que le fichier soit complet
     
     goat = full_stats_global.sort_values('Moyenne', ascending=False).iloc[0]
     mvp = full_stats_global.sort_values('Moyenne_Raw', ascending=False).iloc[0]

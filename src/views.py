@@ -846,7 +846,7 @@ def render_hall_of_fame(df_full_history, bp_map, daily_max_map):
             with cols[i]:
                 st.markdown(f"""<div class="glass-card" style="position:relative; overflow:hidden; margin-bottom:10px"><div style="position:absolute; right:-10px; top:-10px; font-size:5rem; opacity:0.05; pointer-events:none">{card['icon']}</div><div class="hof-badge" style="color:{card['color']}; border:1px solid {card['color']}">{card['icon']} {card['title']}</div><div style="display:flex; justify-content:space-between; align-items:flex-end;"><div><div class="hof-player">{card['player']}</div><div style="font-size:0.8rem; color:#888; margin-top:4px">{card['desc']}</div></div><div><div class="hof-stat" style="color:{card['color']}">{card['val']}</div><div class="hof-unit">{card['unit']}</div></div></div></div>""", unsafe_allow_html=True)
 
-# --- 8. WEEKLY REPORT (V22.5 FINAL POSITIVE) ---
+# --- 8. WEEKLY REPORT (VERSION V22.6 FINAL) ---
 def render_weekly_report(df_full_history):
     section_title("WEEKLY <span class='highlight'>REPORT</span>", "Générateur de Rapport Premium")
     
@@ -872,25 +872,39 @@ def render_weekly_report(df_full_history):
         st.markdown(f"### 📄 APERÇU DISCORD (Deck #{target_deck})")
         
         border_color = f"#{meta['color']:06x}"
+        
+        # Helpers
         def clean_md(txt): return txt.replace("**", "<b>").replace("**", "</b>") if isinstance(txt, str) else txt
+        
         def fmt_list(lst, suffix=""):
             if not lst: return "Personne."
-            names = [f"<b>{x[0]}</b>" for x in lst]
-            val = lst[0][1] 
-            return f"{', '.join(names)} ({val}{suffix})"
+            # On affiche TOUTE la liste
+            items = [f"<b>{x[0]}</b> ({x[1]}{suffix})" for x in lst]
+            return ", ".join(items)
 
+        # Podium Moyenne
         podium_html = ""
         medals = ["🥇", "🥈", "🥉"]
         for p in data['podium']:
-            rotw_tag = f" (ROTW #{p['rotw_count']})" if p['rank'] == 1 and p['rotw_count'] > 0 else ""
-            podium_html += f"<div>{medals[p['rank']-1]} <b>{p['player']}</b> • {p['score']} pts{rotw_tag}</div>"
+            # Couronne si Vainqueur Officiel (Somme)
+            crown = " 👑" if p.get('is_winner') else ""
+            rotw_tag = f" (ROTW #{p['rotw_count']})" if p.get('is_winner') and p['rotw_count'] > 0 else ""
+            
+            podium_html += f"""
+            <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                <div>{medals[p['rank']-1]} <b>{p['player']}</b>{crown}{rotw_tag}</div>
+                <div style="text-align:right;"><b>{p['score']:.1f}</b> <span style="font-size:0.8em; color:#888;">(Tot: {p['total']})</span></div>
+            </div>
+            """
 
         perfect_disp = ", ".join([f"<b>{p}</b>" for p in data['perfect']]) if data['perfect'] else "Aucun joueur parfait cette semaine."
         daily_html = "<br>".join(data['daily_mvp'])
-        analysis_html = "<br>".join([clean_md(l) for l in data['analysis']]) if data['analysis'] else "Pas de dynamique majeure détectée."
+        
+        # Analyse : On insère des sauts de ligne HTML
+        analysis_html = "<br><br>".join([clean_md(l) for l in data['analysis']]) if data['analysis'] else "Pas de dynamique majeure détectée."
         
         sniper_txt = fmt_list(lists['sniper'], " BP")
-        muraille_txt = fmt_list(lists['muraille'], " 🥕")
+        muraille_txt = ", ".join([f"<b>{x[0]}</b>" for x in lists['muraille']]) if lists['muraille'] else "Personne."
         remontada_txt = fmt_list(lists['remontada'], " pts")
         sunday_txt = fmt_list(lists['sunday'], " pts")
         diff_col = '#57F287' if '+' in stats['diff'] else '#ED4245'
@@ -911,8 +925,8 @@ def render_weekly_report(df_full_history):
 
 <div style="display:flex; gap:20px; margin-bottom:25px;">
     <div style="flex:1;">
-        <div style="font-weight:700; color:#FFF; font-size:1rem; margin-bottom:2px;">🏆 LE PODIUM</div>
-        <div style="font-size:0.75rem; color:#888; font-style:italic; margin-bottom:8px;">Les meilleurs scores cumulés de la semaine.</div>
+        <div style="font-weight:700; color:#FFF; font-size:1rem; margin-bottom:2px;">🏆 LE PODIUM (MOYENNE)</div>
+        <div style="font-size:0.75rem; color:#888; font-style:italic; margin-bottom:8px;">Classement par moyenne de points/match.</div>
         {podium_html}
     </div>
     <div style="flex:1; background:rgba(255,255,255,0.03); padding:10px; border-radius:5px;">
@@ -925,7 +939,7 @@ def render_weekly_report(df_full_history):
 <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px; margin-bottom:25px;">
     <div>
         <div style="font-weight:700; color:#FFF;">🎯 SNIPER</div>
-        <div style="font-size:0.75rem; color:#888; font-style:italic; margin-bottom:4px;">Le plus de Best Picks trouvés.</div>
+        <div style="font-size:0.75rem; color:#888; font-style:italic; margin-bottom:4px;">Tous les joueurs ayant trouvé un Best Pick.</div>
         {sniper_txt}
     </div>
     <div>
@@ -947,13 +961,13 @@ def render_weekly_report(df_full_history):
 
 <div style="margin-bottom:25px; background:rgba(0,0,0,0.2); padding:15px; border-radius:5px;">
     <div style="font-weight:700; color:#FFF; margin-bottom:2px;">📅 MVP PAR PICK</div>
-    <div style="font-size:0.75rem; color:#888; font-style:italic; margin-bottom:10px;">Qui a porté l'équipe chaque soir ?</div>
+    <div style="font-size:0.75rem; color:#888; font-style:italic; margin-bottom:10px;">Le meilleur scoreur de chaque soirée.</div>
     {daily_html}
 </div>
 
 <div style="border-top:1px solid #444; padding-top:15px; margin-bottom:20px;">
     <div style="font-weight:700; color:#FFF; margin-bottom:2px;">🔬 ANALYSE & DYNAMIQUES</div>
-    <div style="font-size:0.75rem; color:#888; font-style:italic; margin-bottom:8px;">Comparatif : Série actuelle vs Record Perso vs Record Team.</div>
+    <div style="font-size:0.75rem; color:#888; font-style:italic; margin-bottom:8px;">Focus sur les séries marquantes (vs Records).</div>
     <div style="font-size:0.9rem;">{analysis_html}</div>
 </div>
 

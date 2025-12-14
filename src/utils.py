@@ -8,33 +8,34 @@ DISCORD_COLOR_RED = 13504833  # #CE1141 (Raptors Red)
 DISCORD_COLOR_GOLD = 16766720 # Gold
 WEBHOOK_URL = st.secrets["DISCORD_WEBHOOK"] if "DISCORD_WEBHOOK" in st.secrets else ""
 
-# --- FONCTION RESTAURÉE (ESSENTIELLE POUR LE DATA LOADER) ---
+# --- FONCTION DE NETTOYAGE (DATE/MOIS) ---
 def normalize_month(month_str):
     """
     Normalise le nom du mois (minuscule, sans accent) pour correspondre aux clés.
-    Ex: "Février" -> "fevrier", "Décembre" -> "decembre"
+    Ex: "Février" -> "fevrier"
     """
     if not isinstance(month_str, str): 
         return "Inconnu"
-    
-    # Minuscule et suppression des espaces
     month_str = month_str.lower().strip()
-    
-    # Suppression des accents (ex: é -> e)
     normalized = unicodedata.normalize('NFD', month_str).encode('ascii', 'ignore').decode("utf-8")
-    
     return normalized
 
-# --- FONCTIONS GRAPHIQUES ---
+# --- FONCTIONS GRAPHIQUES (Code Couleur Strict) ---
 def get_uniform_color(score):
     """
-    Retourne une couleur hexadécimale en fonction du score (Pour les graphiques).
+    Retourne la couleur selon la règle stricte :
+    - Moins de 20 : Rouge
+    - De 20 à 39 : Gris Sombre
+    - 40 et plus : Vert
     """
-    if score >= 60: return "#10B981" # Green
-    if score >= 40: return "#3B82F6" # Blue
-    if score >= 30: return "#F59E0B" # Orange
-    if score < 20: return "#EF4444"  # Red
-    return "#6B7280" # Gray
+    try:
+        s = float(score)
+    except:
+        return "#374151" # Gris par défaut en cas d'erreur
+
+    if s >= 40: return "#10B981" # VERT (Succès)
+    if s < 20:  return "#EF4444" # ROUGE (Carotte)
+    return "#374151"             # GRIS SOMBRE (Neutre)
 
 # --- FONCTIONS DE RAPPORT ---
 def format_winners_list(winners, suffix=""):
@@ -45,14 +46,13 @@ def format_winners_list(winners, suffix=""):
     if not winners: return "Personne."
     
     names = [f"**{w[0]}**" for w in winners]
-    val = winners[0][1] # On prend la valeur du premier car ex-aequo
+    val = winners[0][1] 
     
     if len(names) == 1:
         return f"{names[0]} ({val}{suffix})"
     elif len(names) == 2:
         return f"{names[0]} & {names[1]} ({val}{suffix})"
     else:
-        # Si plus de 2, on met des virgules et un & à la fin
         return f"{', '.join(names[:-1])} & {names[-1]} ({val}{suffix})"
 
 def send_weekly_report_discord(report_data, dashboard_url):
@@ -62,11 +62,9 @@ def send_weekly_report_discord(report_data, dashboard_url):
     if not WEBHOOK_URL:
         return "URL Webhook manquante dans les secrets."
 
-    meta = report_data['meta']
-    podium = report_data['podium']
-    stats = report_data['team_stats']
-    
-    # --- CONSTRUCTION DU CONTENU ---
+    meta = report_data.get('meta', {})
+    podium = report_data.get('podium', [])
+    stats = report_data.get('team_stats', {})
     
     # 1. PODIUM
     podium_txt = ""
@@ -74,82 +72,64 @@ def send_weekly_report_discord(report_data, dashboard_url):
     for p in podium:
         crown = f" (👑 Titre #{p['titles']})" if p['rank'] == 1 else ""
         podium_txt += f"{medals[p['rank']-1]} **{p['player']}** • {p['score']} pts{crown}\n"
-    
+    if not podium_txt: podium_txt = "Pas de données."
+
     # 2. ROTW LEADERBOARD
     rotw_txt = ""
-    for idx, (p, nb) in enumerate(report_data['rotw_leaderboard']):
+    for idx, (p, nb) in enumerate(report_data.get('rotw_leaderboard', [])):
         rotw_txt += f"{idx+1}. **{p}** ({nb})  "
+    if not rotw_txt: rotw_txt = "Aucun historique."
     
-    # 3. LISTES GAGNANTS (Ex-Aequo Gérés)
-    sniper_txt = format_winners_list(report_data['sniper'], " BP")
-    muraille_txt = format_winners_list(report_data['muraille'], " 🥕")
-    remontada_txt = format_winners_list(report_data['remontada'], " pts prog.")
-    sunday_txt = format_winners_list(report_data['sunday_clutch'], " pts") if report_data['sunday_clutch'] else "N/A"
+    # 3. LISTES GAGNANTS
+    sniper_txt = format_winners_list(report_data.get('sniper', []), " BP")
+    muraille_txt = format_winners_list(report_data.get('muraille', []), " 🥕")
+    remontada_txt = format_winners_list(report_data.get('remontada', []), " pts prog.")
+    sunday_txt = format_winners_list(report_data.get('sunday_clutch', []), " pts") if report_data.get('sunday_clutch') else "N/A"
 
-    # 4. SERIES & DYNAMIQUES
+    # 4. SERIES
     streaks_fields = []
-    if report_data['streaks']:
+    if report_data.get('streaks'):
         txt_s = ""
         for s in report_data['streaks']:
             txt_s += f"{s['msg']} **{s['player']}** : {s['val']} {s['type']} (Record : {s['record']})\n"
         streaks_fields.append({"name": "🔥 SÉRIES & DYNAMIQUES", "value": txt_s, "inline": False})
     
     # 5. TEAM PULSE
-    sign = "+" if stats['diff'] > 0 else ""
-    pulse_txt = f"📈 **Moyenne :** {stats['avg']:.1f} ({sign}{stats['diff']:.1f})\n"
-    pulse_txt += f"🎯 **Best Picks :** {stats['bp']}\n"
-    pulse_txt += f"🛡️ **Carottes :** {stats['carrots']}\n"
-    if stats['clean_sheet']:
+    sign = "+" if stats.get('diff', 0) > 0 else ""
+    pulse_txt = f"📈 **Moyenne :** {stats.get('avg', 0):.1f} ({sign}{stats.get('diff', 0):.1f})\n"
+    pulse_txt += f"🎯 **Best Picks :** {stats.get('bp', 0)}\n"
+    pulse_txt += f"🛡️ **Carottes :** {stats.get('carrots', 0)}\n"
+    if stats.get('clean_sheet'):
         pulse_txt += "✨ **CLEAN SHEET SEMAINE !** (Aucun score < 25)"
 
-    # --- ASSEMBLAGE EMBED ---
     embed = {
-        "title": f"🦖 RAPTORS WEEKLY REPORT • SEMAINE #{meta['week_num']}",
-        "description": f"*Bilan du Lundi {meta['start_date']} au Dimanche {meta['end_date']}*",
+        "title": f"🦖 RAPTORS WEEKLY REPORT • SEMAINE #{meta.get('week_num', '?')}",
+        "description": f"*Bilan du Lundi {meta.get('start_date', '?')} au Dimanche {meta.get('end_date', '?')}*",
         "color": DISCORD_COLOR_RED,
         "fields": [
             {"name": "🏆 LE PODIUM HEBDOMADAIRE", "value": podium_txt, "inline": False},
             {"name": "👑 COURSE AU TRÔNE (Total Titres)", "value": rotw_txt, "inline": False},
-            
-            # Ligne de stats indiv
             {"name": "🎯 SNIPER HEBDO", "value": sniper_txt, "inline": True},
             {"name": "🛡️ LA MURAILLE", "value": muraille_txt, "inline": True},
             {"name": "🧗 LA REMONTADA", "value": remontada_txt, "inline": True},
         ]
     }
     
-    # Ajout Sunday Clutch si existe
-    if report_data['has_sunday']:
+    if meta.get('has_sunday'):
         embed["fields"].insert(5, {"name": "🌅 SUNDAY CLUTCH (MVP Dimanche)", "value": sunday_txt, "inline": True})
 
-    # Ajout Séries
     embed["fields"].extend(streaks_fields)
-    
-    # Ajout Team Pulse
     embed["fields"].append({"name": "📊 TEAM PULSE", "value": pulse_txt, "inline": False})
-    
-    # Footer
     embed["footer"] = {"text": "War Room v22 • Generated by Python 🐍"}
-    
-    # Bouton Dashboard
     embed["fields"].append({"name": "", "value": f"👉 [Voir le Dashboard Complet]({dashboard_url})", "inline": False})
 
-    payload = {
-        "username": "Raptors Weekly",
-        "avatar_url": "https://raw.githubusercontent.com/pedrille/dino-fant/main/basketball_discord.png",
-        "embeds": [embed]
-    }
+    payload = {"username": "Raptors Weekly", "avatar_url": "https://raw.githubusercontent.com/pedrille/dino-fant/main/basketball_discord.png", "embeds": [embed]}
 
     try:
         response = requests.post(WEBHOOK_URL, json=payload)
-        if response.status_code in [200, 204]:
-            return "success"
-        else:
-            return f"Erreur Discord: {response.status_code}"
+        return "success" if response.status_code in [200, 204] else f"Erreur Discord: {response.status_code}"
     except Exception as e:
         return str(e)
 
-# --- FONCTION LEGACY (Daily) ---
-# Gardée pour compatibilité
-def send_discord_webhook(day_df, pick, url):
-    pass
+# --- LEGACY ---
+def send_discord_webhook(day_df, pick, url): pass

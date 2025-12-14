@@ -846,24 +846,18 @@ def render_hall_of_fame(df_full_history, bp_map, daily_max_map):
             with cols[i]:
                 st.markdown(f"""<div class="glass-card" style="position:relative; overflow:hidden; margin-bottom:10px"><div style="position:absolute; right:-10px; top:-10px; font-size:5rem; opacity:0.05; pointer-events:none">{card['icon']}</div><div class="hof-badge" style="color:{card['color']}; border:1px solid {card['color']}">{card['icon']} {card['title']}</div><div style="display:flex; justify-content:space-between; align-items:flex-end;"><div><div class="hof-player">{card['player']}</div><div style="font-size:0.8rem; color:#888; margin-top:4px">{card['desc']}</div></div><div><div class="hof-stat" style="color:{card['color']}">{card['val']}</div><div class="hof-unit">{card['unit']}</div></div></div></div>""", unsafe_allow_html=True)
 
-# --- 8. WEEKLY REPORT (CORRIGÉ & NETTOYÉ) ---
+# --- 8. WEEKLY REPORT (CORRIGÉ AFFICHAGE) ---
 def render_weekly_report(df_full_history):
     section_title("WEEKLY <span class='highlight'>REPORT</span>", "Générateur du Rapport Hebdomadaire")
     
-    # Génération des données via le moteur weekly
     data = generate_weekly_report_data(df_full_history)
     
     if not data:
         st.error("Impossible de générer le rapport. Vérifiez que la colonne 'Deck' est bien remplie dans le fichier Excel.")
         return
 
-    # Sécurisation des accès aux données
     meta = data.get('meta', {})
     stats = data.get('team_stats', {})
-    
-    # --- ALERTE SI DIMANCHE MANQUANT ---
-    if not meta.get('has_sunday', False):
-        st.warning("⚠️ Attention : La semaine semble incomplète (pas de 'dimanche' ou fin de Deck détectée).")
     
     c1, c2 = st.columns([2, 1])
     
@@ -871,13 +865,10 @@ def render_weekly_report(df_full_history):
         st.markdown(f"### 📄 APERÇU DU RAPPORT (Deck #{meta.get('week_num', '?')})")
         st.markdown(f"<div style='color:#888; font-size:0.9rem; margin-bottom:20px'>Période : {meta.get('start_date', '?')} au {meta.get('end_date', '?')}</div>", unsafe_allow_html=True)
         
-        # --- PRÉPARATION DU TEXTE POUR HTML (Remplacement Markdown -> HTML) ---
         def clean_md(text):
-            """Remplace le gras Markdown **txt** par <b>txt</b> pour l'affichage HTML"""
             if not isinstance(text, str): return text
-            return text.replace("**", "<b>").replace("**", "</b>") # Remplacement simple
+            return text.replace("**", "<b>").replace("**", "</b>")
 
-        # Formatage des listes
         rotw_list = [f"<b>{p}</b> ({nb})" for p, nb in data.get('rotw_leaderboard', [])]
         rotw_display = ', '.join(rotw_list)
         
@@ -886,67 +877,47 @@ def render_weekly_report(df_full_history):
         remontada_disp = clean_md(format_winners_list(data.get('remontada', []), " pts prog."))
         sunday_disp = clean_md(format_winners_list(data.get('sunday_clutch', []), " pts")) if data.get('sunday_clutch') else "N/A"
         
-        # Podium
         podium_raw = [(p['player'], p['score']) for p in data.get('podium', [])]
         podium_disp = clean_md(format_winners_list(podium_raw))
 
-        # Séries (Nettoyage des astérisques)
         streaks_html = "Aucune série significative cette semaine."
         if data.get('streaks'):
             lines = []
             for s in data['streaks']:
-                # On formate manuellement pour être sûr
                 lines.append(f"{s['msg']} <b>{s['player']}</b> : {s['val']} {s['type']} (Record : {s['record']})")
             streaks_html = '<br>'.join(lines)
 
-        # Pulse Check
         avg_val = stats.get('avg', 0)
         diff_val = stats.get('diff', 0)
         sign = "+" if diff_val > 0 else ""
         
-        # --- RENDU VISUEL (EMBED SIMULATOR) ---
-        st.markdown(f"""
-        <div style="background:#2f3136; border-left: 4px solid #CE1141; padding:15px; border-radius:4px; font-family:'Inter', sans-serif; color:#dcddde; font-size: 0.9rem; line-height: 1.5;">
-            <div style="font-weight:700; color:#FFF; font-size:1.1rem; margin-bottom:10px">🦖 RAPTORS WEEKLY REPORT • DECK #{meta.get('week_num', '?')}</div>
-            <div style="font-style:italic; color:#b9bbbe; margin-bottom:15px">*Bilan du Lundi {meta.get('start_date', '?')} au Dimanche {meta.get('end_date', '?')}*</div>
-            
-            <div style="font-weight:700; color:#FFF; margin-top:10px">🏆 LE PODIUM HEBDOMADAIRE</div>
-            {podium_disp} (détail complet sur Discord)
-            
-            <div style="font-weight:700; color:#FFF; margin-top:10px">👑 COURSE AU TRÔNE (Total Titres)</div>
-            {rotw_display if rotw_display else "Aucun historique."}
-            
-            <div style="display:flex; margin-top:15px; gap:20px; flex-wrap:wrap;">
-                <div style="flex:1; min-width:150px;">
-                    <div style="font-weight:700; color:#FFF">🎯 SNIPER HEBDO</div>
-                    {sniper_disp}
-                </div>
-                <div style="flex:1; min-width:150px;">
-                    <div style="font-weight:700; color:#FFF">🛡️ LA MURAILLE</div>
-                    {muraille_disp}
-                </div>
-            </div>
-            <div style="display:flex; margin-top:10px; gap:20px; flex-wrap:wrap;">
-                <div style="flex:1; min-width:150px;">
-                    <div style="font-weight:700; color:#FFF">🧗 LA REMONTADA</div>
-                    {remontada_disp}
-                </div>
-                <div style="flex:1; min-width:150px;">
-                    <div style="font-weight:700; color:#FFF">🌅 SUNDAY CLUTCH</div>
-                    {sunday_disp}
-                </div>
-            </div>
-            
-            <div style="font-weight:700; color:#FFF; margin-top:15px">🔥 SÉRIES & DYNAMIQUES</div>
-            {streaks_html}
-            
-            <div style="font-weight:700; color:#FFF; margin-top:15px">📊 TEAM PULSE</div>
-            📈 Moyenne : <b>{avg_val:.1f}</b> ({sign}{diff_val:.1f})<br>
-            🎯 Best Picks : {stats.get('bp', 0)}<br>
-            🛡️ Carottes : {stats.get('carrots', 0)}<br>
-            { "✨ <b>CLEAN SHEET SEMAINE !</b> (Aucun score < 25)" if stats.get('clean_sheet') else ""}
-        </div>
-        """, unsafe_allow_html=True)
+        # --- HTML NON INDENTÉ POUR EVITER LE BUG D'AFFICHAGE ---
+        html_content = f"""
+<div style="background:#2f3136; border-left: 4px solid #CE1141; padding:15px; border-radius:4px; font-family:'Inter', sans-serif; color:#dcddde; font-size: 0.9rem; line-height: 1.5;">
+<div style="font-weight:700; color:#FFF; font-size:1.1rem; margin-bottom:10px">🦖 RAPTORS WEEKLY REPORT • DECK #{meta.get('week_num', '?')}</div>
+<div style="font-style:italic; color:#b9bbbe; margin-bottom:15px">*Bilan du Lundi {meta.get('start_date', '?')} au Dimanche {meta.get('end_date', '?')}*</div>
+<div style="font-weight:700; color:#FFF; margin-top:10px">🏆 LE PODIUM HEBDOMADAIRE</div>
+{podium_disp} (détail complet sur Discord)
+<div style="font-weight:700; color:#FFF; margin-top:10px">👑 COURSE AU TRÔNE (Total Titres)</div>
+{rotw_display if rotw_display else "Aucun historique."}
+<div style="display:flex; margin-top:15px; gap:20px; flex-wrap:wrap;">
+<div style="flex:1; min-width:150px;"><div style="font-weight:700; color:#FFF">🎯 SNIPER HEBDO</div>{sniper_disp}</div>
+<div style="flex:1; min-width:150px;"><div style="font-weight:700; color:#FFF">🛡️ LA MURAILLE</div>{muraille_disp}</div>
+</div>
+<div style="display:flex; margin-top:10px; gap:20px; flex-wrap:wrap;">
+<div style="flex:1; min-width:150px;"><div style="font-weight:700; color:#FFF">🧗 LA REMONTADA</div>{remontada_disp}</div>
+<div style="flex:1; min-width:150px;"><div style="font-weight:700; color:#FFF">🌅 SUNDAY CLUTCH</div>{sunday_disp}</div>
+</div>
+<div style="font-weight:700; color:#FFF; margin-top:15px">🔥 SÉRIES & DYNAMIQUES</div>
+{streaks_html}
+<div style="font-weight:700; color:#FFF; margin-top:15px">📊 TEAM PULSE</div>
+📈 Moyenne : <b>{avg_val:.1f}</b> ({sign}{diff_val:.1f})<br>
+🎯 Best Picks : {stats.get('bp', 0)}<br>
+🛡️ Carottes : {stats.get('carrots', 0)}<br>
+{ "✨ <b>CLEAN SHEET SEMAINE !</b> (Aucun score < 25)" if stats.get('clean_sheet') else ""}
+</div>
+"""
+        st.markdown(html_content, unsafe_allow_html=True)
 
     with c2:
         st.markdown("### 🚀 ACTIONS")
@@ -954,7 +925,6 @@ def render_weekly_report(df_full_history):
         
         if st.button("ENVOYER LE RAPPORT", type="primary", use_container_width=True):
             with st.spinner("Envoi en cours..."):
-                # On passe les données brutes (pas le HTML nettoyé) à la fonction Discord
                 res = send_weekly_report_discord(data, "https://raptorsttfl-dashboard.streamlit.app/")
                 if res == "success":
                     st.success("✅ Rapport envoyé avec succès !")

@@ -846,7 +846,7 @@ def render_hall_of_fame(df_full_history, bp_map, daily_max_map):
             with cols[i]:
                 st.markdown(f"""<div class="glass-card" style="position:relative; overflow:hidden; margin-bottom:10px"><div style="position:absolute; right:-10px; top:-10px; font-size:5rem; opacity:0.05; pointer-events:none">{card['icon']}</div><div class="hof-badge" style="color:{card['color']}; border:1px solid {card['color']}">{card['icon']} {card['title']}</div><div style="display:flex; justify-content:space-between; align-items:flex-end;"><div><div class="hof-player">{card['player']}</div><div style="font-size:0.8rem; color:#888; margin-top:4px">{card['desc']}</div></div><div><div class="hof-stat" style="color:{card['color']}">{card['val']}</div><div class="hof-unit">{card['unit']}</div></div></div></div>""", unsafe_allow_html=True)
 
-# --- 8. WEEKLY REPORT (V23.0 FINAL CLEAN) ---
+# --- 8. WEEKLY REPORT (V23.1 - HTML FLAT FIX) ---
 def render_weekly_report(df_full_history):
     section_title("WEEKLY <span class='highlight'>REPORT</span>", "Générateur de Rapport Premium")
     
@@ -860,9 +860,7 @@ def render_weekly_report(df_full_history):
         target_deck = st.selectbox("📅 Sélectionner le Deck", range(max_deck, 0, -1), format_func=lambda x: f"Deck #{x}")
 
     data = generate_weekly_report_data(df_full_history, target_deck)
-    if not data:
-        st.error("Erreur génération.")
-        return
+    if not data: st.error("Erreur génération."); return
 
     meta = data['meta']
     stats = data['stats']
@@ -875,40 +873,37 @@ def render_weekly_report(df_full_history):
         
         border_color = f"#{meta['color']:06x}"
         
-        def clean_md(txt):
-            return txt.replace("**", "<b>").replace("**", "</b>") if isinstance(txt, str) else txt
+        # Helpers
+        def clean_md(txt): return txt.replace("**", "<b>").replace("**", "</b>") if isinstance(txt, str) else txt
         
         def fmt_list(lst, suffix=""):
             if not lst: return "Personne."
+            # Affiche toute la liste avec sa valeur
             items = [f"<b>{x[0]}</b> ({x[1]}{suffix})" for x in lst]
             return ", ".join(items)
 
+        # --- CONSTRUCTION DU HTML APLATI (SANS INDENTATION) ---
+        
+        # 1. Podium (Construit sur une seule ligne par item pour éviter le bug)
         podium_html = ""
         medals = ["🥇", "🥈", "🥉"]
         for p in data['podium']:
             crown = " 👑" if p.get('is_winner') else ""
             rotw_tag = f" (ROTW #{p['rotw_count']})" if p.get('is_winner') and p['rotw_count'] > 0 else ""
-            podium_html += f"""
-            <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
-                <div>{medals[p['rank']-1]} <b>{p['player']}</b>{crown}{rotw_tag}</div>
-                <div style="text-align:right;"><b>{p['avg']:.1f}</b> <span style="font-size:0.8em; color:#888;">(Tot: {p['total']})</span></div>
-            </div>
-            """
+            # Notez l'absence d'indentation dans la f-string
+            podium_html += f'<div style="display:flex; justify-content:space-between; margin-bottom:4px;"><div>{medals[p["rank"]-1]} <b>{p["player"]}</b>{crown}{rotw_tag}</div><div style="text-align:right;"><b>{p["avg"]:.1f}</b> <span style="font-size:0.8em; color:#888;">(Tot: {p["total"]})</span></div></div>'
 
+        # 2. Listes & Textes
         perfect_disp = ", ".join([f"<b>{p}</b>" for p in data['perfect']]) if data['perfect'] else "Aucun joueur parfait cette semaine."
         
-        # MVP List : nettoyage du formatage
         daily_html = ""
         for d in data['daily_mvp']:
-            clean_d = clean_md(d)
-            daily_html += f"<div style='margin-bottom:3px;'>{clean_d}</div>"
+            daily_html += f"<div style='margin-bottom:3px;'>{clean_md(d)}</div>"
 
-        # Analysis List : Formatage compact
         analysis_html = ""
         if data['analysis']:
             for line in data['analysis']:
-                clean_line = clean_md(line)
-                analysis_html += f"<div style='margin-bottom:6px; padding-left:8px; border-left:2px solid #555;'>{clean_line}</div>"
+                analysis_html += f"<div style='margin-bottom:6px; padding-left:8px; border-left:2px solid #555;'>{clean_md(line)}</div>"
         else:
             analysis_html = "Pas de dynamique majeure détectée."
         
@@ -918,87 +913,32 @@ def render_weekly_report(df_full_history):
         sunday_txt = fmt_list(lists['sunday'], " pts")
         diff_col = '#57F287' if '+' in stats['diff'] else '#ED4245'
 
-        html_content = f"""
-<div style="background:#2f3136; border-left: 5px solid {border_color}; padding:20px; border-radius:8px; font-family:'Helvetica', sans-serif; color:#dcddde; font-size: 0.95rem; line-height: 1.5;">
-
+        # 3. BLOC HTML FINAL (COLLÉ À GAUCHE)
+        html_content = f"""<div style="background:#2f3136; border-left: 5px solid {border_color}; padding:20px; border-radius:8px; font-family:sans-serif; color:#dcddde; font-size: 0.95rem; line-height: 1.5;">
 <div style="margin-bottom:20px; border-bottom:1px solid #444; padding-bottom:15px; display:flex; justify-content:space-between; align-items:center;">
-    <div>
-        <div style="font-weight:900; color:#FFF; font-size:1.4rem; letter-spacing:1px;">🦖 ROTW • DECK #{target_deck}</div>
-        <div style="color:#b9bbbe; font-size:0.9rem; margin-top:4px;">Raptors Of The Week - {meta['dates']}</div>
-    </div>
-    <div style="text-align:right;">
-        <div style="font-weight:bold; color:#FFF; font-size:1.4rem;">{stats['avg']:.1f} PTS</div>
-        <div style="font-size:0.8rem; color:{diff_col}">{stats['diff']}</div>
-    </div>
+<div><div style="font-weight:900; color:#FFF; font-size:1.4rem; letter-spacing:1px;">🦖 ROTW • DECK #{target_deck}</div><div style="color:#b9bbbe; font-size:0.9rem; margin-top:4px;">Raptors Of The Week - {meta['dates']}</div></div>
+<div style="text-align:right;"><div style="font-weight:bold; color:#FFF; font-size:1.4rem;">{stats['avg']:.1f} PTS</div><div style="font-size:0.8rem; color:{diff_col}">{stats['diff']}</div></div>
 </div>
-
 <div style="display:flex; gap:20px; margin-bottom:25px;">
-    <div style="flex:1;">
-        <div style="font-weight:700; color:#FFF; font-size:1rem; margin-bottom:2px;">🏆 LE PODIUM (MOYENNE)</div>
-        <div style="font-size:0.75rem; color:#888; font-style:italic; margin-bottom:8px;">Classement par moyenne de points/match.</div>
-        {podium_html}
-    </div>
-    <div style="flex:1; background:rgba(255,255,255,0.03); padding:10px; border-radius:5px;">
-        <div style="font-weight:700; color:#FFF; margin-bottom:2px;">💎 THE PERFECT (30+)</div>
-        <div style="font-size:0.75rem; color:#888; font-style:italic; margin-bottom:8px;">Joueurs n'ayant fait aucun score sous les 30 pts.</div>
-        {perfect_disp}
-    </div>
+<div style="flex:1;"><div style="font-weight:700; color:#FFF; font-size:1rem; margin-bottom:2px;">🏆 LE PODIUM (MOYENNE)</div><div style="font-size:0.75rem; color:#888; font-style:italic; margin-bottom:8px;">Classement par moyenne de points/match.</div>{podium_html}</div>
+<div style="flex:1; background:rgba(255,255,255,0.03); padding:10px; border-radius:5px;"><div style="font-weight:700; color:#FFF; margin-bottom:2px;">💎 THE PERFECT (30+)</div><div style="font-size:0.75rem; color:#888; font-style:italic; margin-bottom:8px;">Joueurs n'ayant fait aucun score sous les 30 pts.</div>{perfect_disp}</div>
 </div>
-
 <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px; margin-bottom:25px;">
-    <div>
-        <div style="font-weight:700; color:#FFF;">🎯 SNIPER</div>
-        <div style="font-size:0.75rem; color:#888; font-style:italic; margin-bottom:4px;">Tous les joueurs ayant trouvé un Best Pick.</div>
-        {sniper_txt}
-    </div>
-    <div>
-        <div style="font-weight:700; color:#FFF;">🛡️ MURAILLE</div>
-        <div style="font-size:0.75rem; color:#888; font-style:italic; margin-bottom:4px;">Le moins de carottes (&lt;20) encaissées.</div>
-        {muraille_txt}
-    </div>
-    <div>
-        <div style="font-weight:700; color:#FFF;">🚀 PROGRESSION</div>
-        <div style="font-size:0.75rem; color:#888; font-style:italic; margin-bottom:4px;">Plus forte hausse vs Deck précédent.</div>
-        {remontada_txt}
-    </div>
-    <div>
-        <div style="font-weight:700; color:#FFF;">🌅 SUNDAY CLUTCH</div>
-        <div style="font-size:0.75rem; color:#888; font-style:italic; margin-bottom:4px;">Meilleur score sur le dernier pick du Deck.</div>
-        {sunday_txt}
-    </div>
+<div><div style="font-weight:700; color:#FFF;">🎯 SNIPER</div><div style="font-size:0.75rem; color:#888; font-style:italic; margin-bottom:4px;">Tous les joueurs ayant trouvé un Best Pick.</div>{sniper_txt}</div>
+<div><div style="font-weight:700; color:#FFF;">🛡️ MURAILLE</div><div style="font-size:0.75rem; color:#888; font-style:italic; margin-bottom:4px;">Le moins de carottes (&lt;20) encaissées.</div>{muraille_txt}</div>
+<div><div style="font-weight:700; color:#FFF;">🚀 PROGRESSION</div><div style="font-size:0.75rem; color:#888; font-style:italic; margin-bottom:4px;">Plus forte hausse vs Deck précédent.</div>{remontada_txt}</div>
+<div><div style="font-weight:700; color:#FFF;">🌅 SUNDAY CLUTCH</div><div style="font-size:0.75rem; color:#888; font-style:italic; margin-bottom:4px;">Meilleur score sur le dernier pick du Deck.</div>{sunday_txt}</div>
 </div>
-
-<div style="margin-bottom:25px; background:rgba(0,0,0,0.2); padding:15px; border-radius:5px;">
-    <div style="font-weight:700; color:#FFF; margin-bottom:2px;">📅 MVP PAR PICK</div>
-    <div style="font-size:0.75rem; color:#888; font-style:italic; margin-bottom:10px;">Le meilleur scoreur de chaque soirée.</div>
-    {daily_html}
-</div>
-
-<div style="border-top:1px solid #444; padding-top:15px; margin-bottom:20px;">
-    <div style="font-weight:700; color:#FFF; margin-bottom:2px;">🔬 ANALYSE & DYNAMIQUES</div>
-    <div style="font-size:0.75rem; color:#888; font-style:italic; margin-bottom:10px;">Deep Dive : Séries, Fiabilité & Sur-performance.</div>
-    <div style="font-size:0.9rem;">{analysis_html}</div>
-</div>
-
+<div style="margin-bottom:25px; background:rgba(0,0,0,0.2); padding:15px; border-radius:5px;"><div style="font-weight:700; color:#FFF; margin-bottom:2px;">📅 MVP PAR PICK</div><div style="font-size:0.75rem; color:#888; font-style:italic; margin-bottom:10px;">Le meilleur scoreur de chaque soirée.</div>{daily_html}</div>
+<div style="border-top:1px solid #444; padding-top:15px; margin-bottom:20px;"><div style="font-weight:700; color:#FFF; margin-bottom:2px;">🔬 ANALYSE & DYNAMIQUES</div><div style="font-size:0.75rem; color:#888; font-style:italic; margin-bottom:8px;">Focus sur les séries marquantes (vs Records).</div><div style="font-size:0.9rem;">{analysis_html}</div></div>
 <div style="background:rgba(255,255,255,0.05); padding:15px; border-radius:8px; display:flex; justify-content:space-around; align-items:center; text-align:center;">
-    <div>
-        <div style="font-size:1.5rem; font-weight:900; color:#d4af37;">{stats['bp']}</div>
-        <div style="font-size:0.75rem; color:#AAA; font-weight:bold;">TEAM TOTAL BP 🎯</div>
-    </div>
-    <div style="height:40px; width:1px; background:#444;"></div>
-    <div>
-        <div style="font-size:1.5rem; font-weight:900; color:#ED4245;">{stats['carrots']}</div>
-        <div style="font-size:0.75rem; color:#AAA; font-weight:bold;">CAROTTES 🥕</div>
-    </div>
-    <div style="height:40px; width:1px; background:#444;"></div>
-    <div>
-        <div style="font-size:1.5rem; font-weight:900; color:#3B82F6;">{stats['safe_zone']}</div>
-        <div style="font-size:0.75rem; color:#AAA; font-weight:bold;">SAFE ZONE (>30) 🛡️</div>
-    </div>
-</div>
-
-</div>
-"""
+<div><div style="font-size:1.5rem; font-weight:900; color:#d4af37;">{stats['bp']}</div><div style="font-size:0.75rem; color:#AAA; font-weight:bold;">TEAM TOTAL BP 🎯</div></div>
+<div style="height:40px; width:1px; background:#444;"></div>
+<div><div style="font-size:1.5rem; font-weight:900; color:#ED4245;">{stats['carrots']}</div><div style="font-size:0.75rem; color:#AAA; font-weight:bold;">CAROTTES 🥕</div></div>
+<div style="height:40px; width:1px; background:#444;"></div>
+<div><div style="font-size:1.5rem; font-weight:900; color:#3B82F6;">{stats['safe_zone']}</div><div style="font-size:0.75rem; color:#AAA; font-weight:bold;">SAFE ZONE (>30) 🛡️</div></div>
+</div></div>"""
+        
         st.markdown(html_content, unsafe_allow_html=True)
 
     with c2:
@@ -1006,8 +946,5 @@ def render_weekly_report(df_full_history):
         if st.button("🚀 ENVOYER SUR DISCORD", type="primary", use_container_width=True):
             with st.spinner("Envoi..."):
                 res = send_weekly_report_discord(data, "https://raptorsttfl-dashboard.streamlit.app/")
-                if res == "success":
-                    st.success("✅ Envoyé !")
-                    st.balloons()
-                else:
-                    st.error(f"Erreur : {res}")
+                if res == "success": st.success("✅ Envoyé !"); st.balloons()
+                else: st.error(f"Erreur : {res}")

@@ -846,142 +846,146 @@ def render_hall_of_fame(df_full_history, bp_map, daily_max_map):
             with cols[i]:
                 st.markdown(f"""<div class="glass-card" style="position:relative; overflow:hidden; margin-bottom:10px"><div style="position:absolute; right:-10px; top:-10px; font-size:5rem; opacity:0.05; pointer-events:none">{card['icon']}</div><div class="hof-badge" style="color:{card['color']}; border:1px solid {card['color']}">{card['icon']} {card['title']}</div><div style="display:flex; justify-content:space-between; align-items:flex-end;"><div><div class="hof-player">{card['player']}</div><div style="font-size:0.8rem; color:#888; margin-top:4px">{card['desc']}</div></div><div><div class="hof-stat" style="color:{card['color']}">{card['val']}</div><div class="hof-unit">{card['unit']}</div></div></div></div>""", unsafe_allow_html=True)
 
-# --- 8. WEEKLY REPORT (CORRECTIF AFFICHAGE V22.1) ---
+# --- 8. WEEKLY REPORT (VERSION V22.2 HIGH COUTURE) ---
 def render_weekly_report(df_full_history):
-    section_title("WEEKLY <span class='highlight'>REPORT</span>", "Générateur de Rapport Avancé")
+    section_title("WEEKLY <span class='highlight'>REPORT</span>", "Générateur de Rapport Premium")
     
     if df_full_history.empty or 'Deck' not in df_full_history.columns:
-        st.error("Données insuffisantes pour le module Weekly.")
+        st.error("Données insuffisantes.")
         return
 
-    # 1. SELECTEUR DE SEMAINE (DECK)
+    # 1. SELECTEUR
     max_deck = int(df_full_history['Deck'].max())
-    if max_deck == 0:
-        st.warning("Aucun Deck validé pour le moment.")
-        return
-
     col_sel, _ = st.columns([1, 3])
     with col_sel:
-        target_deck = st.selectbox(
-            "📅 Sélectionner la Semaine (Deck)", 
-            options=range(max_deck, 0, -1),
-            index=0,
-            format_func=lambda x: f"Deck #{x}"
-        )
+        target_deck = st.selectbox("📅 Sélectionner le Deck", range(max_deck, 0, -1), format_func=lambda x: f"Deck #{x}")
 
-    # 2. GENERATION DES DONNEES
+    # 2. GENERATION
     data = generate_weekly_report_data(df_full_history, target_deck)
-    
-    if not data:
-        st.error("Erreur lors de la génération du rapport.")
-        return
+    if not data: st.error("Erreur génération."); return
 
     meta = data['meta']
-    stats = data['team_stats']
-    
-    # 3. INTERFACE DE PREVISUALISATION
+    stats = data['stats']
+    lists = data['lists']
+
+    # 3. INTERFACE
     c1, c2 = st.columns([2, 1], gap="large")
     
     with c1:
-        st.markdown(f"### 📄 APERÇU DISCORD (Deck #{target_deck})")
-        st.caption(f"Période : {meta['start_date']} au {meta['end_date']}")
+        st.markdown(f"### 📄 APERÇU (Deck #{target_deck})")
         
-        # Fonctions de nettoyage
-        def clean_md(text):
-            if not isinstance(text, str): return text
-            return text.replace("**", "<b>").replace("**", "</b>")
+        # Helpers Formatage
+        def clean(txt): return txt.replace("**", "<b>").replace("**", "</b>") if isinstance(txt, str) else txt
+        
+        def fmt_list(lst, suffix=""):
+            if not lst: return "Personne."
+            # On met en gras les noms
+            names = [f"<b>{x[0]}</b>" for x in lst]
+            val = lst[0][1] # Valeur du premier
+            return f"{', '.join(names)} ({val}{suffix})"
 
-        # Préparation des variables pour le f-string
-        # On nettoie tout avant de l'injecter dans le HTML
-        
-        # Podium
+        # Construction des blocs
         podium_html = ""
         medals = ["🥇", "🥈", "🥉"]
         for p in data['podium']:
-            crown = " 👑" if p['titles'] > 0 and p['rank'] == 1 else ""
-            title_txt = f" (Titre #{p['titles']})" if p['rank'] == 1 and p['titles'] > 0 else ""
-            podium_html += f"<div>{medals[p['rank']-1]} <b>{p['player']}</b> • {p['score']} pts{title_txt}</div>"
+            rotw_tag = f" (ROTW #{p['rotw_count']})" if p['rank'] == 1 else ""
+            podium_html += f"<div>{medals[p['rank']-1]} <b>{p['player']}</b> • {p['score']} pts{rotw_tag}</div>"
 
-        sniper_disp = clean_md(format_winners_list(data['sniper'], " BP"))
-        muraille_disp = ", ".join([f"<b>{x[0]}</b>" for x in data['muraille']]) if data['muraille'] else "Personne (la honte 🥕)"
-        remontada_disp = clean_md(format_winners_list(data['remontada'], ""))
-        sunday_disp = clean_md(format_winners_list(data['sunday_clutch'], " pts"))
-        perfect_disp = ", ".join([f"<b>{p}</b>" for p in data['perfect']]) if data['perfect'] else "Aucun joueur parfait cette semaine."
-        daily_html = "<br>".join([f"<span style='opacity:0.8'>{d}</span>" for d in data['daily_mvp']])
-        streaks_html = "<br>".join(data['streaks_analysis']) if data['streaks_analysis'] else "Pas de dynamique marquante."
-        rotw_display = ', '.join([f"<b>{p}</b> ({nb})" for p, nb in data.get('rotw_leaderboard', [])])
+        perfect_txt = ", ".join([f"<b>{p}</b>" for p in data['perfect']]) if data['perfect'] else "Aucun joueur parfait cette semaine."
+        daily_html = "<br>".join(data['daily_mvp'])
+        analysis_html = "<br>".join([clean(l) for l in data['analysis']]) if data['analysis'] else "Pas de dynamique majeure détectée."
+        
+        sniper_txt = fmt_list(lists['sniper'], " BP")
+        muraille_txt = fmt_list(lists['muraille'], " 🥕")
+        remontada_txt = fmt_list(lists['remontada'], " pts")
+        sunday_txt = fmt_list(lists['sunday'], " pts")
 
-        border_color = f"#{meta['discord_color']:06x}"
-        avg_val = stats['avg']
-        diff_txt = stats['diff_txt']
-        diff_color = '#57F287' if '+' in diff_txt else '#ED4245'
-        clean_sheet_txt = "✨ <b>CLEAN SHEET SEMAINE !</b> (Aucun score < 25)" if stats['clean_sheet'] else ""
-
-        # --- HTML STRICTEMENT ALIGNÉ A GAUCHE POUR ÉVITER LE BUG ---
+        border_col = f"#{meta['color']:06x}"
+        
+        # --- HTML FINAL (ALIGNÉ A GAUCHE POUR ÉVITER BUG STREAMLIT) ---
         html_content = f"""
-<div style="background:#2f3136; border-left: 5px solid {border_color}; padding:20px; border-radius:5px; font-family:sans-serif; color:#dcddde; font-size: 0.9rem; line-height: 1.5;">
-<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; border-bottom:1px solid #444; padding-bottom:10px;">
-<div>
-<div style="font-weight:800; color:#FFF; font-size:1.2rem;">🦖 RAPTORS WEEKLY • DECK #{target_deck}</div>
-<div style="font-style:italic; color:#b9bbbe; font-size:0.8rem;">Du {meta['start_date']} au {meta['end_date']}</div>
+<div style="background:#2f3136; border-left: 5px solid {border_color}; padding:20px; border-radius:8px; font-family:'Helvetica', sans-serif; color:#dcddde; font-size: 0.95rem; line-height: 1.6;">
+
+<div style="margin-bottom:20px; border-bottom:1px solid #444; padding-bottom:15px;">
+<div style="font-weight:900; color:#FFF; font-size:1.4rem; letter-spacing:1px;">🦖 ROTW • DECK #{target_deck}</div>
+<div style="color:#b9bbbe; font-size:0.9rem; margin-top:4px;">Raptors Of The Week - {meta['dates']}</div>
 </div>
-<div style="text-align:right;">
-<div style="font-weight:bold; color:#FFF; font-size:1.1rem;">{avg_val:.1f} PTS</div>
-<div style="font-size:0.8rem; color:{diff_color}">{diff_txt}</div>
-</div>
-</div>
-<div style="display:flex; gap:20px; margin-bottom:20px;">
+
+<div style="display:flex; gap:20px; margin-bottom:25px;">
 <div style="flex:1;">
-<div style="font-weight:700; color:#FFF; margin-bottom:5px;">🏆 LE PODIUM</div>
+<div style="font-weight:700; color:#FFF; font-size:1rem; margin-bottom:5px;">🏆 LE PODIUM</div>
+<div style="font-size:0.8rem; color:#888; font-style:italic; margin-bottom:8px;">Les meilleurs scores cumulés de la semaine.</div>
 {podium_html}
 </div>
-<div style="flex:1; border-left:1px solid #444; padding-left:15px;">
+<div style="flex:1; background:rgba(255,255,255,0.03); padding:10px; border-radius:5px;">
 <div style="font-weight:700; color:#FFF; margin-bottom:5px;">💎 THE PERFECT (30+)</div>
-{perfect_disp}
+<div style="font-size:0.8rem; color:#888; font-style:italic; margin-bottom:8px;">Joueurs n'ayant fait aucun score sous les 30 pts.</div>
+{perfect_txt}
 </div>
 </div>
-<div style="font-weight:700; color:#FFF; margin-bottom:5px;">👑 COURSE AU TRÔNE</div>
-<div style="margin-bottom:20px;">{rotw_display}</div>
-<div style="background:rgba(0,0,0,0.2); padding:10px; border-radius:5px; margin-bottom:20px;">
-<div style="font-weight:700; color:#FFF; margin-bottom:5px;">📅 MVP PAR SOIR</div>
+
+<div style="margin-bottom:25px;">
+<div style="font-weight:700; color:#FFF; margin-bottom:5px;">📊 STATS CLÉS (TEAM PULSE)</div>
+<div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px; text-align:center;">
+<div style="background:rgba(0,0,0,0.3); padding:10px; border-radius:5px;">
+<div style="font-size:0.8rem; color:#AAA;">MOYENNE</div>
+<div style="font-weight:bold; color:#FFF; font-size:1.2rem;">{stats['avg']:.1f}</div>
+<div style="font-size:0.7rem; color:{'#57F287' if '+' in stats['diff'] else '#ED4245'}">{stats['diff']}</div>
+</div>
+<div style="background:rgba(0,0,0,0.3); padding:10px; border-radius:5px;">
+<div style="font-size:0.8rem; color:#AAA;">BEST PICKS</div>
+<div style="font-weight:bold; color:#d4af37; font-size:1.2rem;">{stats['bp']} 🎯</div>
+</div>
+<div style="background:rgba(0,0,0,0.3); padding:10px; border-radius:5px;">
+<div style="font-size:0.8rem; color:#AAA;">CAROTTES</div>
+<div style="font-weight:bold; color:#ED4245; font-size:1.2rem;">{stats['carrots']} 🥕</div>
+</div>
+</div>
+</div>
+
+<div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px; margin-bottom:25px;">
+<div>
+<div style="font-weight:700; color:#FFF;">🎯 SNIPER</div>
+<div style="font-size:0.75rem; color:#888; font-style:italic;">Le plus de Best Picks trouvés.</div>
+{sniper_txt}
+</div>
+<div>
+<div style="font-weight:700; color:#FFF;">🛡️ MURAILLE</div>
+<div style="font-size:0.75rem; color:#888; font-style:italic;">Le moins de carottes (&lt;20) encaissées.</div>
+{muraille_txt}
+</div>
+<div>
+<div style="font-weight:700; color:#FFF;">🚀 PROGRESSION</div>
+<div style="font-size:0.75rem; color:#888; font-style:italic;">Plus forte hausse de moyenne vs Deck précédent.</div>
+{remontada_txt}
+</div>
+<div>
+<div style="font-weight:700; color:#FFF;">🌅 SUNDAY CLUTCH</div>
+<div style="font-size:0.75rem; color:#888; font-style:italic;">Meilleur score sur le dernier match du Deck.</div>
+{sunday_txt}
+</div>
+</div>
+
+<div style="margin-bottom:25px;">
+<div style="font-weight:700; color:#FFF; margin-bottom:5px;">📅 MVP PAR PICK</div>
+<div style="font-size:0.8rem; color:#888; font-style:italic; margin-bottom:8px;">Qui a porté l'équipe chaque soir ?</div>
 {daily_html}
 </div>
-<div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom:20px;">
-<div><span style="color:#FFF; font-weight:bold;">🎯 SNIPER :</span> {sniper_disp}</div>
-<div><span style="color:#FFF; font-weight:bold;">🛡️ MURAILLE :</span> {muraille_disp}</div>
-<div><span style="color:#FFF; font-weight:bold;">🚀 PROGRESSION :</span> {remontada_disp}</div>
-<div><span style="color:#FFF; font-weight:bold;">🌅 SUNDAY CLUTCH :</span> {sunday_disp}</div>
-</div>
-<div style="margin-bottom:15px;">
+
+<div style="border-top:1px solid #444; padding-top:15px;">
 <div style="font-weight:700; color:#FFF; margin-bottom:5px;">🔬 ANALYSE & DYNAMIQUES</div>
-{streaks_html}
+<div style="font-size:0.9rem;">{analysis_html}</div>
 </div>
-<div style="border-top:1px solid #444; pt:10px; margin-top:10px; font-size:0.8rem; color:#72767d; display:flex; justify-content:space-between;">
-<span>🎯 {stats['bp']} BP</span>
-<span>🥕 {stats['carrots']} Carottes</span>
-<span>{clean_sheet_txt}</span>
-</div>
+
 </div>
 """
         st.markdown(html_content, unsafe_allow_html=True)
 
     with c2:
         st.markdown("### 📡 DIFFUSION")
-        st.markdown("""
-        <div style="background:rgba(255,255,255,0.05); padding:15px; border-radius:10px; border:1px solid rgba(255,255,255,0.1)">
-            <div style="font-size:0.8rem; color:#AAA; margin-bottom:5px">STATUT DU RAPPORT</div>
-            <div style="color:#10B981; font-weight:bold; margin-bottom:15px">✅ PRÊT À L'ENVOI</div>
-            <div style="font-size:0.8rem; color:#AAA">Ce rapport sera envoyé sur le canal Discord configuré. Vérifiez bien les données avant de cliquer.</div>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        st.markdown("<br>", unsafe_allow_html=True)
-        
+        st.info("Vérifiez l'aperçu. Si tout est correct, cliquez ci-dessous.")
         if st.button("🚀 ENVOYER SUR DISCORD", type="primary", use_container_width=True):
-            with st.spinner("Transmission au QG..."):
+            with st.spinner("Envoi..."):
                 res = send_weekly_report_discord(data, "https://raptorsttfl-dashboard.streamlit.app/")
-                if res == "success":
-                    st.balloons()
-                    st.success("Rapport publié avec succès !")
-                else:
-                    st.error(f"Erreur : {res}")
+                if res == "success": st.success("✅ Envoyé !"); st.balloons()
+                else: st.error(f"Erreur : {res}")

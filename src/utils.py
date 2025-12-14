@@ -8,7 +8,7 @@ DISCORD_COLOR_RED = 13504833  # #CE1141 (Raptors Red)
 DISCORD_COLOR_GOLD = 16766720 # Gold
 WEBHOOK_URL = st.secrets["DISCORD_WEBHOOK"] if "DISCORD_WEBHOOK" in st.secrets else ""
 
-# --- FONCTION DE NETTOYAGE (DATE/MOIS) ---
+# --- FONCTION DE NETTOYAGE (ESSENTIELLE) ---
 def normalize_month(month_str):
     """
     Normalise le nom du mois (minuscule, sans accent) pour correspondre aux clés.
@@ -20,7 +20,7 @@ def normalize_month(month_str):
     normalized = unicodedata.normalize('NFD', month_str).encode('ascii', 'ignore').decode("utf-8")
     return normalized
 
-# --- FONCTIONS GRAPHIQUES (Code Couleur Strict) ---
+# --- FONCTIONS GRAPHIQUES (Code Couleur Fixé) ---
 def get_uniform_color(score):
     """
     Retourne la couleur selon la règle stricte :
@@ -31,11 +31,11 @@ def get_uniform_color(score):
     try:
         s = float(score)
     except:
-        return "#374151" # Gris par défaut en cas d'erreur
+        return "#374151" # Gris par défaut
 
     if s >= 40: return "#10B981" # VERT (Succès)
     if s < 20:  return "#EF4444" # ROUGE (Carotte)
-    return "#374151"             # GRIS SOMBRE (Neutre)
+    return "#374151"             # GRIS SOMBRE (Neutre 20-39)
 
 # --- FONCTIONS DE RAPPORT ---
 def format_winners_list(winners, suffix=""):

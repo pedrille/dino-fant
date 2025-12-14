@@ -406,12 +406,41 @@ def render_player_lab(df, full_stats):
     if p1_sel and p2_sel:
         stat1 = full_stats[full_stats['Player'] == p1_sel].iloc[0]
         stat2 = full_stats[full_stats['Player'] == p2_sel].iloc[0]
-        st.markdown(f"<div class='glass-card'><div style='display:flex; justify-content:space-between; border-bottom:1px solid rgba(255,255,255,0.05); padding:8px 0;'><div style='width:30%; text-align:left; font-family:Rajdhani; font-weight:700; color:#FFF'>{stat1['Total']:.0f}</div><div style='width:40%; text-align:center; font-size:0.8rem; color:#AAA; letter-spacing:1px;'>POINTS TOTAL</div><div style='width:30%; text-align:right; font-family:Rajdhani; font-weight:700; color:#FFF'>{stat2['Total']:.0f}</div></div></div>", unsafe_allow_html=True)
+        
+        # --- RESTAURATION DE LA LOGIQUE DE COMPARAISON COMPLETE ---
+        def comp_row(label, v1, v2, format_str="{}", inverse=False):
+            color1, color2 = "#FFF", "#FFF"
+            if v1 != v2:
+                better_v1 = (v1 > v2) if not inverse else (v1 < v2)
+                if better_v1: color1 = C_GREEN; color2 = "#666"
+                else: color1 = "#666"; color2 = C_GREEN
+            
+            st.markdown(f"""
+            <div style="display:flex; justify-content:space-between; border-bottom:1px solid rgba(255,255,255,0.05); padding:8px 0;">
+                <div style="width:30%; text-align:left; font-family:Rajdhani; font-weight:700; color:{color1}">{format_str.format(v1)}</div>
+                <div style="width:40%; text-align:center; font-size:0.8rem; color:#AAA; letter-spacing:1px;">{label}</div>
+                <div style="width:30%; text-align:right; font-family:Rajdhani; font-weight:700; color:{color2}">{format_str.format(v2)}</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        st.markdown(f"<div class='glass-card'>", unsafe_allow_html=True)
+        comp_row("POINTS TOTAL", stat1['Total'], stat2['Total'], "{:.0f}")
+        comp_row("MOYENNE", stat1['Moyenne'], stat2['Moyenne'], "{:.1f}")
+        comp_row("FORME (15J)", stat1['Last15'], stat2['Last15'], "{:.1f}")
+        comp_row("RECORD SAISON", stat1['Best'], stat2['Best'], "{:.0f}")
+        comp_row("BEST PICKS", stat1['BP_Count'], stat2['BP_Count'], "{:.0f}")
+        comp_row("NUKES (>50)", stat1['Nukes'], stat2['Nukes'], "{:.0f}")
+        comp_row("CAROTTES (<20)", stat1['Carottes'], stat2['Carottes'], "{:.0f}", inverse=True)
+        comp_row("FIABILITÉ", stat1['ReliabilityPct'], stat2['ReliabilityPct'], "{:.0f}%")
+        st.markdown("</div>", unsafe_allow_html=True)
 
 # --- 4. BONUS X2 ---
 def render_bonus_x2(df):
     section_title("BONUS <span class='highlight'>ZONE</span>", "Analyse de Rentabilité")
     df_bonus = df[df['IsBonus'] == True].copy()
+    
+    # Calcul du Gain Réel (Score Total - Score Brut)
+    # Ex: Score 98 (Bonus) - ScoreVal 49 = Gain 49
     df_bonus['RealGain'] = df_bonus['Score'] - df_bonus['ScoreVal']
 
     available_months = df['Month'].unique().tolist()
@@ -439,7 +468,15 @@ def render_bonus_x2(df):
         c_chart1, c_chart2 = st.columns([2, 3], gap="medium")
         with c_chart1:
             st.markdown("#### 💰 IMPACT MENSUEL (GAINS RÉELS)")
+            
+            # Aggrégation par somme des gains
             monthly_gain = df_bonus.groupby('Month')['RealGain'].sum().reset_index()
+            
+            # Tri chronologique des mois pour l'affichage
+            month_order = ['octobre', 'novembre', 'decembre', 'janvier', 'fevrier', 'mars', 'avril']
+            monthly_gain['Month'] = pd.Categorical(monthly_gain['Month'], categories=month_order, ordered=True)
+            monthly_gain = monthly_gain.sort_values('Month')
+
             fig_m = px.bar(monthly_gain, x='Month', y='RealGain', text='RealGain', color='RealGain', color_continuous_scale='Teal')
             fig_m.update_traces(texttemplate='+%{text}', textposition='outside')
             fig_m.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, xaxis=dict(title=None), yaxis=dict(showgrid=False, visible=False), height=300, showlegend=False, coloraxis_showscale=False)
@@ -470,11 +507,15 @@ def render_no_carrot(df, team_streak_nc, full_stats):
     if curr_str > max_streak_team: max_streak_team = curr_str
 
     iron_man_curr = full_stats.sort_values('CurrentNoCarrot', ascending=False).iloc[0]
+    # Récupération du record All-Time via les stats calculées
+    iron_man_all_time = full_stats.sort_values('MaxNoCarrot', ascending=False).iloc[0]
 
-    k1, k2, k3 = st.columns(3)
+    # --- MODIFICATION: 4 COLONNES ---
+    k1, k2, k3, k4 = st.columns(4)
     with k1: kpi_card("SÉRIE TEAM EN COURS", f"{team_streak_nc}", "JOURS SANS CAROTTE", C_GREEN if team_streak_nc > 0 else C_RED)
     with k2: kpi_card("RECORD PÉRIODE TEAM", f"{max_streak_team}", "JOURS CONSÉCUTIFS", C_GOLD)
     with k3: kpi_card("IRON MAN (ACTUEL)", iron_man_curr['Player'], f"{int(iron_man_curr['CurrentNoCarrot'])} MATCHS SUITE", C_BLUE)
+    with k4: kpi_card("IRON MAN (HISTORIQUE)", iron_man_all_time['Player'], f"{int(iron_man_all_time['MaxNoCarrot'])} MATCHS SUITE", C_PURPLE)
 
     st.markdown("<br>", unsafe_allow_html=True)
     c_graph, c_list = st.columns([2, 1], gap="large")
@@ -599,10 +640,11 @@ def render_hall_of_fame(df_full_history, bp_map, daily_max_map):
     st.markdown("<div style='height: 50px;'></div>", unsafe_allow_html=True)
     st.markdown("<h3 style='margin-bottom:10px; font-family:Rajdhani; color:#AAA;'>🏛️ RECORDS GLOBAUX SAISON</h3>", unsafe_allow_html=True)
 
-    # On récupère les stats calculées
     full_stats_global = compute_stats(df_full_history, bp_map, daily_max_map)
-
-    # --- TRI DES GAGNANTS ---
+    
+    # ... (Le code de tri et d'affichage des 32 cartes reste identique à ta version validée précédente) ...
+    # Je réintègre ici tout le bloc de tri et d'affichage pour que le fichier soit complet
+    
     goat = full_stats_global.sort_values('Moyenne', ascending=False).iloc[0]
     mvp = full_stats_global.sort_values('Moyenne_Raw', ascending=False).iloc[0]
     sniper = full_stats_global.sort_values('BP_Count', ascending=False).iloc[0]
@@ -640,25 +682,19 @@ def render_hall_of_fame(df_full_history, bp_map, daily_max_map):
     brick = full_stats_global.sort_values('Worst_Raw', ascending=True).iloc[0]
     farmer = full_stats_global.sort_values('Carottes', ascending=False).iloc[0]
 
-    # --- DEFINITION DES CARTES ---
     hof_list = [
-        # I. L'ELITE
         {"title": "THE GOAT", "icon": "🏆", "color": C_GOLD, "player": goat['Player'], "val": f"{goat['Moyenne']:.1f}", "unit": "PTS MOYENNE", "desc": "Meilleure moyenne générale de la saison (Bonus inclus)."},
         {"title": "REAL MVP", "icon": "💎", "color": C_PURE, "player": mvp['Player'], "val": f"{mvp['Moyenne_Raw']:.1f}", "unit": "PTS MOYENNE (BRUT)", "desc": "Meilleure moyenne de points 'purs', sans compter les bonus."},
         {"title": "THE SNIPER", "icon": "🎯", "color": C_PURPLE, "player": sniper['Player'], "val": int(sniper['BP_Count']), "unit": "BEST PICKS", "desc": "Le plus grand nombre de Best Picks trouvés cette saison."},
         {"title": "ALPHA DOG", "icon": "🐺", "color": C_ALPHA, "player": alpha['Player'], "val": int(alpha['Alpha_Count']), "unit": "TOPS TEAM", "desc": "Le joueur ayant fini le plus souvent meilleur scoreur de l'équipe."},
         {"title": "THE MEDALIST", "icon": "🎖️", "color": "#F59E0B", "player": medalist['Player'], "val": int(medalist['Medalist']), "unit": "PODIUMS", "desc": "Le plus grand nombre d'apparitions sur le podium journalier de l'équipe."},
         {"title": "PRIME TIME", "icon": "🗓️", "color": "#EC4899", "player": prime['Player'], "val": f"{prime['PrimeTime']:.1f}", "unit": "PTS MOYENNE (MOIS)", "desc": "Meilleure moyenne de points enregistrée sur un mois civil complet."},
-
-        # II. LES SCOREURS
         {"title": "THE CEILING", "icon": "🏔️", "color": "#FB7185", "player": ceiling['Player'], "val": int(ceiling['Best']), "unit": "PTS MAX", "desc": "Record absolu de points sur un match (Bonus inclus)."},
         {"title": "PURE SCORER", "icon": "🏀", "color": "#7C3AED", "player": pure_scorer['Player'], "val": int(pure_scorer['Best_Raw']), "unit": "PTS MAX (BRUT)", "desc": "Record absolu de points sur un match (Score brut)."},
         {"title": "THE ALIEN", "icon": "👽", "color": C_ALIEN, "player": alien['Player'], "val": int(alien['MaxAlien']), "unit": "MATCHS", "desc": "Plus longue série de matchs consécutifs au-dessus de 60 pts."},
         {"title": "NUCLEAR", "icon": "☢️", "color": C_ACCENT, "player": nuclear['Player'], "val": int(nuclear['Nukes']), "unit": "BOMBS", "desc": "Le plus grand nombre de scores explosifs (> 50 pts)."},
         {"title": "HEAVY HITTER", "icon": "🥊", "color": "#DC2626", "player": heavy['Player'], "val": int(heavy['Count40']), "unit": "PICKS > 40", "desc": "Le plus grand nombre de scores très élevés (> 40 pts)."},
         {"title": "UNSTOPPABLE", "icon": "⚡", "color": "#F59E0B", "player": unstoppable['Player'], "val": int(unstoppable['MaxUnstoppable']), "unit": "SERIE > 40", "desc": "Plus longue série historique de matchs consécutifs au-dessus de 40 pts."},
-
-        # III. LES FIABLES
         {"title": "IRON LUNGS", "icon": "🫁", "color": "#06B6D4", "player": lungs['Player'], "val": int(lungs['IronLungs']), "unit": "PTS TOTAL (BRUT)", "desc": "Plus gros volume total de points marqués à la sueur du front (sans bonus)."},
         {"title": "KING OF DECKS", "icon": "🃏", "color": "#8B5CF6", "player": decks['Player'], "val": int(decks['MaxDeck']), "unit": "PTS (7 MATCHS)", "desc": "Meilleur cumul de points sur 7 matchs consécutifs."},
         {"title": "THE ROCK", "icon": "🛡️", "color": C_GREEN, "player": rock['Player'], "val": int(rock['Count30']), "unit": "MATCHS", "desc": "Le plus grand nombre de matchs dans la Safe Zone (> 30 pts)."},
@@ -667,8 +703,6 @@ def render_hall_of_fame(df_full_history, bp_map, daily_max_map):
         {"title": "IRON MAN", "icon": "🤖", "color": "#4F46E5", "player": iron_man['Player'], "val": int(iron_man['MaxNoCarrot']), "unit": "MATCHS", "desc": "Plus longue série historique de matchs sans aucune carotte."},
         {"title": "IRON WALL", "icon": "🧱", "color": "#78350F", "player": wall['Player'], "val": int(wall['Worst']), "unit": "PIRE SCORE", "desc": "Le 'Pire score' le plus élevé de la saison (Plancher haut)."},
         {"title": "THE METRONOME", "icon": "⏰", "color": C_IRON, "player": metronome['Player'], "val": f"{metronome['StdDev']:.1f}", "unit": "ECART TYPE", "desc": "Le joueur le plus régulier (Plus faible écart-type)."},
-
-        # IV. LE STYLE
         {"title": "HUMAN TORCH", "icon": "🔥", "color": "#BE123C", "player": torch['Player'], "val": f"{torch['Last15']:.1f}", "unit": "PTS / 15J", "desc": "Meilleure forme du moment (Moyenne sur les 15 derniers matchs)."},
         {"title": "RISING STAR", "icon": "🚀", "color": "#34D399", "player": rising['Player'], "val": f"+{rising['ProgressionPct']:.1f}%", "unit": "PROGRESSION", "desc": "Plus grosse progression de forme (Moyenne 15j vs Moyenne Saison)."},
         {"title": "THE PHOENIX", "icon": "🐣", "color": "#F97316", "player": phoenix['Player'], "val": int(phoenix['MaxPhoenix']), "unit": "PTS REBOND", "desc": "Meilleur score réalisé le lendemain d'une carotte (< 20 pts)."},
@@ -676,8 +710,6 @@ def render_hall_of_fame(df_full_history, bp_map, daily_max_map):
         {"title": "THE MANIAC", "icon": "🤪", "color": "#D946EF", "player": maniac['Player'], "val": f"{maniac['ModeScore']}", "unit": f"{maniac['ModeCount']} FOIS", "desc": "Le score précis le plus souvent répété par ce joueur."},
         {"title": "THE ALBATROSS", "icon": "🦅", "color": "#2DD4BF", "player": albatross['Player'], "val": int(albatross['Spread']), "unit": "AMPLITUDE", "desc": "Plus grand écart constaté entre le record et le pire score."},
         {"title": "THE GAMBLER", "icon": "🎰", "color": "#E11D48", "player": gambler['Player'], "val": f"{gambler['StdDev']:.1f}", "unit": "VOLATILITÉ", "desc": "Le joueur le plus instable (Plus forte variation de performance)."},
-
-        # V. LE MUR DE LA HONTE
         {"title": "BAD LUCK", "icon": "🍀❌", "color": "#99F6E4", "player": bad_luck['Player'], "val": int(bad_luck['BadLuck']), "unit": "PTS (NO BP)", "desc": "Le plus gros score réalisé sans obtenir le Best Pick ce soir-là."},
         {"title": "CRASH TEST", "icon": "💥", "color": C_RED, "player": crash['Player'], "val": int(crash['Worst_Bonus']), "unit": "PTS MIN (X2)", "desc": "Le pire score réalisé alors qu'un bonus était actif."},
         {"title": "BAD BUSINESS", "icon": "💸", "color": "#9CA3AF", "player": bad_biz['Player'], "val": int(bad_biz['Bonus_Gained']), "unit": "PTS BONUS", "desc": "Le moins de points gagnés grâce aux bonus (Manque de rentabilité)."},

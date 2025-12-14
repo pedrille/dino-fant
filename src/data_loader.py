@@ -1,106 +1,124 @@
-import pandas as pd
-import numpy as np
 import streamlit as st
-from streamlit_gsheets import GSheetsConnection
+import pandas as pd
+import datetime
 from src.utils import normalize_month
 
-@st.cache_data(ttl=3600, show_spinner=False) 
+# --- CONFIGURATION ---
+# Date du Pick #1 (Opening Night NBA 2024-25)
+SEASON_START_DATE = datetime.datetime(2024, 10, 22)
+
+@st.cache_data(ttl=3600, show_spinner=False)
 def load_data():
-    conn = st.connection("gsheets", type=GSheetsConnection)
     try:
-        if "SPREADSHEET_URL" not in st.secrets: 
+        # 1. CHARGEMENT DU CSV GOOGLE SHEET
+        if "GSHEET_ID" in st.secrets:
+            SHEET_ID = st.secrets["GSHEET_ID"]
+            url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Valeurs"
+            df_raw = pd.read_csv(url, header=None)
+        else:
             return pd.DataFrame(), 0, {}, [], {}
 
-        # A. VALEURS
-        df_valeurs = conn.read(spreadsheet=st.secrets["SPREADSHEET_URL"], worksheet="Valeurs", header=None, ttl=0).astype(str)
-        month_row = df_valeurs.iloc[0]
-        pick_row_idx = 2
-        picks_series = pd.to_numeric(df_valeurs.iloc[pick_row_idx, 1:], errors='coerce')
+        # 2. REPÉRAGE DES LIGNES CLÉS (SCAN)
+        pick_row_idx = -1
+        deck_row_idx = -1
         
-        pick_to_month = {}
-        current_month = "Inconnu"
-        for col_idx in range(1, len(month_row)):
-            val_month = str(month_row[col_idx]).strip()
-            # Utilisation de normalize_month pour gérer les accents (Décembre -> decembre)
-            if val_month and val_month.lower() != 'nan' and val_month != '': 
-                current_month = normalize_month(val_month)
+        # On scanne les 10 premières lignes pour trouver "Deck" et "Pick"
+        for i, row in df_raw.head(10).iterrows():
+            first_cell = str(row[0])
+            if "Pick" in first_cell:
+                pick_row_idx = i
+            if "Deck" in first_cell:
+                deck_row_idx = i
+        
+        if pick_row_idx == -1:
+            st.error("Structure du fichier non reconnue (Ligne 'Pick' introuvable).")
+            return pd.DataFrame(), 0, {}, [], {}
+
+        # 3. EXTRACTION DES DONNÉES
+        players_start_row = pick_row_idx + 1
+        players = df_raw.iloc[players_start_row:, 0].dropna().values
+        
+        data_list = []
+        
+        # Variable pour mémoriser le Deck en cours (Fill Forward)
+        current_deck_num = 0
+        
+        # On parcourt les colonnes (à partir de la colonne B)
+        for col_idx in range(1, df_raw.shape[1]):
             
-            pick_val = pd.to_numeric(df_valeurs.iloc[pick_row_idx, col_idx], errors='coerce')
-            if pd.notna(pick_val) and pick_val > 0: 
-                pick_to_month[int(pick_val)] = current_month
+            # --- A. GESTION DU DECK ---
+            # Si on a trouvé une ligne Deck, on regarde ce qu'il y a dedans
+            if deck_row_idx != -1:
+                raw_deck_val = df_raw.iloc[deck_row_idx, col_idx]
+                try:
+                    # Si c'est un chiffre, c'est le début d'un nouveau Deck
+                    deck_val = int(float(raw_deck_val))
+                    current_deck_num = deck_val
+                except (ValueError, TypeError):
+                    # Si c'est vide, on reste sur le Deck précédent (c'est normal en Excel)
+                    pass
+            
+            # --- B. RECUPERATION DU PICK ---
+            raw_pick_val = df_raw.iloc[pick_row_idx, col_idx]
+            try:
+                pick_num = int(float(raw_pick_val))
+            except (ValueError, TypeError):
+                continue # Ce n'est pas une colonne de jeu (ex: colonne vide)
 
-        bp_row = df_valeurs[df_valeurs[0].str.contains("Score BP", na=False)]
-        bp_series = pd.to_numeric(bp_row.iloc[0, 1:], errors='coerce') if not bp_row.empty else pd.Series()
-        
-        df_players = df_valeurs.iloc[pick_row_idx+1:pick_row_idx+50].copy().rename(columns={0: 'Player'})
-        stop = ["Team Raptors", "Score BP", "Classic", "BP", "nan", "Moyenne", "Somme"]
-        df_players = df_players[~df_players['Player'].isin(stop)].dropna(subset=['Player'])
-        df_players['Player'] = df_players['Player'].str.strip()
-
-        valid_map = {idx: int(val) for idx, val in picks_series.items() if pd.notna(val) and val > 0}
-        cols = ['Player'] + list(valid_map.keys())
-        # Filtrer pour ne garder que les colonnes existantes
-        cols = [c for c in cols if c in df_players.columns]
-        
-        df_clean = df_players[cols].copy().rename(columns=valid_map)
-        df_long = df_clean.melt(id_vars=['Player'], var_name='Pick', value_name='ScoreRaw')
-        
-        # --- LOGIQUE DE PARSING SCORE AVEC '!' ---
-        df_long['IsBP'] = df_long['ScoreRaw'].str.contains('!', na=False)
-        df_long['IsBonus'] = df_long['ScoreRaw'].str.contains(r'\*', na=False)
-        df_long['ScoreClean'] = df_long['ScoreRaw'].str.replace(r'[\*!]', '', regex=True)
-        
-        df_long['ScoreVal'] = pd.to_numeric(df_long['ScoreClean'], errors='coerce')
-        # Utilisation de np.where (nécessite l'import numpy as np en haut)
-        df_long['Score'] = np.where(df_long['IsBonus'], df_long['ScoreVal'] * 2, df_long['ScoreVal'])
-        df_long['Pick'] = pd.to_numeric(df_long['Pick'], errors='coerce')
-        
-        final_df = df_long.dropna(subset=['Score', 'Pick'])
-        final_df['Player'] = final_df['Player'].str.strip()
-        final_df['Month'] = final_df['Pick'].map(pick_to_month).fillna("Inconnu")
-        
-        bp_map = {int(picks_series[idx]): val for idx, val in bp_series.items() if idx in valid_map}
-        daily_max_map = final_df.groupby('Pick')['Score'].max().to_dict()
-
-        daily_stats = final_df.groupby('Pick')['Score'].agg(['mean', 'std']).reset_index()
-        daily_stats.rename(columns={'mean': 'DailyMean', 'std': 'DailyStd'}, inplace=True)
-        final_df = pd.merge(final_df, daily_stats, on='Pick', how='left')
-        final_df['ZScore'] = np.where(final_df['DailyStd'] > 0, (final_df['Score'] - final_df['DailyMean']) / final_df['DailyStd'], 0)
-
-        # B. STATS (Uniquement pour historique classement)
-        df_stats = conn.read(spreadsheet=st.secrets["SPREADSHEET_URL"], worksheet="Stats_Raptors_FR", header=None, ttl=0)
-        team_rank_history = []
-        team_current_rank = 0
-
-        # Récupération Historique Rang
-        start_row_rank = -1
-        col_start_rank = -1
-        for r_idx, row in df_stats.iterrows():
-            for c_idx, val in enumerate(row):
-                if str(val).strip() == "Classement":
-                    start_row_rank = r_idx; col_start_rank = c_idx; break
-            if start_row_rank != -1: break
-        
-        if start_row_rank != -1:
-            for i in range(start_row_rank+1, start_row_rank+30):
-                if i >= len(df_stats): break
-                p_name = str(df_stats.iloc[i, col_start_rank]).strip()
-                if "Team Raptors" in p_name:
-                    hist_vals = df_stats.iloc[i, col_start_rank+1:col_start_rank+25].values
-                    valid_history = []
-                    for x in hist_vals:
-                        try:
-                            clean_x = str(x).replace(',', '').replace(' ', '')
-                            val = float(clean_x)
-                            if val > 0: valid_history.append(int(val))
-                        except: pass
-                    if valid_history:
-                        team_current_rank = valid_history[-1]
-                        team_rank_history = valid_history
-                    break
+            # Calcul Date (Esthétique uniquement, le Weekly se basera sur le Deck)
+            calculated_date = SEASON_START_DATE + datetime.timedelta(days=pick_num - 1)
+            
+            # --- C. PARCOURS DES JOUEURS ---
+            for i, player_name in enumerate(players):
+                row_idx = players_start_row + i
+                raw_score = df_raw.iloc[row_idx, col_idx]
+                
+                # Nettoyage
+                if pd.isna(raw_score) or str(raw_score).strip() == "":
+                    continue
                     
-        return final_df, team_current_rank, bp_map, team_rank_history, daily_max_map
+                score_str = str(raw_score).strip().replace(',', '.')
+                if score_str.lower() == 'nan': continue
+                
+                is_bonus = '*' in score_str
+                is_bp = '!' in score_str
+                clean_str = score_str.replace('*', '').replace('!', '')
+                
+                try:
+                    score_val = float(clean_str)
+                except ValueError:
+                    continue 
+                
+                final_score = score_val * 2 if is_bonus else score_val
+                
+                data_list.append({
+                    'Deck': current_deck_num, # Le vrai Deck lu dans le Excel
+                    'Pick': pick_num,
+                    'Date': calculated_date,
+                    'Player': player_name,
+                    'Score': int(final_score),
+                    'ScoreVal': int(score_val),
+                    'IsBonus': is_bonus,
+                    'IsBP': is_bp,
+                    'Month': normalize_month(calculated_date.strftime("%B")) 
+                })
 
-    except Exception: 
-        # En cas d'erreur, on renvoie des objets vides pour éviter le crash brutal
+        # 4. DATAFRAME FINAL
+        df = pd.DataFrame(data_list)
+        if df.empty: return pd.DataFrame(), 0, {}, [], {}
+
+        # 5. CALCULS ADDITIONNELS
+        df['ZScore'] = df.groupby('Pick')['Score'].transform(
+            lambda x: (x - x.mean()) / x.std(ddof=0) if x.std(ddof=0) > 0 else 0
+        ).fillna(0)
+        
+        team_rank = 1 
+        bp_map = df[df['IsBP'] == True].set_index('Pick')['Score'].to_dict()
+        team_history = [1] 
+        daily_max_map = df.groupby('Pick')['Score'].max().to_dict()
+
+        return df, team_rank, bp_map, team_history, daily_max_map
+
+    except Exception as e:
+        st.error(f"Erreur Data Loader: {e}")
         return pd.DataFrame(), 0, {}, [], {}

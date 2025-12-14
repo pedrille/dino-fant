@@ -860,7 +860,9 @@ def render_weekly_report(df_full_history):
         target_deck = st.selectbox("📅 Sélectionner le Deck", range(max_deck, 0, -1), format_func=lambda x: f"Deck #{x}")
 
     data = generate_weekly_report_data(df_full_history, target_deck)
-    if not data: st.error("Erreur génération."); return
+    if not data:
+        st.error("Erreur génération.")
+        return
 
     meta = data['meta']
     stats = data['stats']
@@ -872,7 +874,9 @@ def render_weekly_report(df_full_history):
         st.markdown(f"### 📄 APERÇU DISCORD (Deck #{target_deck})")
         
         border_color = f"#{meta['color']:06x}"
-        def clean_md(txt): return txt.replace("**", "<b>").replace("**", "</b>") if isinstance(txt, str) else txt
+        
+        def clean_md(txt):
+            return txt.replace("**", "<b>").replace("**", "</b>") if isinstance(txt, str) else txt
         
         def fmt_list(lst, suffix=""):
             if not lst: return "Personne."
@@ -1002,5 +1006,8 @@ def render_weekly_report(df_full_history):
         if st.button("🚀 ENVOYER SUR DISCORD", type="primary", use_container_width=True):
             with st.spinner("Envoi..."):
                 res = send_weekly_report_discord(data, "https://raptorsttfl-dashboard.streamlit.app/")
-                if res == "success": st.success("✅ Envoyé !"); st.balloons()
-                else: st.error(f"Erreur : {res}")
+                if res == "success":
+                    st.success("✅ Envoyé !")
+                    st.balloons()
+                else:
+                    st.error(f"Erreur : {res}")

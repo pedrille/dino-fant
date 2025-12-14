@@ -1,13 +1,7 @@
 import pandas as pd
 import numpy as np
-import datetime
 
-# --- CONFIGURATION ---
-SEASON_START_DATE = datetime.datetime(2025, 10, 21)
-
-def get_date_from_pick(pick_num):
-    p_int = int(pick_num)
-    return SEASON_START_DATE + datetime.timedelta(days=p_int - 1)
+# --- NOTE : PLUS DE GESTION DE DATES (CALENDRIER SUPPRIMÉ) ---
 
 def get_winners_list(series, maximize=True):
     if series.empty: return []
@@ -16,11 +10,13 @@ def get_winners_list(series, maximize=True):
     return [(player, val) for player, val in winners.items()]
 
 def get_all_scorers(series):
+    """Récupère TOUTE la liste triée."""
     if series.empty: return []
     sorted_series = series.sort_values(ascending=False)
     return [(player, val) for player, val in sorted_series.items()]
 
 def get_global_records(df_full):
+    """Calcule les records d'équipe."""
     records = {"NoCarrot": 0, "Serie30": 0}
     for p in df_full['Player'].unique():
         scores = df_full[df_full['Player'] == p].sort_values('Pick')['Score'].values
@@ -37,13 +33,13 @@ def get_global_records(df_full):
     return records
 
 def analyze_streaks_direct(df, player, current_pick_limit, global_records):
-    """Analyse factuelle et directe (Format User Requested)."""
+    """Analyse factuelle des séries (Actuel vs Perso vs Team)."""
     p_df = df[(df['Player'] == player) & (df['Pick'] <= current_pick_limit)].sort_values('Pick')
     if p_df.empty: return []
 
     scores = p_df['Score'].values
     
-    # Calculs
+    # Calculs Séries
     curr_nc, rec_perso_nc, temp = 0, 0, 0
     for s in scores:
         if s >= 20: temp += 1; rec_perso_nc = max(rec_perso_nc, temp)
@@ -99,11 +95,12 @@ def generate_weekly_report_data(df_full, target_deck_num=None):
     week_df = df[df['Deck'] == target_deck].copy()
     if week_df.empty: return None
     
-    first_pick = week_df['Pick'].min()
-    last_pick = week_df['Pick'].max()
-    s_date = get_date_from_pick(first_pick).strftime('%d/%m')
-    e_date = get_date_from_pick(last_pick).strftime('%d/%m')
+    # --- 1. GESTION DES PICKS (REMPLACEMENT DES DATES) ---
+    first_pick = int(week_df['Pick'].min())
+    last_pick = int(week_df['Pick'].max())
+    period_str = f"Picks #{first_pick} à #{last_pick}"
     
+    # --- 2. TEAM PULSE ---
     team_avg = week_df['Score'].mean()
     prev_deck = target_deck - 1
     diff_txt = ""
@@ -116,6 +113,7 @@ def generate_weekly_report_data(df_full, target_deck_num=None):
 
     discord_color = 5763719 if team_avg >= 40 else (16705372 if team_avg >= 30 else 15548997)
 
+    # --- 3. PODIUM (PAR MOYENNE) ---
     stats_week = week_df.groupby('Player')['Score'].agg(['mean', 'sum', 'count']).sort_values('mean', ascending=False)
     
     rotw_history = {}
@@ -135,6 +133,7 @@ def generate_weekly_report_data(df_full, target_deck_num=None):
         rank = i + 1
         weekly_podium.append({'rank': rank, 'player': player, 'avg': float(row['mean']), 'total': int(row['sum']), 'rotw_count': nb_rotw, 'is_winner': is_official_winner})
 
+    # --- 4. LISTES ---
     bp_series = week_df.groupby('Player')['IsBP'].sum()
     snipers = get_all_scorers(bp_series[bp_series > 0])
     
@@ -156,26 +155,28 @@ def generate_weekly_report_data(df_full, target_deck_num=None):
         remontada = get_winners_list(prog[prog > 0], maximize=True)
         remontada = [(p, f"+{v:.1f}") for p, v in remontada]
 
-    sunday_winners = get_winners_list(week_df[week_df['Pick'] == int(week_df['Pick'].max())].groupby('Player')['Score'].max())
+    sunday_winners = get_winners_list(week_df[week_df['Pick'] == last_pick].groupby('Player')['Score'].max())
 
     perfects = []
     for p in week_df['Player'].unique():
         scores = week_df[week_df['Player'] == p]['Score']
         if len(scores) >= 4 and scores.min() >= 30: perfects.append(p)
 
+    # --- 5. MVP PAR PICK (SANS DATE) ---
     daily_mvps = []
     for p_num in sorted(week_df['Pick'].unique()):
         d_data = week_df[week_df['Pick'] == p_num]
         if d_data.empty: continue
         max_s = d_data['Score'].max()
         mvps = d_data[d_data['Score'] == max_s]['Player'].tolist()
+        
+        # Format strict : Pick #XX
         daily_mvps.append(f"**Pick #{int(p_num)}** : {', '.join(mvps)} ({int(max_s)})")
 
-    # DEEP ANALYSIS (Direct & Simple)
+    # --- 6. DEEP ANALYSIS ---
     global_recs = get_global_records(df)
     analysis_lines = []
     for p in week_df['Player'].unique():
-        # On ne passe plus le préfixe joueur ici, il est géré dans la fonction
         lines = analyze_streaks_direct(df, p, int(week_df['Pick'].max()), global_recs)
         if lines:
             analysis_lines.extend(lines)
@@ -186,7 +187,7 @@ def generate_weekly_report_data(df_full, target_deck_num=None):
         "meta": {
             "week_num": target_deck,
             "max_deck": max_deck,
-            "dates": f"Du {s_date} au {e_date}",
+            "dates": period_str, # "Picks #48 à #53"
             "color": discord_color
         },
         "podium": weekly_podium,

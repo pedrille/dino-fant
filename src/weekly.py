@@ -4,24 +4,30 @@ import datetime
 import random
 
 # --- CONFIGURATION CALENDRIER ---
-# Date du Pick #1 de la saison NBA 2024-25 (Mardi 22 Octobre 2024)
-SEASON_START_DATE = datetime.datetime(2024, 10, 22)
+# Basé sur votre remarque du 04/11/2025 (Mardi)
+# On cale le Pick #1 au Mardi 21 Octobre 2025 (Début standard NBA)
+SEASON_START_DATE = datetime.datetime(2025, 10, 21)
 
-# --- MOTEUR NARRATIF ---
+# --- DICTIONNAIRE NARRATIF ---
 PHRASES_NC = [
-    "enchaine une série impressionnante de",
-    "est sur un nuage avec",
-    "fait preuve d'une régularité modèle avec",
-    "ne lâche rien :",
-    "est d'une solidité à toute épreuve :"
+    "affiche une solidité exemplaire",
+    "est réglé comme une horloge suisse",
+    "enchaine les performances fiables",
+    "ne laisse rien au hasard",
+    "impose son rythme de croisière"
 ]
 
 PHRASES_30 = [
-    "cogne fort avec",
-    "est en mode rouleau-compresseur :",
-    "enfile les perles :",
-    "confirme son statut de heavy hitter :"
+    "cogne très fort",
+    "est en mode rouleau-compresseur",
+    "confirme son statut de leader offensif",
+    "enfile les cartons comme des perles"
 ]
+
+def get_date_from_pick(pick_num):
+    """Convertit un numéro de Pick en Date réelle (Fix numpy int64 error)."""
+    p_int = int(pick_num)
+    return SEASON_START_DATE + datetime.timedelta(days=p_int - 1)
 
 def get_winners_list(series, maximize=True):
     if series.empty: return []
@@ -29,26 +35,22 @@ def get_winners_list(series, maximize=True):
     winners = series[series == target_val]
     return [(player, val) for player, val in winners.items()]
 
-def get_all_scorers(series, suffix=""):
-    """Récupère tous les joueurs ayant scoré (ex: pour les BP)."""
+def get_all_scorers(series):
+    """Récupère TOUTE la liste triée (ex: pour les Snipers)."""
     if series.empty: return []
-    # On trie du plus grand au plus petit
     sorted_series = series.sort_values(ascending=False)
     return [(player, val) for player, val in sorted_series.items()]
-
-def get_date_from_pick(pick_num):
-    """Calcule la date réelle basée sur le Pick #1 = 22 Octobre 2024."""
-    # Pick 1 = 22 Oct, donc Pick X = 22 Oct + (X-1) jours
-    return SEASON_START_DATE + datetime.timedelta(days=pick_num - 1)
 
 def get_global_records(df_full):
     records = {"NoCarrot": 0, "Serie30": 0}
     for p in df_full['Player'].unique():
         scores = df_full[df_full['Player'] == p].sort_values('Pick')['Score'].values
+        # No Carrot
         temp = 0
         for s in scores:
             if s >= 20: temp += 1; records["NoCarrot"] = max(records["NoCarrot"], temp)
             else: temp = 0
+        # Serie 30
         temp = 0
         for s in scores:
             if s >= 30: temp += 1; records["Serie30"] = max(records["Serie30"], temp)
@@ -56,13 +58,12 @@ def get_global_records(df_full):
     return records
 
 def analyze_streaks_human(df, player, current_pick_limit, global_records):
-    """Génère une analyse textuelle fluide et contextuelle."""
     p_df = df[(df['Player'] == player) & (df['Pick'] <= current_pick_limit)].sort_values('Pick')
     if p_df.empty: return []
 
     scores = p_df['Score'].values
     
-    # Calcul Séries Actuelles & Records Perso
+    # Calculs Séries
     curr_nc, rec_perso_nc, temp = 0, 0, 0
     for s in scores:
         if s >= 20: temp += 1; rec_perso_nc = max(rec_perso_nc, temp)
@@ -81,31 +82,29 @@ def analyze_streaks_human(df, player, current_pick_limit, global_records):
 
     lines = []
     
-    # Analyse No-Carrot (Seuil 8)
+    # Seuil d'affichage : 8 matchs pour NC, 4 pour 30+
     if curr_nc >= 8:
         phrase = random.choice(PHRASES_NC)
-        status = ""
+        # Comparaison contextuelle
         if curr_nc >= global_records["NoCarrot"]:
-            status = f" 👑 **RECORD SAISON BATTU !**"
-        elif curr_nc >= rec_perso_nc:
-            status = f" 🚨 **Nouveau Record Personnel !** (Record absolu à aller chercher : {global_records['NoCarrot']})"
+            context = f" 👑 **RECORD SAISON BATTU !** (Précédent: {global_records['NoCarrot']})"
+        elif curr_nc >= rec_perso_nc and curr_nc > 10:
+            context = f" 🚨 **Nouveau Record Personnel !** (Objectif Team: {global_records['NoCarrot']})"
         else:
-            status = f" (Record Perso: {rec_perso_nc} | Record Saison: {global_records['NoCarrot']})"
+            context = f" (Rec. Perso: {rec_perso_nc} | Rec. Team: {global_records['NoCarrot']})"
             
-        lines.append(f"{phrase} **{curr_nc} matchs sans carotte**.{status}")
+        lines.append(f"{phrase} avec **{curr_nc} matchs sans carotte**{context}")
 
-    # Analyse Heavy Hitter (Seuil 4)
     if curr_30 >= 4:
         phrase = random.choice(PHRASES_30)
-        status = ""
         if curr_30 >= global_records["Serie30"]:
-            status = f" 👑 **RECORD SAISON BATTU !**"
+            context = f" 👑 **RECORD SAISON BATTU !**"
         elif curr_30 >= rec_perso_30:
-            status = f" 🚨 **Nouveau Record Personnel !** (Record absolu à aller chercher : {global_records['Serie30']})"
+            context = f" 🚨 **Nouveau Record Personnel !** (Objectif Team: {global_records['Serie30']})"
         else:
-            status = f" (Record Perso: {rec_perso_30} | Record Saison: {global_records['Serie30']})"
+            context = f" (Rec. Perso: {rec_perso_30} | Rec. Team: {global_records['Serie30']})"
             
-        lines.append(f"{phrase} **{curr_30} scores > 30 pts**.{status}")
+        lines.append(f"{phrase} avec **{curr_30} scores > 30 pts**{context}")
         
     return lines
 
@@ -122,18 +121,13 @@ def generate_weekly_report_data(df_full, target_deck_num=None):
     if week_df.empty: return None
     
     # --- 1. DATES RÉELLES ---
-    # On prend le min et max des PICKS du deck pour calculer les dates
     first_pick = week_df['Pick'].min()
     last_pick = week_df['Pick'].max()
     
-    real_start_date = get_date_from_pick(first_pick)
-    real_end_date = get_date_from_pick(last_pick)
+    s_date = get_date_from_pick(first_pick).strftime('%d/%m')
+    e_date = get_date_from_pick(last_pick).strftime('%d/%m')
     
-    # Formatage : "Lundi 04/11"
-    start_str = real_start_date.strftime('%d/%m')
-    end_str = real_end_date.strftime('%d/%m')
-    
-    # --- 2. TEAM METRICS ---
+    # --- 2. TEAM PULSE ---
     team_avg = week_df['Score'].mean()
     prev_deck = target_deck - 1
     diff_txt = ""
@@ -147,15 +141,9 @@ def generate_weekly_report_data(df_full, target_deck_num=None):
     discord_color = 5763719 if team_avg >= 40 else (16705372 if team_avg >= 30 else 15548997)
 
     # --- 3. PODIUM (PAR MOYENNE) ---
-    # On groupe, on somme et on compte les matchs pour faire la moyenne
-    stats_week = week_df.groupby('Player')['Score'].agg(['sum', 'count'])
-    stats_week['mean'] = stats_week['sum'] / stats_week['count']
-    stats_week = stats_week.sort_values('mean', ascending=False) # Tri par moyenne
+    stats_week = week_df.groupby('Player')['Score'].agg(['mean', 'sum', 'count'])
+    stats_week = stats_week.sort_values('mean', ascending=False)
 
-    # Historique ROTW (Calculé sur la somme totale comme avant ou moyenne ? Restons sur Somme pour l'historique officiel TTFL)
-    # Note: Si vous voulez changer le critère du titre ROTW en moyenne, dites-le moi. 
-    # Pour l'instant je garde le titre officiel TTFL (Somme) mais j'affiche le podium en Moyenne comme demandé.
-    
     rotw_history = {}
     past_decks = df[df['Deck'] < target_deck]['Deck'].unique()
     for d in past_decks:
@@ -165,29 +153,27 @@ def generate_weekly_report_data(df_full, target_deck_num=None):
             for p in ds[ds == ds.max()].index: rotw_history[p] = rotw_history.get(p, 0) + 1
 
     weekly_podium = []
-    # On prend le top 3 par moyenne
     for i, (player, row) in enumerate(stats_week.head(3).iterrows()):
         nb_rotw = rotw_history.get(player, 0)
-        
-        # Check si c'est le vainqueur officiel (Somme)
-        is_official_winner = (week_df.groupby('Player')['Score'].sum().idxmax() == player)
+        total_leader = week_df.groupby('Player')['Score'].sum().idxmax()
+        is_official_winner = (player == total_leader)
         if is_official_winner: nb_rotw += 1
             
         rank = i + 1
         weekly_podium.append({
             'rank': rank, 
             'player': player, 
-            'score': float(row['mean']), # On affiche la moyenne
-            'total': int(row['sum']),    # On garde le total en info
+            'avg': float(row['mean']), 
+            'total': int(row['sum']), 
             'rotw_count': nb_rotw,
             'is_winner': is_official_winner
         })
 
-    # --- 4. LISTES COMPLÈTES ---
-    # Sniper : Tous ceux qui ont > 0 BP
+    # --- 4. LISTES EXHAUSTIVES ---
+    # Sniper
     bp_series = week_df.groupby('Player')['IsBP'].sum()
     bp_series = bp_series[bp_series > 0]
-    snipers = get_all_scorers(bp_series) # Retourne liste [(Joueur, Nb), ...]
+    snipers = get_all_scorers(bp_series)
     
     # Muraille
     max_g = week_df.groupby('Player')['Score'].count().max()
@@ -211,7 +197,7 @@ def generate_weekly_report_data(df_full, target_deck_num=None):
         remontada = [(p, f"+{v:.1f}") for p, v in remontada]
 
     # Sunday Clutch
-    last_pick = week_df['Pick'].max()
+    last_pick = int(week_df['Pick'].max())
     sunday_winners = get_winners_list(week_df[week_df['Pick'] == last_pick].groupby('Player')['Score'].max())
 
     # Perfect
@@ -224,29 +210,31 @@ def generate_weekly_report_data(df_full, target_deck_num=None):
     daily_mvps = []
     for p_num in sorted(week_df['Pick'].unique()):
         d_data = week_df[week_df['Pick'] == p_num]
+        if d_data.empty: continue
+        
         max_s = d_data['Score'].max()
         mvps = d_data[d_data['Score'] == max_s]['Player'].tolist()
-        # Date réelle
-        real_date = get_date_from_pick(p_num)
-        day_name = real_date.strftime('%a %d') # Ex: "Lun 04"
-        daily_mvps.append(f"`{day_name}` (Pick #{p_num}) : {', '.join(mvps)} ({int(max_s)})")
+        
+        r_date = get_date_from_pick(p_num)
+        day_str = r_date.strftime('%a %d')
+        
+        daily_mvps.append(f"`{day_str} #{int(p_num)}` : {', '.join(mvps)} ({int(max_s)})")
 
-    # --- 5. ANALYSE HUMAINE ---
+    # --- 5. ANALYSE PROFONDE ---
     global_recs = get_global_records(df)
     analysis_lines = []
     for p in week_df['Player'].unique():
-        lines = analyze_streaks_human(df, p, week_df['Pick'].max(), global_recs)
+        lines = analyze_streaks_human(df, p, int(week_df['Pick'].max()), global_recs)
         if lines:
             for l in lines: analysis_lines.append(f"👤 **{p}** {l}")
 
-    # KPI Safe Zone
     safe_zone_count = len(week_df[week_df['Score'] >= 30])
     
     return {
         "meta": {
             "week_num": target_deck,
             "max_deck": max_deck,
-            "dates": f"Du {start_str} au {end_str}",
+            "dates": f"Du {s_date} au {e_date}",
             "color": discord_color
         },
         "podium": weekly_podium,

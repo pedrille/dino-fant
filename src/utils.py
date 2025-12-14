@@ -1,12 +1,31 @@
 import requests
 import json
 import streamlit as st
+import unicodedata
 
 # --- CONSTANTES ---
 DISCORD_COLOR_RED = 13504833  # #CE1141 (Raptors Red)
 DISCORD_COLOR_GOLD = 16766720 # Gold
 WEBHOOK_URL = st.secrets["DISCORD_WEBHOOK"] if "DISCORD_WEBHOOK" in st.secrets else ""
 
+# --- FONCTION RESTAURÉE (ESSENTIELLE POUR LE DATA LOADER) ---
+def normalize_month(month_str):
+    """
+    Normalise le nom du mois (minuscule, sans accent) pour correspondre aux clés.
+    Ex: "Février" -> "fevrier", "Décembre" -> "decembre"
+    """
+    if not isinstance(month_str, str): 
+        return "Inconnu"
+    
+    # Minuscule et suppression des espaces
+    month_str = month_str.lower().strip()
+    
+    # Suppression des accents (ex: é -> e)
+    normalized = unicodedata.normalize('NFD', month_str).encode('ascii', 'ignore').decode("utf-8")
+    
+    return normalized
+
+# --- FONCTIONS GRAPHIQUES ---
 def get_uniform_color(score):
     """
     Retourne une couleur hexadécimale en fonction du score (Pour les graphiques).
@@ -17,6 +36,7 @@ def get_uniform_color(score):
     if score < 20: return "#EF4444"  # Red
     return "#6B7280" # Gray
 
+# --- FONCTIONS DE RAPPORT ---
 def format_winners_list(winners, suffix=""):
     """
     Formate une liste de tuples (Joueur, Score) en chaîne propre.
@@ -130,6 +150,6 @@ def send_weekly_report_discord(report_data, dashboard_url):
         return str(e)
 
 # --- FONCTION LEGACY (Daily) ---
-# Gardée pour compatibilité si besoin, mais non utilisée par le Weekly
+# Gardée pour compatibilité
 def send_discord_webhook(day_df, pick, url):
     pass

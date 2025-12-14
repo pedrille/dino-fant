@@ -4,7 +4,7 @@ import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 from src.utils import normalize_month
 
-@st.cache_data(ttl=600, show_spinner=False) 
+@st.cache_data(ttl=3600, show_spinner=False) 
 def load_data():
     conn = st.connection("gsheets", type=GSheetsConnection)
     try:

@@ -15,17 +15,14 @@ def render_dashboard(day_df, full_stats, latest_pick, team_avg_per_pick, team_st
     section_title("RAPTORS <span class='highlight'>DASHBOARD</span>", f"Daily Briefing • Pick #{int(latest_pick)}")
     top = day_df.iloc[0]
 
-    # LOGIQUE MVP & BP & BONUS (CORRECTION ALIGNEMENT: TOUT SUR LA MEME LIGNE)
+    # ALIGNEMENT CORRECT DU SCORE ET DES BADGES
     val_suffix = ""
     if 'IsBonus' in top and top['IsBonus']: val_suffix += " 🌟x2"
     if 'IsBP' in top and top['IsBP']: val_suffix += " 🎯BP"
 
-    # On formate le HTML pour que le suffixe soit dans le même conteneur que le score, mais un peu plus petit
     sub_html = f"<div><span style='font-size:1.6rem; font-weight:800'>{int(top['Score'])} PTS</span> <span style='font-size:1rem; color:{C_GOLD}; font-weight:700'>{val_suffix}</span></div>"
 
-    # 5 COLONNES POUR LE DASHBOARD
     c1, c2, c3, c4, c5 = st.columns(5)
-
     with c1:
         st.markdown(f"""<div class="glass-card kpi-dashboard-fixed" style="text-align:center"><div class="kpi-label">MVP DU SOIR</div><div class="kpi-num" style="color:{C_GOLD}">{top['Player']}</div><div class="kpi-sub" style="color:{C_ACCENT}">{sub_html}</div></div>""", unsafe_allow_html=True)
 
@@ -112,7 +109,6 @@ def render_dashboard(day_df, full_stats, latest_pick, team_avg_per_pick, team_st
         st.markdown("</div>", unsafe_allow_html=True)
 
 # --- 2. TEAM HQ ---
-# CORRECTION: Ajout de l'argument full_stats
 def render_team_hq(df, latest_pick, team_rank, team_history, team_avg_per_pick, total_bp_team, full_stats):
     section_title("TEAM <span class='highlight'>HQ</span>", "Vue d'ensemble de l'effectif")
     total_pts_season = df['Score'].sum()
@@ -494,38 +490,55 @@ def render_bonus_x2(df):
 # CORRECTION: Ajout de l'argument df_full_history pour calculer l'Iron Man global
 def render_no_carrot(df, team_streak_nc, full_stats, df_full_history):
     section_title("ANTI <span class='highlight'>CARROTE</span>", "Objectif Fiabilité & Constance")
-    max_streak_team = 0
+    
+    # 1. CALCULS SUR FULL HISTORY (POUR TOUT L'ONGLET)
+    # Pour garantir que cet onglet reflète la saison complète, on travaille principalement sur df_full_history
+    # Sauf pour "Série Team en cours" qui dépend du dernier pick joué (donc df filtré par load_data est ok, mais mieux vaut recalculer sur full)
+    
+    # Série Team (Active)
+    max_streak_team_hist = 0
     curr_str = 0
-    sorted_picks_asc = sorted(df['Pick'].unique())
+    sorted_picks_asc = sorted(df_full_history['Pick'].unique())
+    
+    # Calcul série active
+    team_streak_active = 0
+    for p_id in sorted(df_full_history['Pick'].unique(), reverse=True):
+        d_min = df_full_history[df_full_history['Pick'] == p_id]['Score'].min()
+        if d_min >= 20: team_streak_active += 1
+        else: break
+            
+    # Calcul Record Historique Team
     for p_id in sorted_picks_asc:
-        d_min = df[df['Pick'] == p_id]['Score'].min()
+        d_min = df_full_history[df_full_history['Pick'] == p_id]['Score'].min()
         if d_min >= 20: curr_str += 1
         else:
-            if curr_str > max_streak_team: max_streak_team = curr_str
+            if curr_str > max_streak_team_hist: max_streak_team_hist = curr_str
             curr_str = 0
-    if curr_str > max_streak_team: max_streak_team = curr_str
+    if curr_str > max_streak_team_hist: max_streak_team_hist = curr_str
 
-    iron_man_curr = full_stats.sort_values('CurrentNoCarrot', ascending=False).iloc[0]
+    # Stats Joueurs (Sur Full History)
+    # On doit recalculer les stats joueurs sur df_full_history pour cet onglet
+    full_stats_global = compute_stats(df_full_history, {}, {})
     
-    # --- CALCUL IRON MAN ALL-TIME ---
-    # On recalcule les stats sur tout l'historique pour avoir le vrai record
-    # Note : Cela peut être optimisé mais c'est le moyen le plus sûr d'avoir la donnée
-    full_stats_global = compute_stats(df_full_history, {}, {}) # maps vides car pas besoin ici
+    iron_man_curr = full_stats_global.sort_values('CurrentNoCarrot', ascending=False).iloc[0]
     iron_man_all_time = full_stats_global.sort_values('MaxNoCarrot', ascending=False).iloc[0]
+    mister_clean = full_stats_global.sort_values('Carottes', ascending=True).iloc[0] # Le moins de carottes
 
-    # --- MODIFICATION: 4 COLONNES ---
-    k1, k2, k3, k4 = st.columns(4)
-    with k1: kpi_card("SÉRIE TEAM EN COURS", f"{team_streak_nc}", "JOURS SANS CAROTTE", C_GREEN if team_streak_nc > 0 else C_RED)
-    with k2: kpi_card("RECORD PÉRIODE TEAM", f"{max_streak_team}", "JOURS CONSÉCUTIFS", C_GOLD)
+    # --- 5 COLONNES KPIS ---
+    k1, k2, k3, k4, k5 = st.columns(5)
+    with k1: kpi_card("SÉRIE TEAM EN COURS", f"{team_streak_active}", "JOURS SANS CAROTTE", C_GREEN if team_streak_active > 0 else C_RED)
+    with k2: kpi_card("RECORD TEAM (HISTORIQUE)", f"{max_streak_team_hist}", "JOURS CONSÉCUTIFS", C_GOLD)
     with k3: kpi_card("IRON MAN (ACTUEL)", iron_man_curr['Player'], f"{int(iron_man_curr['CurrentNoCarrot'])} MATCHS SUITE", C_BLUE)
     with k4: kpi_card("IRON MAN (HISTORIQUE)", iron_man_all_time['Player'], f"{int(iron_man_all_time['MaxNoCarrot'])} MATCHS SUITE", C_PURPLE)
+    with k5: kpi_card("MISTER CLEAN", mister_clean['Player'], f"{int(mister_clean['Carottes'])} CAROTTES (TOTAL)", C_PURE)
 
     st.markdown("<br>", unsafe_allow_html=True)
     c_graph, c_list = st.columns([2, 1], gap="large")
     with c_graph:
-        st.markdown("#### 📉 ZONE DE DANGER (CAROTTES PAR SOIR)")
-        carrot_counts = df[df['Score'] < 20].groupby('Pick').size().reset_index(name='Carottes')
-        all_picks = pd.DataFrame({'Pick': sorted(df['Pick'].unique())})
+        st.markdown("#### 📉 ZONE DE DANGER (CAROTTES PAR SOIR - SAISON)")
+        # Utilisation de df_full_history
+        carrot_counts = df_full_history[df_full_history['Score'] < 20].groupby('Pick').size().reset_index(name='Carottes')
+        all_picks = pd.DataFrame({'Pick': sorted(df_full_history['Pick'].unique())})
         carrot_chart = pd.merge(all_picks, carrot_counts, on='Pick', how='left').fillna(0)
         carrot_chart['Color'] = carrot_chart['Carottes'].apply(lambda x: "#374151" if x == 0 else C_RED)
         fig_car = px.bar(carrot_chart, x='Pick', y='Carottes')
@@ -535,7 +548,7 @@ def render_no_carrot(df, team_streak_nc, full_stats, df_full_history):
 
     with c_list:
         st.markdown("#### 🛡️ SÉRIES EN COURS (JOUEURS)")
-        sorted_reliability = full_stats.sort_values('CurrentNoCarrot', ascending=False)[['Player', 'CurrentNoCarrot']]
+        sorted_reliability = full_stats_global.sort_values('CurrentNoCarrot', ascending=False)[['Player', 'CurrentNoCarrot']]
         for i, r in sorted_reliability.iterrows():
             val = int(r['CurrentNoCarrot'])
             col_bar = C_GREEN if val >= 10 else (C_BLUE if val >= 5 else C_TEXT)
@@ -622,8 +635,6 @@ def render_trends(df, latest_pick):
 
 # --- 7. HALL OF FAME ---
 def render_hall_of_fame(df_full_history, bp_map, daily_max_map):
-    # (Le code du Hall of Fame reste identique à ma proposition précédente)
-    # Je le remets ici pour complétude
     section_title("HALL OF <span class='highlight'>FAME</span>", "Records & Trophées")
     st.markdown("<h3 style='margin-bottom:15px; font-family:Rajdhani; color:#AAA;'>🏆 RAPTORS SEASON TROPHIES</h3>", unsafe_allow_html=True)
     trophy_cols = st.columns(4)
@@ -677,6 +688,8 @@ def render_hall_of_fame(df_full_history, bp_map, daily_max_map):
     alpha = full_stats_global.sort_values('Alpha_Count', ascending=False).iloc[0]
     medalist = full_stats_global.sort_values('Medalist', ascending=False).iloc[0]
     prime = full_stats_global.sort_values('PrimeTime', ascending=False).iloc[0]
+    dominator = full_stats_global.sort_values('Dominator', ascending=False).iloc[0]
+    savior = full_stats_global.sort_values('SaviorScore', ascending=False).iloc[0]
     
     ceiling = full_stats_global.sort_values('Best', ascending=False).iloc[0]
     pure_scorer = full_stats_global.sort_values('Best_Raw', ascending=False).iloc[0]
@@ -689,6 +702,7 @@ def render_hall_of_fame(df_full_history, bp_map, daily_max_map):
     decks = full_stats_global.sort_values('MaxDeck', ascending=False).iloc[0]
     rock = full_stats_global.sort_values('Count30', ascending=False).iloc[0]
     sixth = full_stats_global.sort_values('SixthMan', ascending=False).iloc[0]
+    shield = full_stats_global.sort_values('ShieldCount', ascending=True).iloc[0]
     zen = full_stats_global.sort_values('ReliabilityPct', ascending=False).iloc[0]
     iron_man = full_stats_global.sort_values('MaxNoCarrot', ascending=False).iloc[0]
     wall = full_stats_global.sort_values('Worst', ascending=False).iloc[0]
@@ -696,50 +710,69 @@ def render_hall_of_fame(df_full_history, bp_map, daily_max_map):
     
     torch = full_stats_global.sort_values('Last15', ascending=False).iloc[0]
     rising = full_stats_global.sort_values('ProgressionPct', ascending=False).iloc[0]
+    soloist = full_stats_global.sort_values('Soloist', ascending=False).iloc[0]
     phoenix = full_stats_global.sort_values('MaxPhoenix', ascending=False).iloc[0]
     alchemist = full_stats_global.sort_values('Bonus_Gained', ascending=False).iloc[0]
+    ghost = full_stats_global.sort_values('Ghost', ascending=False).iloc[0]
     maniac = full_stats_global.sort_values('ModeCount', ascending=False).iloc[0]
     albatross = full_stats_global.sort_values('Spread', ascending=False).iloc[0]
     gambler = full_stats_global.sort_values('StdDev', ascending=False).iloc[0]
+    braqueur = full_stats_global.sort_values('Braqueur', ascending=True).iloc[0]
     
     bad_luck = full_stats_global.sort_values('BadLuck', ascending=False).iloc[0]
     crash = full_stats_global[full_stats_global['Worst_Bonus'] > 0].sort_values('Worst_Bonus', ascending=True).iloc[0]
     bad_biz = full_stats_global.sort_values('Bonus_Gained', ascending=True).iloc[0]
     brick = full_stats_global.sort_values('Worst_Raw', ascending=True).iloc[0]
+    mister_clean = full_stats_global.sort_values('Carottes', ascending=True).iloc[0]
     farmer = full_stats_global.sort_values('Carottes', ascending=False).iloc[0]
 
     hof_list = [
+        # I. L'ELITE
         {"title": "THE GOAT", "icon": "🏆", "color": C_GOLD, "player": goat['Player'], "val": f"{goat['Moyenne']:.1f}", "unit": "PTS MOYENNE", "desc": "Meilleure moyenne générale de la saison (Bonus inclus)."},
         {"title": "REAL MVP", "icon": "💎", "color": C_PURE, "player": mvp['Player'], "val": f"{mvp['Moyenne_Raw']:.1f}", "unit": "PTS MOYENNE (BRUT)", "desc": "Meilleure moyenne de points 'purs', sans compter les bonus."},
         {"title": "THE SNIPER", "icon": "🎯", "color": C_PURPLE, "player": sniper['Player'], "val": int(sniper['BP_Count']), "unit": "BEST PICKS", "desc": "Le plus grand nombre de Best Picks trouvés cette saison."},
         {"title": "ALPHA DOG", "icon": "🐺", "color": C_ALPHA, "player": alpha['Player'], "val": int(alpha['Alpha_Count']), "unit": "TOPS TEAM", "desc": "Le joueur ayant fini le plus souvent meilleur scoreur de l'équipe."},
         {"title": "THE MEDALIST", "icon": "🎖️", "color": "#F59E0B", "player": medalist['Player'], "val": int(medalist['Medalist']), "unit": "PODIUMS", "desc": "Le plus grand nombre d'apparitions sur le podium journalier de l'équipe."},
         {"title": "PRIME TIME", "icon": "🗓️", "color": "#EC4899", "player": prime['Player'], "val": f"{prime['PrimeTime']:.1f}", "unit": "PTS MOYENNE (MOIS)", "desc": "Meilleure moyenne de points enregistrée sur un mois civil complet."},
+        {"title": "THE DOMINATOR", "icon": "🦖", "color": "#10B981", "player": dominator['Player'], "val": int(dominator['Dominator']), "unit": "MATCHS > MOYENNE", "desc": "Le plus grand nombre de fois où le joueur a scoré plus que la moyenne journalière de l'équipe."},
+        {"title": "THE SAVIOR", "icon": "🙏", "color": "#FCD34D", "player": savior['Player'], "val": int(savior['SaviorScore']), "unit": "PTS (PIRE SOIR)", "desc": "Le MVP de la pire soirée collective de la saison."},
+
+        # II. LES SCOREURS
         {"title": "THE CEILING", "icon": "🏔️", "color": "#FB7185", "player": ceiling['Player'], "val": int(ceiling['Best']), "unit": "PTS MAX", "desc": "Record absolu de points sur un match (Bonus inclus)."},
         {"title": "PURE SCORER", "icon": "🏀", "color": "#7C3AED", "player": pure_scorer['Player'], "val": int(pure_scorer['Best_Raw']), "unit": "PTS MAX (BRUT)", "desc": "Record absolu de points sur un match (Score brut)."},
         {"title": "THE ALIEN", "icon": "👽", "color": C_ALIEN, "player": alien['Player'], "val": int(alien['MaxAlien']), "unit": "MATCHS", "desc": "Plus longue série de matchs consécutifs au-dessus de 60 pts."},
         {"title": "NUCLEAR", "icon": "☢️", "color": C_ACCENT, "player": nuclear['Player'], "val": int(nuclear['Nukes']), "unit": "BOMBS", "desc": "Le plus grand nombre de scores explosifs (> 50 pts)."},
         {"title": "HEAVY HITTER", "icon": "🥊", "color": "#DC2626", "player": heavy['Player'], "val": int(heavy['Count40']), "unit": "PICKS > 40", "desc": "Le plus grand nombre de scores très élevés (> 40 pts)."},
         {"title": "UNSTOPPABLE", "icon": "⚡", "color": "#F59E0B", "player": unstoppable['Player'], "val": int(unstoppable['MaxUnstoppable']), "unit": "SERIE > 40", "desc": "Plus longue série historique de matchs consécutifs au-dessus de 40 pts."},
+
+        # III. LES FIABLES
         {"title": "IRON LUNGS", "icon": "🫁", "color": "#06B6D4", "player": lungs['Player'], "val": int(lungs['IronLungs']), "unit": "PTS TOTAL (BRUT)", "desc": "Plus gros volume total de points marqués à la sueur du front (sans bonus)."},
         {"title": "KING OF DECKS", "icon": "🃏", "color": "#8B5CF6", "player": decks['Player'], "val": int(decks['MaxDeck']), "unit": "PTS (7 MATCHS)", "desc": "Meilleur cumul de points sur 7 matchs consécutifs."},
         {"title": "THE ROCK", "icon": "🛡️", "color": C_GREEN, "player": rock['Player'], "val": int(rock['Count30']), "unit": "MATCHS", "desc": "Le plus grand nombre de matchs dans la Safe Zone (> 30 pts)."},
         {"title": "THE 6TH MAN", "icon": "🏀", "color": "#6366F1", "player": sixth['Player'], "val": int(sixth['SixthMan']), "unit": "MATCHS (30-40)", "desc": "Le plus grand nombre de scores solides situés dans la zone 30-40 pts."},
-        {"title": "ZEN MASTER", "icon": "🧘", "color": "#38BDF8", "player": zen['Player'], "val": f"{int(zen['ReliabilityPct'])}%", "unit": "FIABILITÉ", "desc": "Plus haut taux de fiabilité (Pourcentage de matchs > 20 pts)."},
+        {"title": "THE SHIELD", "icon": "🛡️", "color": "#3B82F6", "player": shield['Player'], "val": int(shield['ShieldCount']), "unit": "DERNIERES PLACES", "desc": "Le joueur ayant fini le moins souvent à la dernière place du classement journalier."},
         {"title": "IRON MAN", "icon": "🤖", "color": "#4F46E5", "player": iron_man['Player'], "val": int(iron_man['MaxNoCarrot']), "unit": "MATCHS", "desc": "Plus longue série historique de matchs sans aucune carotte."},
         {"title": "IRON WALL", "icon": "🧱", "color": "#78350F", "player": wall['Player'], "val": int(wall['Worst']), "unit": "PIRE SCORE", "desc": "Le 'Pire score' le plus élevé de la saison (Plancher haut)."},
         {"title": "THE METRONOME", "icon": "⏰", "color": C_IRON, "player": metronome['Player'], "val": f"{metronome['StdDev']:.1f}", "unit": "ECART TYPE", "desc": "Le joueur le plus régulier (Plus faible écart-type)."},
+
+        # IV. LE STYLE
         {"title": "HUMAN TORCH", "icon": "🔥", "color": "#BE123C", "player": torch['Player'], "val": f"{torch['Last15']:.1f}", "unit": "PTS / 15J", "desc": "Meilleure forme du moment (Moyenne sur les 15 derniers matchs)."},
         {"title": "RISING STAR", "icon": "🚀", "color": "#34D399", "player": rising['Player'], "val": f"+{rising['ProgressionPct']:.1f}%", "unit": "PROGRESSION", "desc": "Plus grosse progression de forme (Moyenne 15j vs Moyenne Saison)."},
+        {"title": "THE SOLOIST", "icon": "🎸", "color": "#A855F7", "player": soloist['Player'], "val": int(soloist['Soloist']), "unit": "SOLOS > 40", "desc": "Le plus grand nombre de soirs où il a été le seul de l'équipe à franchir la barre des 40 pts."},
         {"title": "THE PHOENIX", "icon": "🐣", "color": "#F97316", "player": phoenix['Player'], "val": int(phoenix['MaxPhoenix']), "unit": "PTS REBOND", "desc": "Meilleur score réalisé le lendemain d'une carotte (< 20 pts)."},
         {"title": "THE ALCHEMIST", "icon": "⚗️", "color": C_BONUS, "player": alchemist['Player'], "val": int(alchemist['Bonus_Gained']), "unit": "PTS BONUS", "desc": "Le plus grand volume de points gagnés grâce aux multiplicateurs."},
+        {"title": "THE GHOST", "icon": "👻", "color": "#CBD5E1", "player": ghost['Player'], "val": int(ghost['Ghost']), "unit": "SCORES > 35 (NO MVP)", "desc": "Le plus grand nombre de gros scores (> 35 pts) sans jamais décrocher le titre de MVP du soir."},
         {"title": "THE MANIAC", "icon": "🤪", "color": "#D946EF", "player": maniac['Player'], "val": f"{maniac['ModeScore']}", "unit": f"{maniac['ModeCount']} FOIS", "desc": "Le score précis le plus souvent répété par ce joueur."},
         {"title": "THE ALBATROSS", "icon": "🦅", "color": "#2DD4BF", "player": albatross['Player'], "val": int(albatross['Spread']), "unit": "AMPLITUDE", "desc": "Plus grand écart constaté entre le record et le pire score."},
         {"title": "THE GAMBLER", "icon": "🎰", "color": "#E11D48", "player": gambler['Player'], "val": f"{gambler['StdDev']:.1f}", "unit": "VOLATILITÉ", "desc": "Le joueur le plus instable (Plus forte variation de performance)."},
+        {"title": "THE BRAQUEUR", "icon": "🥷", "color": "#334155", "player": braqueur['Player'], "val": int(braqueur['Braqueur']), "unit": "PTS (MIN BP)", "desc": "Le score le plus faible ayant suffi pour décrocher un Best Pick."},
+
+        # V. LE MUR DE LA HONTE
         {"title": "BAD LUCK", "icon": "🍀❌", "color": "#99F6E4", "player": bad_luck['Player'], "val": int(bad_luck['BadLuck']), "unit": "PTS (NO BP)", "desc": "Le plus gros score réalisé sans obtenir le Best Pick ce soir-là."},
         {"title": "CRASH TEST", "icon": "💥", "color": C_RED, "player": crash['Player'], "val": int(crash['Worst_Bonus']), "unit": "PTS MIN (X2)", "desc": "Le pire score réalisé alors qu'un bonus était actif."},
         {"title": "BAD BUSINESS", "icon": "💸", "color": "#9CA3AF", "player": bad_biz['Player'], "val": int(bad_biz['Bonus_Gained']), "unit": "PTS BONUS", "desc": "Le moins de points gagnés grâce aux bonus (Manque de rentabilité)."},
         {"title": "THE BRICK", "icon": "🏗️", "color": "#6B7280", "player": brick['Player'], "val": int(brick['Worst_Raw']), "unit": "PTS MIN (BRUT)", "desc": "Le pire score brut enregistré cette saison."},
+        {"title": "MISTER CLEAN", "icon": "🧼", "color": "#E0F2FE", "player": mister_clean['Player'], "val": int(mister_clean['Carottes']), "unit": "CAROTTES (TOTAL)", "desc": "Le plus petit nombre de carottes récoltées sur la saison."},
         {"title": "THE FARMER", "icon": "🥕", "color": C_ORANGE, "player": farmer['Player'], "val": int(farmer['Carottes']), "unit": "CAROTTES", "desc": "Le plus grand nombre de carottes récoltées (< 20 pts)."}
     ]
 

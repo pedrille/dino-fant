@@ -352,52 +352,6 @@ def render_player_lab(df, full_stats):
             st.markdown(html_card, unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown("<h3 style='margin-bottom:10px'>📡 PROFIL ATHLÉTIQUE</h3>", unsafe_allow_html=True)
-
-    c_radar_graph, c_radar_legend = st.columns([2, 1], gap="large")
-    with c_radar_graph:
-        max_avg = full_stats['Moyenne'].max(); max_best = full_stats['Best'].max(); max_last10 = full_stats['Last10'].max(); max_nukes = full_stats['Nukes'].max()
-        reg_score = 100 - ((p_data['StdDev'] / full_stats['StdDev'].max()) * 100)
-        r_vals = [(p_data['Moyenne'] / max_avg) * 100, (p_data['Best'] / max_best) * 100, (p_data['Last10'] / max_last10) * 100, reg_score, (p_data['Nukes'] / (max_nukes if max_nukes > 0 else 1)) * 100]
-        r_cats = ['SCORING', 'CEILING', 'FORME', 'RÉGULARITÉ', 'CLUTCH']
-        fig_radar = go.Figure(data=go.Scatterpolar(r=r_vals + [r_vals[0]], theta=r_cats + [r_cats[0]], fill='toself', line_color=C_ACCENT, fillcolor="rgba(206, 17, 65, 0.3)"))
-        fig_radar.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 100], showticklabels=False, linecolor='#333'), bgcolor='rgba(0,0,0,0)'), paper_bgcolor='rgba(0,0,0,0)', font=dict(color='white', size=14, family="Rajdhani"), margin=dict(t=20, b=20, l=40, r=40), height=400)
-        st.plotly_chart(fig_radar, use_container_width=True)
-
-    with c_radar_legend:
-        st.markdown("""<div class='legend-box'><div class='legend-item'><div class='legend-title'>SCORING</div><div class='legend-desc'>Volume de points moyen sur la période.</div></div><div class='legend-item'><div class='legend-title'>CEILING (PLAFOND)</div><div class='legend-desc'>Record personnel (Potentiel max sur un match).</div></div><div class='legend-item'><div class='legend-title'>FORME</div><div class='legend-desc'>Dynamique actuelle sur les 10 derniers matchs.</div></div><div class='legend-item'><div class='legend-title'>RÉGULARITÉ</div><div class='legend-desc'>Capacité à éviter les gros écarts de score.</div></div><div class='legend-item'><div class='legend-title'>CLUTCH</div><div class='legend-desc'>Fréquence des très gros scores (> 50 points).</div></div></div>""", unsafe_allow_html=True)
-
-    c_dist, c_trend = st.columns(2, gap="medium")
-    with c_dist:
-        if not p_hist_all.empty:
-            st.markdown("#### 📊 DISTRIBUTION DES SCORES", unsafe_allow_html=True)
-            fig_hist = px.histogram(p_hist_all, x="Score", nbins=15, color_discrete_sequence=[C_ACCENT], text_auto=True)
-            fig_hist.update_traces(marker_line_color='white', marker_line_width=1, opacity=0.8)
-            fig_hist.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, margin=dict(l=0, r=0, t=10, b=0), height=250, xaxis_title=None, yaxis_title=None, bargap=0.1)
-            st.plotly_chart(fig_hist, use_container_width=True)
-
-    with c_trend:
-        if not p_hist_all.empty:
-            st.markdown("#### 📈 TENDANCE (15 DERNIERS MATCHS)", unsafe_allow_html=True)
-            last_15_data = p_hist_all.sort_values('Pick').tail(15)
-            if not last_15_data.empty:
-                fig_trend = px.line(last_15_data, x="Pick", y="Score", markers=True)
-                fig_trend.update_traces(line_color=C_GOLD, marker_color=C_ACCENT, marker_size=8)
-                fig_trend.add_hline(y=p_data['Moyenne'], line_dash="dot", line_color=C_TEXT, annotation_text="Moy. Période", annotation_position="bottom right")
-                fig_trend.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, margin=dict(l=0, r=0, t=10, b=0), height=250, xaxis_title=None, yaxis_title=None)
-                st.plotly_chart(fig_trend, use_container_width=True)
-
-    if not p_hist_all.empty:
-        st.markdown("#### 🏔️ PARCOURS PÉRIODE", unsafe_allow_html=True)
-        team_season_avg = df['Score'].mean()
-        fig_evol = px.line(p_hist_all, x="Pick", y="Score", markers=True)
-        fig_evol.update_traces(line_color=C_BLUE, line_width=2, marker_size=4)
-        fig_evol.add_hline(y=p_data['Moyenne'], line_dash="dot", line_color=C_TEXT, annotation_text="Moy. Joueur", annotation_position="top left")
-        fig_evol.add_hline(y=team_season_avg, line_dash="dash", line_color=C_ORANGE, annotation_text="Moy. Team", annotation_position="bottom right", annotation_font_color=C_ORANGE)
-        fig_evol.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, margin=dict(l=0, r=0, t=30, b=0), height=300, xaxis_title="Pick #", yaxis_title="Points TTFL", legend=dict(font=dict(color="#E5E7EB")))
-        st.plotly_chart(fig_evol, use_container_width=True)
-
-    st.markdown("<br>", unsafe_allow_html=True)
     st.markdown("<h3 style='margin-bottom:15px'>⚔️ DUEL : LE COMPARATEUR</h3>", unsafe_allow_html=True)
 
     dc1, dc2 = st.columns(2)
@@ -492,28 +446,26 @@ def render_bonus_x2(df):
             monthly_gain['Month'] = pd.Categorical(monthly_gain['Month'], categories=existing_months, ordered=True)
             monthly_gain = monthly_gain.sort_values('Month')
             
-            # Calcul cumulé
-            monthly_gain['Cumul'] = monthly_gain['RealGain'].cumsum()
-
-            # Graphique combiné (Bar + Line)
-            fig_m = go.Figure()
-            fig_m.add_trace(go.Bar(
-                x=monthly_gain['Month'], 
-                y=monthly_gain['RealGain'],
-                name='Gain Mensuel',
-                marker_color='teal',
-                text=monthly_gain['RealGain'],
-                textposition='auto'
-            ))
-            fig_m.add_trace(go.Scatter(
-                x=monthly_gain['Month'],
-                y=monthly_gain['Cumul'],
-                name='Cumul Saison',
-                mode='lines+markers',
-                line=dict(color='#FCD34D', width=3)
-            ))
-            
-            fig_m.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, xaxis=dict(title=None), yaxis=dict(showgrid=False, visible=False), height=300, showlegend=True, legend=dict(orientation="h", y=1.1))
+            # -- MODIFICATION GRAPHIQUE --
+            # Utilisation de px.bar pour des couleurs distinctes par mois et suppression de la ligne de cumul.
+            fig_m = px.bar(
+                monthly_gain, 
+                x='Month', 
+                y='RealGain', 
+                text='RealGain', 
+                color='Month', # Une couleur différente par mois
+                color_discrete_sequence=px.colors.qualitative.Prism # Palette qualitative sympa
+            )
+            fig_m.update_traces(textposition='outside', texttemplate='%{text:.0f}')
+            fig_m.update_layout(
+                plot_bgcolor='rgba(0,0,0,0)', 
+                paper_bgcolor='rgba(0,0,0,0)', 
+                font={'color': '#AAA'}, 
+                xaxis=dict(title=None), 
+                yaxis=dict(showgrid=False, visible=False), 
+                height=300, 
+                showlegend=False # Pas besoin de légende car les barres sont explicites
+            )
             st.plotly_chart(fig_m, use_container_width=True)
             
         with c_chart2:
@@ -638,28 +590,34 @@ def render_trends(df, latest_pick):
     fig_team_15.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, xaxis=dict(showgrid=False, title=None), yaxis=dict(showgrid=True, gridcolor='#222', title="Points Totaux"), height=350, showlegend=False)
     st.plotly_chart(fig_team_15, use_container_width=True)
 
+    # Calcul dynamique Top 3 / Flop 3 (SANS FILTRE STRICT)
     player_season_avg = df.groupby('Player')['Score'].mean()
-    player_15_avg = df[df['Pick'] > (latest_pick - 15)].groupby('Player')['Score'].mean()
-    delta_df = pd.DataFrame({'Season': player_season_avg, 'Last15': player_15_avg})
-    delta_df['Delta'] = delta_df['Last15'] - delta_df['Season']
-    delta_df = delta_df.dropna()
-    hot_players = delta_df[delta_df['Delta'] > 0].sort_values('Delta', ascending=False).head(5)
-    cold_players = delta_df[delta_df['Delta'] < 0].sort_values('Delta', ascending=True).head(5)
+    # On regarde la forme sur les 7 derniers matchs pour plus de réactivité
+    player_7_avg = df[df['Pick'] > (latest_pick - 7)].groupby('Player')['Score'].mean()
+    
+    delta_df = pd.DataFrame({'Season': player_season_avg, 'Recent': player_7_avg})
+    delta_df['Delta'] = delta_df['Recent'] - delta_df['Season']
+    delta_df = delta_df.dropna().sort_values('Delta', ascending=False)
+    
+    # Top 3
+    hot_players = delta_df.head(3)
+    # Flop 3
+    cold_players = delta_df.tail(3).sort_values('Delta', ascending=True)
 
     c_hot, c_cold = st.columns(2, gap="large")
     with c_hot:
-        st.markdown(f"<div class='trend-box'><div class='hot-header'>🔥 EN FEU (SUR-PERFORMANCE)</div><div style='font-size:0.8rem; color:#888; margin-bottom:10px'>Joueurs ayant le plus progressé sur 15j vs Moyenne Saison.</div>", unsafe_allow_html=True)
-        if hot_players.empty: st.info("Personne.")
+        st.markdown(f"<div class='trend-box'><div class='hot-header'>🔥 TOP 3 PROGRESSION (7J)</div><div style='font-size:0.8rem; color:#888; margin-bottom:10px'>Joueurs avec la meilleure dynamique récente.</div>", unsafe_allow_html=True)
+        if hot_players.empty: st.info("Données insuffisantes.")
         else:
             for p, row in hot_players.iterrows():
-                st.markdown(f"<div class='trend-card-row'><div class='trend-name'>{p}</div><div style='text-align:right'><div class='trend-val' style='color:{C_GREEN}'>{row['Last15']:.1f}</div><div class='trend-delta' style='color:{C_GREEN}'>+{row['Delta']:.1f}</div></div></div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='trend-card-row'><div class='trend-name'>{p}</div><div style='text-align:right'><div class='trend-val' style='color:{C_GREEN}'>{row['Recent']:.1f}</div><div class='trend-delta' style='color:{C_GREEN}'>+{row['Delta']:.1f}</div></div></div>", unsafe_allow_html=True)
         st.markdown("</div>", unsafe_allow_html=True)
     with c_cold:
-        st.markdown(f"<div class='trend-box'><div class='cold-header'>❄️ DANS LE DUR (SOUS-PERFORMANCE)</div><div style='font-size:0.8rem; color:#888; margin-bottom:10px'>Joueurs en baisse de régime sur 15j vs Moyenne Saison.</div>", unsafe_allow_html=True)
-        if cold_players.empty: st.info("Personne.")
+        st.markdown(f"<div class='trend-box'><div class='cold-header'>❄️ TOP 3 REGRESSION (7J)</div><div style='font-size:0.8rem; color:#888; margin-bottom:10px'>Joueurs en baisse de régime récente.</div>", unsafe_allow_html=True)
+        if cold_players.empty: st.info("Données insuffisantes.")
         else:
             for p, row in cold_players.iterrows():
-                st.markdown(f"<div class='trend-card-row'><div class='trend-name'>{p}</div><div style='text-align:right'><div class='trend-val' style='color:{C_RED}'>{row['Last15']:.1f}</div><div class='trend-delta' style='color:{C_RED}'>{row['Delta']:.1f}</div></div></div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='trend-card-row'><div class='trend-name'>{p}</div><div style='text-align:right'><div class='trend-val' style='color:{C_RED}'>{row['Recent']:.1f}</div><div class='trend-delta' style='color:{C_RED}'>{row['Delta']:.1f}</div></div></div>", unsafe_allow_html=True)
         st.markdown("</div>", unsafe_allow_html=True)
         
     st.markdown("<br>", unsafe_allow_html=True)
@@ -821,7 +779,7 @@ def render_hall_of_fame(df_full_history, bp_map, daily_max_map):
         {"title": "THE BRAQUEUR", "icon": "🥷", "color": "#334155", "player": braqueur['Player'], "val": int(braqueur['Braqueur']), "unit": "PTS (MIN BP)", "desc": "Le score le plus faible ayant suffi pour décrocher un Best Pick."},
 
         # V. LE MUR DE LA HONTE
-        {"title": "BAD LUCK", "icon": "🍀❌", "color": "#99F6E4", "player": bad_luck['Player'], "val": int(bad_luck['BadLuck']), "unit": "PTS (NO BP)", "desc": "Le plus gros score réalisé sans obtenir le Best Pick ce soir-là."},
+        {"title": "BAD LUCK", "icon": "🍀❌", "color": "#99F6E4", "player": bad_luck['Player'], "val": int(bad_luck['BadLuck']), "unit": "PTS (NO BP)", "desc": "Le plus gros score réalisé sans obtenir le Best Pick ce soir-là (Score Brut)."},
         {"title": "CRASH TEST", "icon": "💥", "color": C_RED, "player": crash['Player'], "val": int(crash['Worst_Bonus']), "unit": "PTS MIN (X2)", "desc": "Le pire score réalisé alors qu'un bonus était actif."},
         {"title": "BAD BUSINESS", "icon": "💸", "color": "#9CA3AF", "player": bad_biz['Player'], "val": int(bad_biz['Bonus_Gained']), "unit": "PTS BONUS", "desc": "Le moins de points gagnés grâce aux bonus (Manque de rentabilité)."},
         {"title": "THE BRICK", "icon": "🏗️", "color": "#6B7280", "player": brick['Player'], "val": int(brick['Worst_Raw']), "unit": "PTS MIN (BRUT)", "desc": "Le pire score brut enregistré cette saison."},

@@ -400,7 +400,8 @@ try:
             views.render_dashboard(day_df, full_stats, latest_pick, team_avg_per_pick, team_streak_nc, df)
         
         elif menu == "Team HQ":
-            views.render_team_hq(df, latest_pick, team_rank, team_history, team_avg_per_pick, total_bp_team)
+            # CORRECTION ARGUMENT: Ajout de full_stats ici
+            views.render_team_hq(df, latest_pick, team_rank, team_history, team_avg_per_pick, total_bp_team, full_stats)
         
         elif menu == "Player Lab":
             views.render_player_lab(df, full_stats)
@@ -409,7 +410,8 @@ try:
             views.render_bonus_x2(df)
         
         elif menu == "No-Carrot":
-            views.render_no_carrot(df, team_streak_nc, full_stats)
+            # CORRECTION ARGUMENT: Ajout de df_full_history pour le calcul global
+            views.render_no_carrot(df, team_streak_nc, full_stats, df_full_history)
         
         elif menu == "Trends":
             views.render_trends(df, latest_pick)

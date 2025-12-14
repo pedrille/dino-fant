@@ -873,13 +873,26 @@ def render_weekly_report(df_full_history):
         # Simulation Visuelle de l'Embed Discord (Style CSS proche de Discord)
         rotw_display = ', '.join([f"**{p}** ({nb})" for p, nb in data['rotw_leaderboard']])
         
+        # Formatage des listes pour l'aperçu
+        sniper_disp = format_winners_list(data['sniper'], " BP")
+        muraille_disp = format_winners_list(data['muraille'], " 🥕")
+        remontada_disp = format_winners_list(data['remontada'], " pts prog.")
+        podium_disp = format_winners_list([(p['player'], p['score']) for p in data['podium']])
+
+        # Séries
+        streaks_html = ""
+        if data['streaks']:
+            streaks_html = '<br>'.join([f"{s['msg']} **{s['player']}** : {s['val']} {s['type']} (Record : {s['record']})" for s in data['streaks']])
+        else:
+            streaks_html = "Aucune série significative cette semaine."
+
         st.markdown(f"""
         <div style="background:#2f3136; border-left: 4px solid #CE1141; padding:15px; border-radius:4px; font-family:'Inter', sans-serif; color:#dcddde; font-size: 0.9rem; line-height: 1.5;">
             <div style="font-weight:700; color:#FFF; font-size:1.1rem; margin-bottom:10px">🦖 RAPTORS WEEKLY REPORT • SEMAINE #{meta['week_num']}</div>
             <div style="font-style:italic; color:#b9bbbe; margin-bottom:15px">*Bilan du Lundi {meta['start_date']} au Dimanche {meta['end_date']}*</div>
             
             <div style="font-weight:700; color:#FFF; margin-top:10px">🏆 LE PODIUM HEBDOMADAIRE</div>
-            {format_winners_list([(p['player'], p['score']) for p in data['podium']])} (format complet sur Discord)
+            {podium_disp} (format complet sur Discord)
             
             <div style="font-weight:700; color:#FFF; margin-top:10px">👑 COURSE AU TRÔNE (Total Titres)</div>
             {rotw_display if rotw_display else "Aucun historique."}
@@ -887,20 +900,20 @@ def render_weekly_report(df_full_history):
             <div style="display:flex; margin-top:15px; gap:20px; flex-wrap:wrap;">
                 <div style="flex:1; min-width:150px;">
                     <div style="font-weight:700; color:#FFF">🎯 SNIPER HEBDO</div>
-                    {format_winners_list(data['sniper'], " BP")}
+                    {sniper_disp}
                 </div>
                 <div style="flex:1; min-width:150px;">
                     <div style="font-weight:700; color:#FFF">🛡️ LA MURAILLE</div>
-                    {format_winners_list(data['muraille'], " 🥕")}
+                    {muraille_disp}
                 </div>
                 <div style="flex:1; min-width:150px;">
                     <div style="font-weight:700; color:#FFF">🧗 LA REMONTADA</div>
-                    {format_winners_list(data['remontada'], " pts prog.")}
+                    {remontada_disp}
                 </div>
             </div>
             
             <div style="font-weight:700; color:#FFF; margin-top:15px">🔥 SÉRIES & DYNAMIQUES</div>
-            {'<br>'.join([f"{s['msg']} **{s['player']}** : {s['val']} {s['type']} (Record : {s['record']})" for s in data['streaks']]) if data['streaks'] else "Aucune série significative cette semaine."}
+            {streaks_html}
             
             <div style="font-weight:700; color:#FFF; margin-top:15px">📊 TEAM PULSE</div>
             📈 Moyenne : <b>{data['team_stats']['avg']:.1f}</b> ({"+" if data['team_stats']['diff']>0 else ""}{data['team_stats']['diff']:.1f})<br>

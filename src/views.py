@@ -846,7 +846,7 @@ def render_hall_of_fame(df_full_history, bp_map, daily_max_map):
             with cols[i]:
                 st.markdown(f"""<div class="glass-card" style="position:relative; overflow:hidden; margin-bottom:10px"><div style="position:absolute; right:-10px; top:-10px; font-size:5rem; opacity:0.05; pointer-events:none">{card['icon']}</div><div class="hof-badge" style="color:{card['color']}; border:1px solid {card['color']}">{card['icon']} {card['title']}</div><div style="display:flex; justify-content:space-between; align-items:flex-end;"><div><div class="hof-player">{card['player']}</div><div style="font-size:0.8rem; color:#888; margin-top:4px">{card['desc']}</div></div><div><div class="hof-stat" style="color:{card['color']}">{card['val']}</div><div class="hof-unit">{card['unit']}</div></div></div></div>""", unsafe_allow_html=True)
 
-# --- 8. WEEKLY REPORT (VERSION V22.6 FINAL) ---
+# --- 8. WEEKLY REPORT (FINAL V23) ---
 def render_weekly_report(df_full_history):
     section_title("WEEKLY <span class='highlight'>REPORT</span>", "Générateur de Rapport Premium")
     
@@ -872,35 +872,29 @@ def render_weekly_report(df_full_history):
         st.markdown(f"### 📄 APERÇU DISCORD (Deck #{target_deck})")
         
         border_color = f"#{meta['color']:06x}"
-        
-        # Helpers
         def clean_md(txt): return txt.replace("**", "<b>").replace("**", "</b>") if isinstance(txt, str) else txt
         
+        # Liste Exhaustive
         def fmt_list(lst, suffix=""):
             if not lst: return "Personne."
-            # On affiche TOUTE la liste
             items = [f"<b>{x[0]}</b> ({x[1]}{suffix})" for x in lst]
             return ", ".join(items)
 
-        # Podium Moyenne
+        # Podium avec Moyenne
         podium_html = ""
         medals = ["🥇", "🥈", "🥉"]
         for p in data['podium']:
-            # Couronne si Vainqueur Officiel (Somme)
             crown = " 👑" if p.get('is_winner') else ""
             rotw_tag = f" (ROTW #{p['rotw_count']})" if p.get('is_winner') and p['rotw_count'] > 0 else ""
-            
             podium_html += f"""
             <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
                 <div>{medals[p['rank']-1]} <b>{p['player']}</b>{crown}{rotw_tag}</div>
-                <div style="text-align:right;"><b>{p['score']:.1f}</b> <span style="font-size:0.8em; color:#888;">(Tot: {p['total']})</span></div>
+                <div style="text-align:right;"><b>{p['avg']:.1f}</b> <span style="font-size:0.8em; color:#888;">(Tot: {p['total']})</span></div>
             </div>
             """
 
         perfect_disp = ", ".join([f"<b>{p}</b>" for p in data['perfect']]) if data['perfect'] else "Aucun joueur parfait cette semaine."
         daily_html = "<br>".join(data['daily_mvp'])
-        
-        # Analyse : On insère des sauts de ligne HTML
         analysis_html = "<br><br>".join([clean_md(l) for l in data['analysis']]) if data['analysis'] else "Pas de dynamique majeure détectée."
         
         sniper_txt = fmt_list(lists['sniper'], " BP")

@@ -846,88 +846,147 @@ def render_hall_of_fame(df_full_history, bp_map, daily_max_map):
             with cols[i]:
                 st.markdown(f"""<div class="glass-card" style="position:relative; overflow:hidden; margin-bottom:10px"><div style="position:absolute; right:-10px; top:-10px; font-size:5rem; opacity:0.05; pointer-events:none">{card['icon']}</div><div class="hof-badge" style="color:{card['color']}; border:1px solid {card['color']}">{card['icon']} {card['title']}</div><div style="display:flex; justify-content:space-between; align-items:flex-end;"><div><div class="hof-player">{card['player']}</div><div style="font-size:0.8rem; color:#888; margin-top:4px">{card['desc']}</div></div><div><div class="hof-stat" style="color:{card['color']}">{card['val']}</div><div class="hof-unit">{card['unit']}</div></div></div></div>""", unsafe_allow_html=True)
 
-# --- 8. WEEKLY REPORT (CORRIGÉ AFFICHAGE) ---
+# --- 8. WEEKLY REPORT (VERSION V22.0 "DEEP ANALYSIS") ---
 def render_weekly_report(df_full_history):
-    section_title("WEEKLY <span class='highlight'>REPORT</span>", "Générateur du Rapport Hebdomadaire")
+    section_title("WEEKLY <span class='highlight'>REPORT</span>", "Générateur de Rapport Avancé")
     
-    data = generate_weekly_report_data(df_full_history)
-    
-    if not data:
-        st.error("Impossible de générer le rapport. Vérifiez que la colonne 'Deck' est bien remplie dans le fichier Excel.")
+    if df_full_history.empty or 'Deck' not in df_full_history.columns:
+        st.error("Données insuffisantes pour le module Weekly.")
         return
 
-    meta = data.get('meta', {})
-    stats = data.get('team_stats', {})
+    # 1. SELECTEUR DE SEMAINE (DECK)
+    max_deck = int(df_full_history['Deck'].max())
+    if max_deck == 0:
+        st.warning("Aucun Deck validé pour le moment.")
+        return
+
+    # On propose de choisir le Deck (Défaut = Dernier)
+    col_sel, _ = st.columns([1, 3])
+    with col_sel:
+        target_deck = st.selectbox(
+            "📅 Sélectionner la Semaine (Deck)", 
+            options=range(max_deck, 0, -1), # De Max à 1
+            index=0,
+            format_func=lambda x: f"Deck #{x}"
+        )
+
+    # 2. GENERATION DES DONNEES
+    data = generate_weekly_report_data(df_full_history, target_deck)
     
-    c1, c2 = st.columns([2, 1])
+    if not data:
+        st.error("Erreur lors de la génération du rapport.")
+        return
+
+    meta = data['meta']
+    stats = data['team_stats']
+    
+    # 3. INTERFACE DE PREVISUALISATION
+    c1, c2 = st.columns([2, 1], gap="large")
     
     with c1:
-        st.markdown(f"### 📄 APERÇU DU RAPPORT (Deck #{meta.get('week_num', '?')})")
-        st.markdown(f"<div style='color:#888; font-size:0.9rem; margin-bottom:20px'>Période : {meta.get('start_date', '?')} au {meta.get('end_date', '?')}</div>", unsafe_allow_html=True)
+        st.markdown(f"### 📄 APERÇU DISCORD (Deck #{target_deck})")
+        st.caption(f"Période : {meta['start_date']} au {meta['end_date']}")
         
+        # --- FONCTIONS FORMATAGE ---
         def clean_md(text):
             if not isinstance(text, str): return text
             return text.replace("**", "<b>").replace("**", "</b>")
 
-        rotw_list = [f"<b>{p}</b> ({nb})" for p, nb in data.get('rotw_leaderboard', [])]
-        rotw_display = ', '.join(rotw_list)
-        
-        sniper_disp = clean_md(format_winners_list(data.get('sniper', []), " BP"))
-        muraille_disp = clean_md(format_winners_list(data.get('muraille', []), " 🥕"))
-        remontada_disp = clean_md(format_winners_list(data.get('remontada', []), " pts prog."))
-        sunday_disp = clean_md(format_winners_list(data.get('sunday_clutch', []), " pts")) if data.get('sunday_clutch') else "N/A"
-        
-        podium_raw = [(p['player'], p['score']) for p in data.get('podium', [])]
-        podium_disp = clean_md(format_winners_list(podium_raw))
+        # Podium
+        podium_html = ""
+        medals = ["🥇", "🥈", "🥉"]
+        for p in data['podium']:
+            crown = " 👑" if p['titles'] > 0 and p['rank'] == 1 else ""
+            # On affiche le nombre de titres cumulés si 1er
+            title_txt = f" (Titre #{p['titles']})" if p['rank'] == 1 and p['titles'] > 0 else ""
+            podium_html += f"<div>{medals[p['rank']-1]} <b>{p['player']}</b> • {p['score']} pts{title_txt}</div>"
 
-        streaks_html = "Aucune série significative cette semaine."
-        if data.get('streaks'):
-            lines = []
-            for s in data['streaks']:
-                lines.append(f"{s['msg']} <b>{s['player']}</b> : {s['val']} {s['type']} (Record : {s['record']})")
-            streaks_html = '<br>'.join(lines)
-
-        avg_val = stats.get('avg', 0)
-        diff_val = stats.get('diff', 0)
-        sign = "+" if diff_val > 0 else ""
+        # Listes
+        sniper_disp = clean_md(format_winners_list(data['sniper'], " BP"))
+        muraille_disp = ", ".join([f"<b>{x[0]}</b>" for x in data['muraille']]) if data['muraille'] else "Personne (la honte 🥕)"
+        remontada_disp = clean_md(format_winners_list(data['remontada'], ""))
+        sunday_disp = clean_md(format_winners_list(data['sunday_clutch'], " pts"))
         
-        # --- HTML NON INDENTÉ POUR EVITER LE BUG D'AFFICHAGE ---
-        html_content = f"""
-<div style="background:#2f3136; border-left: 4px solid #CE1141; padding:15px; border-radius:4px; font-family:'Inter', sans-serif; color:#dcddde; font-size: 0.9rem; line-height: 1.5;">
-<div style="font-weight:700; color:#FFF; font-size:1.1rem; margin-bottom:10px">🦖 RAPTORS WEEKLY REPORT • DECK #{meta.get('week_num', '?')}</div>
-<div style="font-style:italic; color:#b9bbbe; margin-bottom:15px">*Bilan du Lundi {meta.get('start_date', '?')} au Dimanche {meta.get('end_date', '?')}*</div>
-<div style="font-weight:700; color:#FFF; margin-top:10px">🏆 LE PODIUM HEBDOMADAIRE</div>
-{podium_disp} (détail complet sur Discord)
-<div style="font-weight:700; color:#FFF; margin-top:10px">👑 COURSE AU TRÔNE (Total Titres)</div>
-{rotw_display if rotw_display else "Aucun historique."}
-<div style="display:flex; margin-top:15px; gap:20px; flex-wrap:wrap;">
-<div style="flex:1; min-width:150px;"><div style="font-weight:700; color:#FFF">🎯 SNIPER HEBDO</div>{sniper_disp}</div>
-<div style="flex:1; min-width:150px;"><div style="font-weight:700; color:#FFF">🛡️ LA MURAILLE</div>{muraille_disp}</div>
-</div>
-<div style="display:flex; margin-top:10px; gap:20px; flex-wrap:wrap;">
-<div style="flex:1; min-width:150px;"><div style="font-weight:700; color:#FFF">🧗 LA REMONTADA</div>{remontada_disp}</div>
-<div style="flex:1; min-width:150px;"><div style="font-weight:700; color:#FFF">🌅 SUNDAY CLUTCH</div>{sunday_disp}</div>
-</div>
-<div style="font-weight:700; color:#FFF; margin-top:15px">🔥 SÉRIES & DYNAMIQUES</div>
-{streaks_html}
-<div style="font-weight:700; color:#FFF; margin-top:15px">📊 TEAM PULSE</div>
-📈 Moyenne : <b>{avg_val:.1f}</b> ({sign}{diff_val:.1f})<br>
-🎯 Best Picks : {stats.get('bp', 0)}<br>
-🛡️ Carottes : {stats.get('carrots', 0)}<br>
-{ "✨ <b>CLEAN SHEET SEMAINE !</b> (Aucun score < 25)" if stats.get('clean_sheet') else ""}
-</div>
-"""
-        st.markdown(html_content, unsafe_allow_html=True)
+        # Perfect
+        perfect_disp = ", ".join([f"<b>{p}</b>" for p in data['perfect']]) if data['perfect'] else "Aucun joueur parfait cette semaine."
+
+        # Daily MVP
+        daily_html = "<br>".join([f"<span style='opacity:0.8'>{d}</span>" for d in data['daily_mvp']])
+
+        # Séries & Deep Analysis
+        streaks_html = "<br>".join(data['streaks_analysis']) if data['streaks_analysis'] else "Pas de dynamique marquante."
+
+        # Couleur latérale Discord
+        border_color = f"#{meta['discord_color']:06x}"
+
+        # --- RENDU HTML ---
+        st.markdown(f"""
+        <div style="background:#2f3136; border-left: 5px solid {border_color}; padding:20px; border-radius:5px; font-family:'Helvetica', sans-serif; color:#dcddde; font-size: 0.95rem; line-height: 1.5; box-shadow: 0 4px 15px rgba(0,0,0,0.3);">
+            
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; border-bottom:1px solid #444; padding-bottom:10px;">
+                <div>
+                    <div style="font-weight:800; color:#FFF; font-size:1.2rem;">🦖 RAPTORS WEEKLY • DECK #{target_deck}</div>
+                    <div style="font-style:italic; color:#b9bbbe; font-size:0.8rem;">Du {meta['start_date']} au {meta['end_date']}</div>
+                </div>
+                <div style="text-align:right;">
+                    <div style="font-weight:bold; color:#FFF; font-size:1.1rem;">{stats['avg']:.1f} PTS</div>
+                    <div style="font-size:0.8rem; color:{'#57F287' if '+' in stats['diff_txt'] else '#ED4245'}">{stats['diff_txt']}</div>
+                </div>
+            </div>
+
+            <div style="display:flex; gap:20px; margin-bottom:20px;">
+                <div style="flex:1;">
+                    <div style="font-weight:700; color:#FFF; margin-bottom:5px;">🏆 LE PODIUM</div>
+                    {podium_html}
+                </div>
+                <div style="flex:1; border-left:1px solid #444; padding-left:15px;">
+                    <div style="font-weight:700; color:#FFF; margin-bottom:5px;">💎 THE PERFECT (30+)</div>
+                    {perfect_disp}
+                </div>
+            </div>
+
+            <div style="background:rgba(0,0,0,0.2); padding:10px; border-radius:5px; margin-bottom:20px;">
+                <div style="font-weight:700; color:#FFF; margin-bottom:5px;">📅 MVP PAR SOIR</div>
+                {daily_html}
+            </div>
+
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom:20px;">
+                <div><span style="color:#FFF; font-weight:bold;">🎯 SNIPER :</span> {sniper_disp}</div>
+                <div><span style="color:#FFF; font-weight:bold;">🛡️ MURAILLE :</span> {muraille_disp}</div>
+                <div><span style="color:#FFF; font-weight:bold;">🚀 PROGRESSION :</span> {remontada_disp}</div>
+                <div><span style="color:#FFF; font-weight:bold;">🌅 SUNDAY CLUTCH :</span> {sunday_disp}</div>
+            </div>
+
+            <div style="margin-bottom:15px;">
+                <div style="font-weight:700; color:#FFF; margin-bottom:5px;">🔬 ANALYSE & DYNAMIQUES</div>
+                {streaks_html}
+            </div>
+
+            <div style="border-top:1px solid #444; pt:10px; margin-top:10px; font-size:0.8rem; color:#72767d; display:flex; justify-content:space-between;">
+                <span>🎯 {stats['bp']} BP</span>
+                <span>🥕 {stats['carrots']} Carottes</span>
+                <span>{ "✨ CLEAN SHEET" if stats['clean_sheet'] else ""}</span>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
     with c2:
-        st.markdown("### 🚀 ACTIONS")
-        st.info("Vérifiez l'aperçu ci-contre. Si tout est bon, cliquez sur le bouton pour envoyer sur Discord.")
+        st.markdown("### 📡 DIFFUSION")
+        st.markdown("""
+        <div style="background:rgba(255,255,255,0.05); padding:15px; border-radius:10px; border:1px solid rgba(255,255,255,0.1)">
+            <div style="font-size:0.8rem; color:#AAA; margin-bottom:5px">STATUT DU RAPPORT</div>
+            <div style="color:#10B981; font-weight:bold; margin-bottom:15px">✅ PRÊT À L'ENVOI</div>
+            <div style="font-size:0.8rem; color:#AAA">Ce rapport sera envoyé sur le canal Discord configuré. Vérifiez bien les données avant de cliquer.</div>
+        </div>
+        """, unsafe_allow_html=True)
         
-        if st.button("ENVOYER LE RAPPORT", type="primary", use_container_width=True):
-            with st.spinner("Envoi en cours..."):
+        st.markdown("<br>", unsafe_allow_html=True)
+        
+        if st.button("🚀 ENVOYER SUR DISCORD", type="primary", use_container_width=True):
+            with st.spinner("Transmission au QG..."):
                 res = send_weekly_report_discord(data, "https://raptorsttfl-dashboard.streamlit.app/")
                 if res == "success":
-                    st.success("✅ Rapport envoyé avec succès !")
                     st.balloons()
+                    st.success("Rapport publié avec succès !")
                 else:
-                    st.error(f"Erreur lors de l'envoi : {res}")
+                    st.error(f"Erreur : {res}")

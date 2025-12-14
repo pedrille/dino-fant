@@ -48,11 +48,15 @@ def render_dashboard(day_df, full_stats, latest_pick, team_avg_per_pick, team_st
     c_perf, c_clutch = st.columns([2, 1])
     with c_perf:
         st.markdown("<h3 style='margin-bottom:10px; margin-top:0; color:#FFF; font-family:Rajdhani; font-weight:700'>📊 SCORES DU SOIR</h3>", unsafe_allow_html=True)
-        day_df['BarColor'] = day_df['Score'].apply(get_uniform_color)
-        fig = px.bar(day_df, x='Player', y='Score', text='Score', color='BarColor', color_discrete_map="identity")
-        fig.update_traces(textposition='outside', marker_line_width=0, textfont_size=14, textfont_family="Rajdhani", cliponaxis=False)
         
-        # AJOUT LIGNE MOYENNE SAISON TEAM
+        # --- RESTAURATION DES COULEURS ---
+        # On applique la fonction get_uniform_color (qui est dans src.utils et renvoie Rouge/Gris/Vert)
+        day_df['BarColor'] = day_df['Score'].apply(get_uniform_color)
+        
+        # On utilise color_discrete_map="identity" pour dire à Plotly d'utiliser les codes hexadécimaux de la colonne BarColor
+        fig = px.bar(day_df, x='Player', y='Score', text='Score', color='BarColor', color_discrete_map="identity")
+        
+        fig.update_traces(textposition='outside', marker_line_width=0, textfont_size=14, textfont_family="Rajdhani", cliponaxis=False)
         fig.add_hline(y=team_avg_per_pick, line_dash="dot", line_color=C_TEXT, annotation_text="Moy. Team", annotation_position="top right")
         
         fig.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA', 'family': 'Inter'}, yaxis=dict(showgrid=False, visible=False), xaxis=dict(title=None, tickfont=dict(size=14, family='Rajdhani', weight=600)), height=350, showlegend=False, margin=dict(l=0, r=0, t=0, b=0))
@@ -294,6 +298,7 @@ def render_player_lab(df, full_stats):
             if r['IsBonus']:
                 bg = C_GOLD; txt_col = "#000000"; border = f"2px solid {C_GOLD}"
             else:
+                # RETABLISSEMENT DE LA COULEUR CONDITIONNELLE
                 bg = get_uniform_color(r['Score'])
                 txt_col = "#FFF"; border = "1px solid rgba(255,255,255,0.1)"
 
@@ -449,13 +454,16 @@ def render_player_lab(df, full_stats):
 
 # --- 4. BONUS X2 ---
 def render_bonus_x2(df):
+    # MODIFICATION: On force l'utilisation de df_full_history passé en argument depuis app.py
+    # (Note: ici df est déjà df_full_history grâce au câblage dans app.py)
     section_title("BONUS <span class='highlight'>ZONE</span>", "Analyse de Rentabilité")
+    
     df_bonus = df[df['IsBonus'] == True].copy()
     
     # Calcul du Gain Réel
     df_bonus['RealGain'] = df_bonus['Score'] - df_bonus['ScoreVal']
     
-    # Indicateur visuel
+    # Indicateur visuel de rentabilité (Rentable si score de base >= 40, donc score total >= 80)
     df_bonus['Rentable'] = df_bonus['ScoreVal'].apply(lambda x: "✅" if x >= 40 else "❌")
 
     available_months = df['Month'].unique().tolist()
@@ -484,20 +492,21 @@ def render_bonus_x2(df):
         with c_chart1:
             st.markdown("#### 💰 IMPACT MENSUEL (GAINS RÉELS)")
             monthly_gain = df_bonus.groupby('Month')['RealGain'].sum().reset_index()
-            # Tri
+            # Tri chronologique sécurisé
             month_order = ['octobre', 'novembre', 'decembre', 'janvier', 'fevrier', 'mars', 'avril']
             existing_months = [m for m in month_order if m in monthly_gain['Month'].unique()]
             monthly_gain['Month'] = pd.Categorical(monthly_gain['Month'], categories=existing_months, ordered=True)
             monthly_gain = monthly_gain.sort_values('Month')
             
-            # Bar Chart avec Couleurs Mensuelles
+            # -- MODIFICATION GRAPHIQUE --
+            # Utilisation de px.bar pour des couleurs distinctes par mois et suppression de la ligne de cumul.
             fig_m = px.bar(
                 monthly_gain, 
                 x='Month', 
                 y='RealGain', 
                 text='RealGain', 
-                color='Month', 
-                color_discrete_sequence=px.colors.qualitative.Prism
+                color='Month', # Une couleur différente par mois
+                color_discrete_sequence=px.colors.qualitative.Prism # Palette qualitative sympa
             )
             fig_m.update_traces(textposition='outside', texttemplate='%{text:.0f}')
             fig_m.update_layout(
@@ -507,7 +516,7 @@ def render_bonus_x2(df):
                 xaxis=dict(title=None), 
                 yaxis=dict(showgrid=False, visible=False), 
                 height=300, 
-                showlegend=False
+                showlegend=False # Pas besoin de légende car les barres sont explicites
             )
             st.plotly_chart(fig_m, use_container_width=True)
             
@@ -530,10 +539,11 @@ def render_bonus_x2(df):
         )
 
 # --- 5. NO CARROT ---
+# CORRECTION: Ajout de l'argument df_full_history pour calculer l'Iron Man global
 def render_no_carrot(df, team_streak_nc, full_stats, df_full_history):
     section_title("ANTI <span class='highlight'>CARROTE</span>", "Objectif Fiabilité & Constance")
     
-    # 1. CALCULS SUR FULL HISTORY
+    # 1. CALCULS SUR FULL HISTORY (Saison Complète)
     max_streak_team_hist = 0
     curr_str = 0
     sorted_picks_asc = sorted(df_full_history['Pick'].unique())
@@ -574,13 +584,14 @@ def render_no_carrot(df, team_streak_nc, full_stats, df_full_history):
         carrot_chart = pd.merge(all_picks, carrot_counts, on='Pick', how='left').fillna(0)
         carrot_chart['Color'] = carrot_chart['Carottes'].apply(lambda x: "#374151" if x == 0 else C_RED)
         
-        # Pire soir
+        # Trouver le pire soir pour l'annotation
         max_carrots = carrot_chart['Carottes'].max()
         worst_day = carrot_chart[carrot_chart['Carottes'] == max_carrots].iloc[0]
         
         fig_car = px.bar(carrot_chart, x='Pick', y='Carottes')
         fig_car.update_traces(marker_color=carrot_chart['Color'])
         
+        # Ajout Annotation
         if max_carrots > 0:
             fig_car.add_annotation(
                 x=worst_day['Pick'], y=max_carrots,
@@ -631,13 +642,18 @@ def render_trends(df, latest_pick):
     fig_team_15.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, xaxis=dict(showgrid=False, title=None), yaxis=dict(showgrid=True, gridcolor='#222', title="Points Totaux"), height=350, showlegend=False)
     st.plotly_chart(fig_team_15, use_container_width=True)
 
+    # Calcul dynamique Top 3 / Flop 3 (SANS FILTRE STRICT)
     player_season_avg = df.groupby('Player')['Score'].mean()
+    # On regarde la forme sur les 7 derniers matchs pour plus de réactivité
     player_7_avg = df[df['Pick'] > (latest_pick - 7)].groupby('Player')['Score'].mean()
+    
     delta_df = pd.DataFrame({'Season': player_season_avg, 'Recent': player_7_avg})
     delta_df['Delta'] = delta_df['Recent'] - delta_df['Season']
     delta_df = delta_df.dropna().sort_values('Delta', ascending=False)
     
+    # Top 3
     hot_players = delta_df.head(3)
+    # Flop 3
     cold_players = delta_df.tail(3).sort_values('Delta', ascending=True)
 
     c_hot, c_cold = st.columns(2, gap="large")
@@ -657,13 +673,27 @@ def render_trends(df, latest_pick):
         st.markdown("</div>", unsafe_allow_html=True)
         
     st.markdown("<br>", unsafe_allow_html=True)
+    # --- MOMENTUM CHART (ALL PLAYERS 15 DAYS) - CORRECTION GRAPH MANQUANT ---
     st.markdown("#### 📉 MOMENTUM (15 DERNIERS JOURS)")
     st.markdown("<div class='chart-desc'>Trajectoire de tous les joueurs actifs sur la période.</div>", unsafe_allow_html=True)
     
+    # Filter only players who played in last 15 days
     active_players = df_15['Player'].unique()
     momentum_data = df_15[df_15['Player'].isin(active_players)].sort_values('Pick')
+    
+    # COLORER LA LIGNE PAR JOUEUR
     fig_mom = px.line(momentum_data, x='Pick', y='Score', color='Player', markers=True, color_discrete_map=PLAYER_COLORS)
-    fig_mom.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font={'color': '#AAA'}, xaxis=dict(showgrid=False), yaxis=dict(showgrid=True, gridcolor='#222'), height=500, legend=dict(orientation="h", y=-0.2, font=dict(color="#E5E7EB")))
+    
+    # FIX UI: LEGEND COLOR TOO DARK
+    fig_mom.update_layout(
+        plot_bgcolor='rgba(0,0,0,0)', 
+        paper_bgcolor='rgba(0,0,0,0)', 
+        font={'color': '#AAA'}, 
+        xaxis=dict(showgrid=False), 
+        yaxis=dict(showgrid=True, gridcolor='#222'), 
+        height=500,
+        legend=dict(orientation="h", y=-0.2, font=dict(color="#E5E7EB"))
+    )
     st.plotly_chart(fig_mom, use_container_width=True)
 
 # --- 7. HALL OF FAME ---
@@ -681,10 +711,17 @@ def render_hall_of_fame(df_full_history, bp_map, daily_max_map):
         details = SEASONS_DETAILS[i]
         dates_txt = details["dates"]
         desc_txt = details["desc"]
+
         is_finished = real_latest_pick > s_end
         is_active = s_start <= real_latest_pick <= s_end
         is_future = real_latest_pick < s_start
-        card_bg = "rgba(255,255,255,0.02)"; border_col = "#333"; title_col = "#666"; icon = "🔒"; player_name = "VERROUILLÉ"; score_val = "-"
+
+        card_bg = "rgba(255,255,255,0.02)"
+        border_col = "#333"
+        title_col = "#666"
+        icon = "🔒"
+        player_name = "VERROUILLÉ"
+        score_val = "-"
 
         if not is_future:
             df_part = df_full_history[(df_full_history['Pick'] >= s_start) & (df_full_history['Pick'] <= s_end)]
@@ -694,9 +731,11 @@ def render_hall_of_fame(df_full_history, bp_map, daily_max_map):
                     player_name = leader.index[0]
                     score_val = f"{int(leader.values[0])} pts"
             if is_finished:
-                card_bg = "linear-gradient(145deg, rgba(255, 215, 0, 0.1) 0%, rgba(0,0,0,0.4) 100%)"; border_col = C_GOLD; title_col = C_GOLD; icon = "👑"
+                card_bg = "linear-gradient(145deg, rgba(255, 215, 0, 0.1) 0%, rgba(0,0,0,0.4) 100%)"
+                border_col = C_GOLD; title_col = C_GOLD; icon = "👑"
             elif is_active:
-                card_bg = "linear-gradient(145deg, rgba(59, 130, 246, 0.1) 0%, rgba(0,0,0,0.4) 100%)"; border_col = C_BLUE; title_col = C_BLUE; icon = "🔥"
+                card_bg = "linear-gradient(145deg, rgba(59, 130, 246, 0.1) 0%, rgba(0,0,0,0.4) 100%)"
+                border_col = C_BLUE; title_col = C_BLUE; icon = "🔥"
 
         with trophy_cols[i]:
             st.markdown(f"""<div style="background:{card_bg}; border:1px solid {border_col}; border-radius:10px; padding:15px; text-align:center; height:100%; position:relative;"><div style="font-size:0.7rem; color:#888;">{short_name}</div><div style="font-family:Rajdhani; font-weight:700; color:{title_col}; font-size:0.9rem;">{full_title}</div><div style="font-size:1.5rem; margin-bottom:5px;">{icon}</div><div style="font-family:Rajdhani; font-weight:800; color:#FFF; font-size:1.1rem;">{player_name}</div><div style="font-size:0.8rem; color:{title_col};">{score_val}</div></div>""", unsafe_allow_html=True)
@@ -751,6 +790,7 @@ def render_hall_of_fame(df_full_history, bp_map, daily_max_map):
     farmer = full_stats_global.sort_values('Carottes', ascending=False).iloc[0]
 
     hof_list = [
+        # I. L'ELITE
         {"title": "THE GOAT", "icon": "🏆", "color": C_GOLD, "player": goat['Player'], "val": f"{goat['Moyenne']:.1f}", "unit": "PTS MOYENNE", "desc": "Meilleure moyenne générale de la saison (Bonus inclus)."},
         {"title": "REAL MVP", "icon": "💎", "color": C_PURE, "player": mvp['Player'], "val": f"{mvp['Moyenne_Raw']:.1f}", "unit": "PTS MOYENNE (BRUT)", "desc": "Meilleure moyenne de points 'purs', sans compter les bonus."},
         {"title": "THE SNIPER", "icon": "🎯", "color": C_PURPLE, "player": sniper['Player'], "val": int(sniper['BP_Count']), "unit": "BEST PICKS", "desc": "Le plus grand nombre de Best Picks trouvés cette saison."},
@@ -760,6 +800,7 @@ def render_hall_of_fame(df_full_history, bp_map, daily_max_map):
         {"title": "THE DOMINATOR", "icon": "🦖", "color": "#10B981", "player": dominator['Player'], "val": int(dominator['Dominator']), "unit": "MATCHS > MOYENNE", "desc": "Le plus grand nombre de fois où le joueur a scoré plus que la moyenne journalière de l'équipe."},
         {"title": "THE SAVIOR", "icon": "🙏", "color": "#FCD34D", "player": savior['Player'], "val": int(savior['SaviorScore']), "unit": "PTS (PIRE SOIR)", "desc": "Le MVP de la pire soirée collective de la saison."},
 
+        # II. LES SCOREURS
         {"title": "THE CEILING", "icon": "🏔️", "color": "#FB7185", "player": ceiling['Player'], "val": int(ceiling['Best']), "unit": "PTS MAX", "desc": "Record absolu de points sur un match (Bonus inclus)."},
         {"title": "PURE SCORER", "icon": "🏀", "color": "#7C3AED", "player": pure_scorer['Player'], "val": int(pure_scorer['Best_Raw']), "unit": "PTS MAX (BRUT)", "desc": "Record absolu de points sur un match (Score brut)."},
         {"title": "THE ALIEN", "icon": "👽", "color": C_ALIEN, "player": alien['Player'], "val": int(alien['MaxAlien']), "unit": "MATCHS", "desc": "Plus longue série de matchs consécutifs au-dessus de 60 pts."},
@@ -767,6 +808,7 @@ def render_hall_of_fame(df_full_history, bp_map, daily_max_map):
         {"title": "HEAVY HITTER", "icon": "🥊", "color": "#DC2626", "player": heavy['Player'], "val": int(heavy['Count40']), "unit": "PICKS > 40", "desc": "Le plus grand nombre de scores très élevés (> 40 pts)."},
         {"title": "UNSTOPPABLE", "icon": "⚡", "color": "#F59E0B", "player": unstoppable['Player'], "val": int(unstoppable['MaxUnstoppable']), "unit": "SERIE > 40", "desc": "Plus longue série historique de matchs consécutifs au-dessus de 40 pts."},
 
+        # III. LES FIABLES
         {"title": "IRON LUNGS", "icon": "🫁", "color": "#06B6D4", "player": lungs['Player'], "val": int(lungs['IronLungs']), "unit": "PTS TOTAL (BRUT)", "desc": "Plus gros volume total de points marqués à la sueur du front (sans bonus)."},
         {"title": "KING OF DECKS", "icon": "🃏", "color": "#8B5CF6", "player": decks['Player'], "val": int(decks['MaxDeck']), "unit": "PTS (7 MATCHS)", "desc": "Meilleur cumul de points sur 7 matchs consécutifs."},
         {"title": "THE ROCK", "icon": "🛡️", "color": C_GREEN, "player": rock['Player'], "val": int(rock['Count30']), "unit": "MATCHS", "desc": "Le plus grand nombre de matchs dans la Safe Zone (> 30 pts)."},
@@ -776,6 +818,7 @@ def render_hall_of_fame(df_full_history, bp_map, daily_max_map):
         {"title": "IRON WALL", "icon": "🧱", "color": "#78350F", "player": wall['Player'], "val": int(wall['Worst']), "unit": "PIRE SCORE", "desc": "Le 'Pire score' le plus élevé de la saison (Plancher haut)."},
         {"title": "THE METRONOME", "icon": "⏰", "color": C_IRON, "player": metronome['Player'], "val": f"{metronome['StdDev']:.1f}", "unit": "ECART TYPE", "desc": "Le joueur le plus régulier (Plus faible écart-type)."},
 
+        # IV. LE STYLE
         {"title": "HUMAN TORCH", "icon": "🔥", "color": "#BE123C", "player": torch['Player'], "val": f"{torch['Last15']:.1f}", "unit": "PTS / 15J", "desc": "Meilleure forme du moment (Moyenne sur les 15 derniers matchs)."},
         {"title": "RISING STAR", "icon": "🚀", "color": "#34D399", "player": rising['Player'], "val": f"+{rising['ProgressionPct']:.1f}%", "unit": "PROGRESSION", "desc": "Plus grosse progression de forme (Moyenne 15j vs Moyenne Saison)."},
         {"title": "THE SOLOIST", "icon": "🎸", "color": "#A855F7", "player": soloist['Player'], "val": int(soloist['Soloist']), "unit": "SOLOS > 40", "desc": "Le plus grand nombre de soirs où il a été le seul de l'équipe à franchir la barre des 40 pts."},
@@ -787,6 +830,7 @@ def render_hall_of_fame(df_full_history, bp_map, daily_max_map):
         {"title": "THE GAMBLER", "icon": "🎰", "color": "#E11D48", "player": gambler['Player'], "val": f"{gambler['StdDev']:.1f}", "unit": "VOLATILITÉ", "desc": "Le joueur le plus instable (Plus forte variation de performance)."},
         {"title": "THE BRAQUEUR", "icon": "🥷", "color": "#334155", "player": braqueur['Player'], "val": int(braqueur['Braqueur']), "unit": "PTS (MIN BP)", "desc": "Le score le plus faible ayant suffi pour décrocher un Best Pick."},
 
+        # V. LE MUR DE LA HONTE
         {"title": "BAD LUCK", "icon": "🍀❌", "color": "#99F6E4", "player": bad_luck['Player'], "val": int(bad_luck['BadLuck']), "unit": "PTS (NO BP)", "desc": "Le plus gros score réalisé sans obtenir le Best Pick ce soir-là (Score Brut)."},
         {"title": "CRASH TEST", "icon": "💥", "color": C_RED, "player": crash['Player'], "val": int(crash['Worst_Bonus']), "unit": "PTS MIN (X2)", "desc": "Le pire score réalisé alors qu'un bonus était actif."},
         {"title": "BAD BUSINESS", "icon": "💸", "color": "#9CA3AF", "player": bad_biz['Player'], "val": int(bad_biz['Bonus_Gained']), "unit": "PTS BONUS", "desc": "Le moins de points gagnés grâce aux bonus (Manque de rentabilité)."},
@@ -806,11 +850,11 @@ def render_hall_of_fame(df_full_history, bp_map, daily_max_map):
 def render_weekly_report(df_full_history):
     section_title("WEEKLY <span class='highlight'>REPORT</span>", "Générateur du Rapport Hebdomadaire")
     
-    # Génération des données
+    # Génération des données via le moteur weekly.py
     data = generate_weekly_report_data(df_full_history)
     
     if not data:
-        st.error("Impossible de générer le rapport (Données insuffisantes).")
+        st.error("Impossible de générer le rapport (Données insuffisantes ou format de date incorrect).")
         return
 
     meta = data['meta']
@@ -818,6 +862,7 @@ def render_weekly_report(df_full_history):
     # --- ALERTE SI DIMANCHE MANQUANT ---
     if not meta['has_sunday']:
         st.error("⚠️ ATTENTION : Les données du Dimanche semblent manquantes pour cette semaine !")
+        st.warning("Le rapport risque d'être incomplet. Assurez-vous d'avoir saisi les scores de la nuit dernière dans le GSheet avant d'envoyer.")
     
     c1, c2 = st.columns([2, 1])
     
@@ -825,33 +870,43 @@ def render_weekly_report(df_full_history):
         st.markdown(f"### 📄 APERÇU DU RAPPORT (Semaine #{meta['week_num']})")
         st.markdown(f"<div style='color:#888; font-size:0.9rem; margin-bottom:20px'>Période : {meta['start_date']} au {meta['end_date']}</div>", unsafe_allow_html=True)
         
-        # Simulation Visuelle de l'Embed Discord
+        # Simulation Visuelle de l'Embed Discord (Style CSS proche de Discord)
+        rotw_display = ', '.join([f"**{p}** ({nb})" for p, nb in data['rotw_leaderboard']])
+        
         st.markdown(f"""
-        <div style="background:#202225; border-left: 4px solid #CE1141; padding:15px; border-radius:4px; font-family:'Inter'; color:#DCDDDE;">
+        <div style="background:#2f3136; border-left: 4px solid #CE1141; padding:15px; border-radius:4px; font-family:'Inter', sans-serif; color:#dcddde; font-size: 0.9rem; line-height: 1.5;">
             <div style="font-weight:700; color:#FFF; font-size:1.1rem; margin-bottom:10px">🦖 RAPTORS WEEKLY REPORT • SEMAINE #{meta['week_num']}</div>
+            <div style="font-style:italic; color:#b9bbbe; margin-bottom:15px">*Bilan du Lundi {meta['start_date']} au Dimanche {meta['end_date']}*</div>
             
-            <div style="font-weight:700; color:#FFF; margin-top:15px">🏆 LE PODIUM HEBDOMADAIRE</div>
-            {format_winners_list([(p['player'], p['score']) for p in data['podium']])}
+            <div style="font-weight:700; color:#FFF; margin-top:10px">🏆 LE PODIUM HEBDOMADAIRE</div>
+            {format_winners_list([(p['player'], p['score']) for p in data['podium']])} (format complet sur Discord)
             
-            <div style="font-weight:700; color:#FFF; margin-top:15px">👑 COURSE AU TRÔNE</div>
-            {', '.join([f"{p} ({nb})" for p, nb in data['rotw_leaderboard']])}
+            <div style="font-weight:700; color:#FFF; margin-top:10px">👑 COURSE AU TRÔNE (Total Titres)</div>
+            {rotw_display if rotw_display else "Aucun historique."}
             
-            <div style="display:flex; margin-top:15px; gap:20px">
-                <div>
+            <div style="display:flex; margin-top:15px; gap:20px; flex-wrap:wrap;">
+                <div style="flex:1; min-width:150px;">
                     <div style="font-weight:700; color:#FFF">🎯 SNIPER HEBDO</div>
                     {format_winners_list(data['sniper'], " BP")}
                 </div>
-                <div>
+                <div style="flex:1; min-width:150px;">
                     <div style="font-weight:700; color:#FFF">🛡️ LA MURAILLE</div>
                     {format_winners_list(data['muraille'], " 🥕")}
+                </div>
+                <div style="flex:1; min-width:150px;">
+                    <div style="font-weight:700; color:#FFF">🧗 LA REMONTADA</div>
+                    {format_winners_list(data['remontada'], " pts prog.")}
                 </div>
             </div>
             
             <div style="font-weight:700; color:#FFF; margin-top:15px">🔥 SÉRIES & DYNAMIQUES</div>
-            {len(data['streaks'])} série(s) active(s) détectée(s).
+            {'<br>'.join([f"{s['msg']} **{s['player']}** : {s['val']} {s['type']} (Record : {s['record']})" for s in data['streaks']]) if data['streaks'] else "Aucune série significative cette semaine."}
             
             <div style="font-weight:700; color:#FFF; margin-top:15px">📊 TEAM PULSE</div>
-            Moyenne : {data['team_stats']['avg']:.1f}
+            📈 Moyenne : <b>{data['team_stats']['avg']:.1f}</b> ({"+" if data['team_stats']['diff']>0 else ""}{data['team_stats']['diff']:.1f})<br>
+            🎯 Best Picks : {data['team_stats']['bp']}<br>
+            🛡️ Carottes : {data['team_stats']['carrots']}<br>
+            { "✨ <b>CLEAN SHEET SEMAINE !</b> (Aucun score < 25)" if data['team_stats']['clean_sheet'] else ""}
         </div>
         """, unsafe_allow_html=True)
 

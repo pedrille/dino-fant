@@ -22,57 +22,44 @@ def get_uniform_color(score):
     if s < 20:  return "#EF4444"
     return "#374151"
 
-# --- NOUVELLES FONCTIONS DE FORMATAGE (Pour Weekly V25) ---
+# --- FORMATAGE LISTES ---
 def format_list_discord(lst, suffix=""):
     """Transforme une liste [(Joueur, Val), ...] en string pour Discord."""
     if not lst: return "Personne."
-    # Format : Joueur (Val), Joueur (Val)
     items = [f"**{x[0]}** ({x[1]}{suffix})" for x in lst]
     return ", ".join(items)
 
 def format_simple_list(lst):
-    """Pour les listes sans valeurs (ex: Murailles [('Joueur', 0)] -> Joueur, Joueur)."""
+    """Pour les listes sans valeurs."""
     if not lst: return "Personne."
     names = [f"**{x[0]}**" for x in lst]
     return ", ".join(names)
 
-# --- ANCIENNE FONCTION (Restaurée pour éviter le crash des imports) ---
+# --- FONCTION LEGACY (Obligatoire pour éviter le crash Dashboard) ---
 def format_winners_list(winners, suffix=""):
-    """
-    Legacy : Utilisée par d'autres vues (Dashboard).
-    Exemple : [('Gabeur', 2), ('Mims', 2)] -> "**Gabeur** & **Mims** (2)"
-    """
     if not winners: return "Personne."
-    
     names = [f"**{w[0]}**" for w in winners]
     val = winners[0][1] 
-    
-    if len(names) == 1:
-        return f"{names[0]} ({val}{suffix})"
-    elif len(names) == 2:
-        return f"{names[0]} & {names[1]} ({val}{suffix})"
-    else:
-        return f"{', '.join(names[:-1])} & {names[-1]} ({val}{suffix})"
+    if len(names) == 1: return f"{names[0]} ({val}{suffix})"
+    elif len(names) == 2: return f"{names[0]} & {names[1]} ({val}{suffix})"
+    else: return f"{', '.join(names[:-1])} & {names[-1]} ({val}{suffix})"
 
-# --- FONCTION D'ENVOI ROTW (V25) ---
+# --- FONCTION D'ENVOI ROTW (V25 WIDE EDITION) ---
 def send_weekly_report_discord(data, dashboard_url):
-    """
-    Envoie le rapport ROTW structuré vers Discord via Webhook.
-    Attend le dictionnaire 'data' généré par weekly.py (V25).
-    """
-    if not WEBHOOK_URL:
-        return "URL Webhook manquante."
+    if not WEBHOOK_URL: return "URL Webhook manquante."
 
     meta = data['meta']
     stats = data['stats']
     lists = data['lists']
     
+    # SEPARATEUR VISUEL (Pour élargir et aérer)
+    SEP = "〰️〰️〰️〰️〰️〰️〰️〰️〰️〰️〰️〰️"
+
     # 1. PODIUM
     podium_txt = ""
     medals = ["🥇", "🥈", "🥉"]
     for p in data['podium']:
         crown = " 👑" if p.get('is_winner') else ""
-        # Format : 🥇 **Joueur** • 45.2 pts (Tot: 250)
         podium_txt += f"{medals[p['rank']-1]} **{p['player']}**{crown} • {p['avg']:.1f} pts (Tot: {p['total']})\n"
     
     # 2. COURSE AU TRÔNE
@@ -86,48 +73,46 @@ def send_weekly_report_discord(data, dashboard_url):
 
     # 3. STATS & LISTES
     sniper_txt = format_list_discord(lists['sniper'], " BP")
-    muraille_txt = format_simple_list(lists['muraille']) # Juste les noms
+    muraille_txt = format_simple_list(lists['muraille'])
     remontada_txt = format_list_discord(lists['remontada'], " pts")
     sunday_txt = format_list_discord(lists['sunday'], " pts")
     perfect_txt = ", ".join([f"**{p}**" for p in data['perfect']]) if data['perfect'] else "Aucun."
 
-    # 4. ANALYSE (Bloc Texte)
+    # 4. ANALYSE
     analysis_txt = ""
     if data.get('analysis'):
-        analysis_txt = "\n".join(data['analysis'])
+        # Ajout d'un tiret pour faire une liste propre
+        analysis_txt = "\n".join([f"🔹 {line}" for line in data['analysis']])
     else:
         analysis_txt = "_Pas de dynamique majeure détectée._"
 
-    # 5. CONSTRUCTION EMBED
+    # 5. CONSTRUCTION EMBED AÉRÉ
     embed = {
-        "title": f"🦖 ROTW • DECK #{meta['week_num']}",
-        "description": f"**{meta['dates']}**\n\n📊 **Moyenne Team :** {stats['avg']:.1f} pts ({stats['diff']})",
-        "color": meta['color'], # Couleur dynamique (Vert/Jaune/Rouge selon score)
+        "title": f"🦖 RAPTORS OF THE WEEK • DECK #{meta['week_num']}",
+        "description": f"**{meta['dates']}**\n\n📊 **Moyenne Team :** {stats['avg']:.1f} pts ({stats['diff']})\n\n{SEP}",
+        "color": meta['color'],
         "fields": [
-            # Ligne 1 : Podium & Trône
+            # Ligne 1 : Podium & Trône (On garde côte à côte car ça marche bien)
             {"name": "🏆 PODIUM SEMAINE", "value": podium_txt, "inline": True},
             {"name": "👑 COURSE AU TRÔNE", "value": rotw_txt, "inline": True},
             
-            # Ligne 2 : KPIs
-            {"name": "💎 THE PERFECT (30+)", "value": perfect_txt, "inline": False},
+            # Ligne 2 : Perfect (Pleine largeur)
+            {"name": "💎 THE PERFECT (30+)", "value": perfect_txt + f"\n\n{SEP}", "inline": False},
             
-            # Ligne 3 : Distinctions
-            {"name": "🎯 SNIPER", "value": sniper_txt, "inline": True},
-            {"name": "🛡️ MURAILLE (0 Carotte)", "value": muraille_txt, "inline": True},
+            # Ligne 3 : Distinctions (Pleine largeur pour ne pas écraser le texte)
+            {"name": "🎯 SNIPER & CLUTCH", "value": f"**Sniper :** {sniper_txt}\n**Sunday Clutch :** {sunday_txt}", "inline": False},
             
-            # Ligne 4 : Progression & Clutch
-            {"name": "🚀 PROGRESSION", "value": remontada_txt, "inline": True},
-            {"name": "🌅 SUNDAY CLUTCH", "value": sunday_txt, "inline": True},
+            {"name": "🛡️ DÉFENSE & PROGRESSION", "value": f"**Muraille (0 Carotte) :** {muraille_txt}\n**Progression :** {remontada_txt}\n\n{SEP}", "inline": False},
             
-            # Ligne 5 : Deep Dive
-            {"name": "🔬 ANALYSE & DYNAMIQUES", "value": analysis_txt, "inline": False},
+            # Ligne 4 : Deep Dive (Pleine largeur + espacé)
+            {"name": "🔬 ANALYSE & DYNAMIQUES", "value": analysis_txt + f"\n\n{SEP}", "inline": False},
             
             # Footer Stats
             {"name": "📈 TEAM PULSE", "value": f"🎯 **{stats['bp']}** Best Picks  |  🥕 **{stats['carrots']}** Carottes  |  🛡️ **{stats['safe_zone']}** Safe Zone (>30)", "inline": False},
             
             {"name": "", "value": f"👉 [Accéder au Dashboard]({dashboard_url})", "inline": False}
         ],
-        "footer": {"text": "War Room V25 • Raptors Data Department 🦖"}
+        "footer": {"text": "War Room V25 • Generated by Python 🦖"}
     }
 
     payload = {
@@ -142,6 +127,3 @@ def send_weekly_report_discord(data, dashboard_url):
         else: return f"Erreur {r.status_code}: {r.text}"
     except Exception as e:
         return str(e)
-
-# --- FONCTION LEGACY (Garder pour compatibilité stats.py si besoin) ---
-def format_winner(player): return f"**{player}**"

@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 
-# --- NOTE : PLUS DE GESTION DE DATES (CALENDRIER SUPPRIMÉ) ---
+# --- CONFIGURATION : AUCUNE DATE ---
 
 def get_winners_list(series, maximize=True):
     if series.empty: return []
@@ -10,6 +10,7 @@ def get_winners_list(series, maximize=True):
     return [(player, val) for player, val in winners.items()]
 
 def get_all_scorers(series):
+    """Récupère TOUTE la liste triée."""
     if series.empty: return []
     sorted_series = series.sort_values(ascending=False)
     return [(player, val) for player, val in sorted_series.items()]
@@ -65,7 +66,6 @@ def analyze_streaks_direct(df, player, current_pick_limit, global_records):
         elif curr_30 >= rec_perso_30: icon = "🚨"; status = "[Record Perso !]"
         txt = f"{icon} **{player}** : {curr_30} jours consécutifs > 30 pts {status} (Rec. perso : {rec_perso_30} | Rec. Team : {global_records['Serie30']})"
         lines.append(txt)
-        
     return lines
 
 def generate_weekly_report_data(df_full, target_deck_num=None):
@@ -79,10 +79,12 @@ def generate_weekly_report_data(df_full, target_deck_num=None):
     week_df = df[df['Deck'] == target_deck].copy()
     if week_df.empty: return None
     
+    # Picks
     first_pick = int(week_df['Pick'].min())
     last_pick = int(week_df['Pick'].max())
     period_str = f"Picks #{first_pick} à #{last_pick}"
     
+    # Team Stats
     team_avg = week_df['Score'].mean()
     prev_deck = target_deck - 1
     diff_txt = ""
@@ -95,6 +97,7 @@ def generate_weekly_report_data(df_full, target_deck_num=None):
 
     discord_color = 5763719 if team_avg >= 40 else (16705372 if team_avg >= 30 else 15548997)
 
+    # Podium & Historique ROTW
     stats_week = week_df.groupby('Player')['Score'].agg(['mean', 'sum', 'count']).sort_values('mean', ascending=False)
     
     rotw_history = {}
@@ -113,14 +116,15 @@ def generate_weekly_report_data(df_full, target_deck_num=None):
         
         if is_official_winner: 
             nb_rotw += 1
-            rotw_history[player] = rotw_history.get(player, 0) + 1 # Update local pour le tableau
+            rotw_history[player] = rotw_history.get(player, 0) + 1 
             
         rank = i + 1
         weekly_podium.append({'rank': rank, 'player': player, 'avg': float(row['mean']), 'total': int(row['sum']), 'rotw_count': nb_rotw, 'is_winner': is_official_winner})
 
-    # --- AJOUT DU TABLEAU RECAP ROTW ---
+    # Palmarès Trié
     rotw_leaderboard = sorted([(k, v) for k, v in rotw_history.items() if v > 0], key=lambda x: x[1], reverse=True)
 
+    # Listes
     bp_series = week_df.groupby('Player')['IsBP'].sum()
     snipers = get_all_scorers(bp_series[bp_series > 0])
     
@@ -166,15 +170,19 @@ def generate_weekly_report_data(df_full, target_deck_num=None):
 
     safe_zone_count = len(week_df[week_df['Score'] >= 30])
     
+    # Check Completeness (Dernier pick a-t-il des données ?)
+    is_complete = not week_df[week_df['Pick'] == last_pick].empty
+    
     return {
         "meta": {
             "week_num": target_deck,
             "max_deck": max_deck,
             "dates": period_str,
-            "color": discord_color
+            "color": discord_color,
+            "is_complete": is_complete
         },
         "podium": weekly_podium,
-        "rotw_leaderboard": rotw_leaderboard, # ICI
+        "rotw_leaderboard": rotw_leaderboard,
         "perfect": perfects,
         "daily_mvp": daily_mvps,
         "analysis": analysis_lines,

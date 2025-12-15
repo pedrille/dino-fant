@@ -61,9 +61,12 @@ def load_data():
         
         # --- MAP DES DECKS (Gestion des trous) ---
         deck_map = {}
+        # --- AJOUT 1 : Variable pour stocker la structure théorique ---
+        deck_tracks = {} 
+        # --------------------------------------------------------------
         current_deck = 0
         
-        # On parcourt la ligne des Decks
+        # On parcourt la ligne des Decks pour construire la carte
         for col_idx in range(1, df_raw.shape[1]):
             val = df_raw.iloc[deck_row_idx, col_idx]
             # Si on a une valeur (ex: "1" ou "1.0"), on met à jour le deck courant
@@ -73,7 +76,20 @@ def load_data():
                 except: pass
             deck_map[col_idx] = current_deck
 
-        # --- PARCOURS DES PICKS ---
+            # --- AJOUT 2 : Mémorisation des Picks prévus pour chaque Deck ---
+            # On regarde la ligne "Pick" pour voir s'il y a un numéro prévu
+            raw_pick_struct = df_raw.iloc[pick_row_idx, col_idx]
+            if pd.notna(raw_pick_struct) and raw_pick_struct != "nan" and raw_pick_struct.strip() != "":
+                try:
+                    p_num = int(float(raw_pick_struct.replace(',', '.')))
+                    if current_deck > 0:
+                        if current_deck not in deck_tracks:
+                            deck_tracks[current_deck] = []
+                        deck_tracks[current_deck].append(p_num)
+                except: pass
+            # ------------------------------------------------------------------
+
+        # --- PARCOURS DES PICKS (Lecture des scores) ---
         for col_idx in range(1, df_raw.shape[1]):
             # Lecture du Pick
             raw_pick = df_raw.iloc[pick_row_idx, col_idx]
@@ -132,6 +148,10 @@ def load_data():
         
         if df.empty:
             return pd.DataFrame(), 0, {}, [], {}
+
+        # --- AJOUT 3 : On attache la structure au DataFrame ---
+        df.attrs['deck_tracks'] = deck_tracks
+        # ------------------------------------------------------
 
         # 6. CALCULS STATS (Z-Score, etc.)
         df['ZScore'] = df.groupby('Pick')['Score'].transform(

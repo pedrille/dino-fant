@@ -899,7 +899,7 @@ def render_weekly_report(df_full_history):
 
         rotw_html = ""
         if data.get('rotw_leaderboard'):
-            for idx, (player, count) in enumerate(data['rotw_leaderboard'][:5]):
+            for idx, (player, count) in enumerate(data['rotw_leaderboard'][:10]):
                 icon = "🏆" if idx == 0 else "▪️"
                 rotw_html += f'<div style="display:flex; justify-content:space-between; margin-bottom:4px;"><div>{icon} {player}</div><div style="font-weight:bold;">{count}</div></div>'
         else:

@@ -850,7 +850,7 @@ def render_hall_of_fame(df_full_history, bp_map, daily_max_map):
 
 # --- 8. WEEKLY REPORT (V25.0 FINAL TEXTS) ---
 def render_weekly_report(df_full_history):
-    section_title("WEEKLY <span class='highlight'>REPORT</span>", "Générateur de Rapport Premium")
+    section_title("WEEKLY <span class='highlight'>REPORT</span>", "Générateur de Rapport Hebdo RotW")
     
     if df_full_history.empty or 'Deck' not in df_full_history.columns:
         st.error("Données insuffisantes.")

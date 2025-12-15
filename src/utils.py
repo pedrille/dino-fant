@@ -65,7 +65,7 @@ def send_weekly_report_discord(data, dashboard_url):
     # 2. COURSE AU TRÔNE
     rotw_txt = ""
     if data.get('rotw_leaderboard'):
-        for idx, (player, count) in enumerate(data['rotw_leaderboard'][:5]):
+        for idx, (player, count) in enumerate(data['rotw_leaderboard'][:10]):
             icon = "🏆" if idx == 0 else "▪️"
             rotw_txt += f"{icon} **{player}** : {count}\n"
     else:

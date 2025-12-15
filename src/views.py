@@ -846,7 +846,7 @@ def render_hall_of_fame(df_full_history, bp_map, daily_max_map):
             with cols[i]:
                 st.markdown(f"""<div class="glass-card" style="position:relative; overflow:hidden; margin-bottom:10px"><div style="position:absolute; right:-10px; top:-10px; font-size:5rem; opacity:0.05; pointer-events:none">{card['icon']}</div><div class="hof-badge" style="color:{card['color']}; border:1px solid {card['color']}">{card['icon']} {card['title']}</div><div style="display:flex; justify-content:space-between; align-items:flex-end;"><div><div class="hof-player">{card['player']}</div><div style="font-size:0.8rem; color:#888; margin-top:4px">{card['desc']}</div></div><div><div class="hof-stat" style="color:{card['color']}">{card['val']}</div><div class="hof-unit">{card['unit']}</div></div></div></div>""", unsafe_allow_html=True)
 
-# --- 8. WEEKLY REPORT (V24.0 FINAL - NO DATES) ---
+# --- 8. WEEKLY REPORT (V25.0 - 2 COLS + HISTORIQUE) ---
 def render_weekly_report(df_full_history):
     section_title("WEEKLY <span class='highlight'>REPORT</span>", "Générateur de Rapport Premium")
     
@@ -879,14 +879,23 @@ def render_weekly_report(df_full_history):
             items = [f"<b>{x[0]}</b> ({x[1]}{suffix})" for x in lst]
             return ", ".join(items)
 
-        # HTML APLATI POUR EVITER LE BUG STREAMLIT
+        # 1. Podium Semaine
         podium_html = ""
         medals = ["🥇", "🥈", "🥉"]
         for p in data['podium']:
             crown = " 👑" if p.get('is_winner') else ""
-            rotw_tag = f" (ROTW #{p['rotw_count']})" if p.get('is_winner') and p['rotw_count'] > 0 else ""
-            podium_html += f'<div style="display:flex; justify-content:space-between; margin-bottom:4px;"><div>{medals[p["rank"]-1]} <b>{p["player"]}</b>{crown}{rotw_tag}</div><div style="text-align:right;"><b>{p["avg"]:.1f}</b> <span style="font-size:0.8em; color:#888;">(Tot: {p["total"]})</span></div></div>'
+            podium_html += f'<div style="display:flex; justify-content:space-between; margin-bottom:4px;"><div>{medals[p["rank"]-1]} <b>{p["player"]}</b>{crown}</div><div style="text-align:right;"><b>{p["avg"]:.1f}</b> <span style="font-size:0.8em; color:#888;">(Tot: {p["total"]})</span></div></div>'
 
+        # 2. Palmarès ROTW (Tableau simple)
+        rotw_html = ""
+        if data.get('rotw_leaderboard'):
+            for idx, (player, count) in enumerate(data['rotw_leaderboard'][:5]):
+                icon = "🏆" if idx == 0 else "▪️"
+                rotw_html += f'<div style="display:flex; justify-content:space-between; margin-bottom:4px;"><div>{icon} {player}</div><div style="font-weight:bold;">{count}</div></div>'
+        else:
+            rotw_html = "<div style='font-style:italic; color:#888;'>Aucun titre distribué.</div>"
+
+        # 3. Perfect
         perfect_disp = ", ".join([f"<b>{p}</b>" for p in data['perfect']]) if data['perfect'] else "Aucun joueur parfait cette semaine."
         
         daily_html = ""
@@ -906,16 +915,17 @@ def render_weekly_report(df_full_history):
         sunday_txt = fmt_list(lists['sunday'], " pts")
         diff_col = '#57F287' if '+' in stats['diff'] else '#ED4245'
 
-        # BLOC HTML FINAL
+        # BLOC HTML FINAL (LAYOUT 2 COLS EN HAUT)
         html_content = f"""<div style="background:#2f3136; border-left: 5px solid {border_color}; padding:20px; border-radius:8px; font-family:sans-serif; color:#dcddde; font-size: 0.95rem; line-height: 1.5;">
 <div style="margin-bottom:20px; border-bottom:1px solid #444; padding-bottom:15px; display:flex; justify-content:space-between; align-items:center;">
 <div><div style="font-weight:900; color:#FFF; font-size:1.4rem; letter-spacing:1px;">🦖 ROTW • DECK #{target_deck}</div><div style="color:#b9bbbe; font-size:0.9rem; margin-top:4px;">Raptors Of The Week - {meta['dates']}</div></div>
 <div style="text-align:right;"><div style="font-weight:bold; color:#FFF; font-size:1.4rem;">{stats['avg']:.1f} PTS</div><div style="font-size:0.8rem; color:{diff_col}">{stats['diff']}</div></div>
 </div>
-<div style="display:flex; gap:20px; margin-bottom:25px;">
-<div style="flex:1;"><div style="font-weight:700; color:#FFF; font-size:1rem; margin-bottom:2px;">🏆 LE PODIUM (MOYENNE)</div><div style="font-size:0.75rem; color:#888; font-style:italic; margin-bottom:8px;">Classement par moyenne de points/match.</div>{podium_html}</div>
-<div style="flex:1; background:rgba(255,255,255,0.03); padding:10px; border-radius:5px;"><div style="font-weight:700; color:#FFF; margin-bottom:2px;">💎 THE PERFECT (30+)</div><div style="font-size:0.75rem; color:#888; font-style:italic; margin-bottom:8px;">Joueurs n'ayant fait aucun score sous les 30 pts.</div>{perfect_disp}</div>
+<div style="display:flex; gap:20px; margin-bottom:20px;">
+<div style="flex:1;"><div style="font-weight:700; color:#FFF; font-size:0.9rem; margin-bottom:5px;">🏆 PODIUM SEMAINE</div>{podium_html}</div>
+<div style="flex:1; background:rgba(255,255,255,0.03); padding:10px; border-radius:5px;"><div style="font-weight:700; color:#d4af37; font-size:0.9rem; margin-bottom:5px;">👑 COURSE AU TRÔNE</div>{rotw_html}</div>
 </div>
+<div style="background:rgba(59, 130, 246, 0.1); padding:10px; border-radius:5px; margin-bottom:25px;"><div style="font-weight:700; color:#60A5FA; font-size:0.9rem; margin-bottom:3px;">💎 THE PERFECT (30+)</div><div style="font-size:0.85rem;">{perfect_disp}</div></div>
 <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px; margin-bottom:25px;">
 <div><div style="font-weight:700; color:#FFF;">🎯 SNIPER</div><div style="font-size:0.75rem; color:#888; font-style:italic; margin-bottom:4px;">Tous les joueurs ayant trouvé un Best Pick.</div>{sniper_txt}</div>
 <div><div style="font-weight:700; color:#FFF;">🛡️ MURAILLE</div><div style="font-size:0.75rem; color:#888; font-style:italic; margin-bottom:4px;">Le moins de carottes (&lt;20) encaissées.</div>{muraille_txt}</div>
@@ -923,7 +933,7 @@ def render_weekly_report(df_full_history):
 <div><div style="font-weight:700; color:#FFF;">🌅 SUNDAY CLUTCH</div><div style="font-size:0.75rem; color:#888; font-style:italic; margin-bottom:4px;">Meilleur score sur le dernier pick du Deck.</div>{sunday_txt}</div>
 </div>
 <div style="margin-bottom:25px; background:rgba(0,0,0,0.2); padding:15px; border-radius:5px;"><div style="font-weight:700; color:#FFF; margin-bottom:2px;">📅 MVP PAR PICK</div><div style="font-size:0.75rem; color:#888; font-style:italic; margin-bottom:10px;">Le meilleur scoreur de chaque soirée.</div>{daily_html}</div>
-<div style="border-top:1px solid #444; padding-top:15px; margin-bottom:20px;"><div style="font-weight:700; color:#FFF; margin-bottom:2px;">🔬 ANALYSE & DYNAMIQUES</div><div style="font-size:0.75rem; color:#888; font-style:italic; margin-bottom:8px;">Focus sur les séries marquantes (vs Records).</div><div style="font-size:0.9rem;">{analysis_html}</div></div>
+<div style="border-top:1px solid #444; padding-top:15px; margin-bottom:20px;"><div style="font-weight:700; color:#FFF; margin-bottom:2px;">🔬 ANALYSE & DYNAMIQUES</div><div style="font-size:0.75rem; color:#888; font-style:italic; margin-bottom:10px;">Deep Dive : Séries, Fiabilité & Sur-performance.</div><div style="font-size:0.9rem;">{analysis_html}</div></div>
 <div style="background:rgba(255,255,255,0.05); padding:15px; border-radius:8px; display:flex; justify-content:space-around; align-items:center; text-align:center;">
 <div><div style="font-size:1.5rem; font-weight:900; color:#d4af37;">{stats['bp']}</div><div style="font-size:0.75rem; color:#AAA; font-weight:bold;">TEAM TOTAL BP 🎯</div></div>
 <div style="height:40px; width:1px; background:#444;"></div>

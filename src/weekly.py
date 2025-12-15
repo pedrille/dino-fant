@@ -10,22 +10,18 @@ def get_winners_list(series, maximize=True):
     return [(player, val) for player, val in winners.items()]
 
 def get_all_scorers(series):
-    """Récupère TOUTE la liste triée."""
     if series.empty: return []
     sorted_series = series.sort_values(ascending=False)
     return [(player, val) for player, val in sorted_series.items()]
 
 def get_global_records(df_full):
-    """Calcule les records d'équipe."""
     records = {"NoCarrot": 0, "Serie30": 0}
     for p in df_full['Player'].unique():
         scores = df_full[df_full['Player'] == p].sort_values('Pick')['Score'].values
-        # No Carrot
         temp = 0
         for s in scores:
             if s >= 20: temp += 1; records["NoCarrot"] = max(records["NoCarrot"], temp)
             else: temp = 0
-        # Serie 30
         temp = 0
         for s in scores:
             if s >= 30: temp += 1; records["Serie30"] = max(records["Serie30"], temp)
@@ -33,13 +29,10 @@ def get_global_records(df_full):
     return records
 
 def analyze_streaks_direct(df, player, current_pick_limit, global_records):
-    """Analyse factuelle des séries (Actuel vs Perso vs Team)."""
     p_df = df[(df['Player'] == player) & (df['Pick'] <= current_pick_limit)].sort_values('Pick')
     if p_df.empty: return []
 
     scores = p_df['Score'].values
-    
-    # Calculs Séries
     curr_nc, rec_perso_nc, temp = 0, 0, 0
     for s in scores:
         if s >= 20: temp += 1; rec_perso_nc = max(rec_perso_nc, temp)
@@ -57,28 +50,19 @@ def analyze_streaks_direct(df, player, current_pick_limit, global_records):
         else: break
 
     lines = []
-    
-    # 1. Analyse Fiabilité (> 10 matchs)
     if curr_nc >= 10:
         icon = "🔥"
         status = "[Série en cours]"
-        if curr_nc >= global_records["NoCarrot"]:
-            icon = "👑"; status = "[RECORD SAISON !]"
-        elif curr_nc >= rec_perso_nc and curr_nc > 10:
-            icon = "🚨"; status = "[Record Perso !]"
-            
+        if curr_nc >= global_records["NoCarrot"]: icon = "👑"; status = "[RECORD SAISON !]"
+        elif curr_nc >= rec_perso_nc and curr_nc > 10: icon = "🚨"; status = "[Record Perso !]"
         txt = f"{icon} **{player}** : {curr_nc} matchs consécutifs sans carotte {status} (Rec. perso : {rec_perso_nc} | Rec. Team : {global_records['NoCarrot']})"
         lines.append(txt)
 
-    # 2. Analyse Heavy Hitter (> 4 matchs > 30)
     if curr_30 >= 4:
         icon = "💪"
         status = "[Série en cours]"
-        if curr_30 >= global_records["Serie30"]:
-            icon = "👑"; status = "[RECORD SAISON !]"
-        elif curr_30 >= rec_perso_30:
-            icon = "🚨"; status = "[Record Perso !]"
-            
+        if curr_30 >= global_records["Serie30"]: icon = "👑"; status = "[RECORD SAISON !]"
+        elif curr_30 >= rec_perso_30: icon = "🚨"; status = "[Record Perso !]"
         txt = f"{icon} **{player}** : {curr_30} jours consécutifs > 30 pts {status} (Rec. perso : {rec_perso_30} | Rec. Team : {global_records['Serie30']})"
         lines.append(txt)
         
@@ -95,12 +79,10 @@ def generate_weekly_report_data(df_full, target_deck_num=None):
     week_df = df[df['Deck'] == target_deck].copy()
     if week_df.empty: return None
     
-    # --- 1. GESTION DES PICKS (REMPLACEMENT DES DATES) ---
     first_pick = int(week_df['Pick'].min())
     last_pick = int(week_df['Pick'].max())
     period_str = f"Picks #{first_pick} à #{last_pick}"
     
-    # --- 2. TEAM PULSE ---
     team_avg = week_df['Score'].mean()
     prev_deck = target_deck - 1
     diff_txt = ""
@@ -113,7 +95,6 @@ def generate_weekly_report_data(df_full, target_deck_num=None):
 
     discord_color = 5763719 if team_avg >= 40 else (16705372 if team_avg >= 30 else 15548997)
 
-    # --- 3. PODIUM (PAR MOYENNE) ---
     stats_week = week_df.groupby('Player')['Score'].agg(['mean', 'sum', 'count']).sort_values('mean', ascending=False)
     
     rotw_history = {}
@@ -129,11 +110,17 @@ def generate_weekly_report_data(df_full, target_deck_num=None):
         nb_rotw = rotw_history.get(player, 0)
         total_leader = week_df.groupby('Player')['Score'].sum().idxmax()
         is_official_winner = (player == total_leader)
-        if is_official_winner: nb_rotw += 1
+        
+        if is_official_winner: 
+            nb_rotw += 1
+            rotw_history[player] = rotw_history.get(player, 0) + 1 # Update local pour le tableau
+            
         rank = i + 1
         weekly_podium.append({'rank': rank, 'player': player, 'avg': float(row['mean']), 'total': int(row['sum']), 'rotw_count': nb_rotw, 'is_winner': is_official_winner})
 
-    # --- 4. LISTES ---
+    # --- AJOUT DU TABLEAU RECAP ROTW ---
+    rotw_leaderboard = sorted([(k, v) for k, v in rotw_history.items() if v > 0], key=lambda x: x[1], reverse=True)
+
     bp_series = week_df.groupby('Player')['IsBP'].sum()
     snipers = get_all_scorers(bp_series[bp_series > 0])
     
@@ -162,18 +149,14 @@ def generate_weekly_report_data(df_full, target_deck_num=None):
         scores = week_df[week_df['Player'] == p]['Score']
         if len(scores) >= 4 and scores.min() >= 30: perfects.append(p)
 
-    # --- 5. MVP PAR PICK (SANS DATE) ---
     daily_mvps = []
     for p_num in sorted(week_df['Pick'].unique()):
         d_data = week_df[week_df['Pick'] == p_num]
         if d_data.empty: continue
         max_s = d_data['Score'].max()
         mvps = d_data[d_data['Score'] == max_s]['Player'].tolist()
-        
-        # Format strict : Pick #XX
         daily_mvps.append(f"**Pick #{int(p_num)}** : {', '.join(mvps)} ({int(max_s)})")
 
-    # --- 6. DEEP ANALYSIS ---
     global_recs = get_global_records(df)
     analysis_lines = []
     for p in week_df['Player'].unique():
@@ -187,10 +170,11 @@ def generate_weekly_report_data(df_full, target_deck_num=None):
         "meta": {
             "week_num": target_deck,
             "max_deck": max_deck,
-            "dates": period_str, # "Picks #48 à #53"
+            "dates": period_str,
             "color": discord_color
         },
         "podium": weekly_podium,
+        "rotw_leaderboard": rotw_leaderboard, # ICI
         "perfect": perfects,
         "daily_mvp": daily_mvps,
         "analysis": analysis_lines,

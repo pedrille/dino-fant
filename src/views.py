@@ -848,7 +848,7 @@ def render_hall_of_fame(df_full_history, bp_map, daily_max_map):
             with cols[i]:
                 st.markdown(f"""<div class="glass-card" style="position:relative; overflow:hidden; margin-bottom:10px"><div style="position:absolute; right:-10px; top:-10px; font-size:5rem; opacity:0.05; pointer-events:none">{card['icon']}</div><div class="hof-badge" style="color:{card['color']}; border:1px solid {card['color']}">{card['icon']} {card['title']}</div><div style="display:flex; justify-content:space-between; align-items:flex-end;"><div><div class="hof-player">{card['player']}</div><div style="font-size:0.8rem; color:#888; margin-top:4px">{card['desc']}</div></div><div><div class="hof-stat" style="color:{card['color']}">{card['val']}</div><div class="hof-unit">{card['unit']}</div></div></div></div>""", unsafe_allow_html=True)
 
-# --- 8. WEEKLY REPORT (V25.0 FINAL - SECURE & STATUS) ---
+# --- 8. WEEKLY REPORT (V25.0 FINAL TEXTS) ---
 def render_weekly_report(df_full_history):
     section_title("WEEKLY <span class='highlight'>REPORT</span>", "Générateur de Rapport Premium")
     
@@ -868,7 +868,7 @@ def render_weekly_report(df_full_history):
     stats = data['stats']
     lists = data['lists']
 
-    # --- GESTION ETAT (Envoyé ou Pas) ---
+    # --- ETATS DE DIFFUSION ---
     sent_key = f"sent_deck_{target_deck}"
     if sent_key not in st.session_state:
         st.session_state[sent_key] = {"sent": False, "time": None}
@@ -929,7 +929,7 @@ def render_weekly_report(df_full_history):
 <div><div style="font-weight:900; color:#FFF; font-size:1.4rem; letter-spacing:1px;">🦖 ROTW • DECK #{target_deck}</div><div style="color:#b9bbbe; font-size:0.9rem; margin-top:4px;">Raptors Of The Week - {meta['dates']}</div></div>
 <div style="text-align:right;"><div style="font-weight:bold; color:#FFF; font-size:1.4rem;">{stats['avg']:.1f} PTS</div><div style="font-size:0.8rem; color:{diff_col}">{stats['diff']}</div></div>
 </div>
-<div style="display:flex; gap:15px; margin-bottom:20px;">
+<div style="display:flex; gap:20px; margin-bottom:20px;">
 <div style="flex:1;"><div style="font-weight:700; color:#FFF; font-size:0.9rem; margin-bottom:5px;">🏆 PODIUM SEMAINE</div>{podium_html}</div>
 <div style="flex:1; background:rgba(255,255,255,0.03); padding:10px; border-radius:5px;"><div style="font-weight:700; color:#d4af37; font-size:0.9rem; margin-bottom:5px;">👑 COURSE AU TRÔNE</div>{rotw_html}</div>
 </div>
@@ -955,9 +955,9 @@ def render_weekly_report(df_full_history):
     with c2:
         st.markdown("### 📤 PARTAGE DISCORD")
         
-        # --- LOGIQUE DYNAMIQUE DES STATUS ---
+        # --- BOX STATUTS ---
         if not is_complete:
-            # CAS 1 : DECK INCOMPLET
+            # 1. ROUGE : INCOMPLET
             status_box = """
             <div style="background:rgba(239, 68, 68, 0.1); padding:15px; border-radius:10px; border:1px solid #EF4444">
                 <div style="color:#EF4444; font-weight:bold; margin-bottom:5px">❌ DECK INCOMPLET</div>
@@ -968,10 +968,10 @@ def render_weekly_report(df_full_history):
             btn_label = "⛔ ATTENTE SCORES"
             
         elif is_sent:
-            # CAS 2 : DEJA ENVOYE
+            # 2. VERT : DEJA ENVOYE
             status_box = f"""
             <div style="background:rgba(16, 185, 129, 0.1); padding:15px; border-radius:10px; border:1px solid #10B981">
-                <div style="color:#10B981; font-weight:bold; margin-bottom:5px">✅ RÉCAPITULATIF ENVOYÉ</div>
+                <div style="color:#10B981; font-weight:bold; margin-bottom:5px">✅ RÉCAP ENVOYÉ</div>
                 <div style="font-size:0.8rem; color:#AAA;">Posté sur Discord à {sent_time}.<br>Pour renvoyer, rafraichissez la page.</div>
             </div>
             """
@@ -979,29 +979,29 @@ def render_weekly_report(df_full_history):
             btn_label = "✅ DÉJÀ PUBLIÉ"
             
         else:
-            # CAS 3 : PRET A POSTER
+            # 3. ORANGE : PRET
             status_box = """
             <div style="background:rgba(245, 158, 11, 0.1); padding:15px; border-radius:10px; border:1px solid #F59E0B">
                 <div style="color:#F59E0B; font-weight:bold; margin-bottom:5px">👌 RÉCAP PRÊT À POSTER</div>
-                <div style="font-size:0.8rem; color:#AAA;">Toutes les données sont valides. Cliquez ci-dessous pour publier le ROTW officiel.</div>
+                <div style="font-size:0.8rem; color:#AAA;">
+                    ROTW : Affichage récapitulatif de tous les scores et dynamiques de la semaine en cours.<br><br>
+                    Postez le récapitulatif chaque lundi en cliquant sur le bouton ci-dessous après avoir vérifié que les données sont ok.
+                </div>
             </div>
             """
             btn_disabled = False
             btn_label = "🚀 PUBLIER LE ROTW"
 
-        # Affichage Box Info
         st.markdown(status_box, unsafe_allow_html=True)
         st.markdown("<br>", unsafe_allow_html=True)
         
-        # Bouton d'action
         if st.button(btn_label, type="primary", use_container_width=True, disabled=btn_disabled):
             with st.spinner("Envoi en cours sur Discord..."):
                 res = send_weekly_report_discord(data, "https://raptorsttfl-dashboard.streamlit.app/")
                 if res == "success":
-                    # Mise à jour Session State
                     now_str = datetime.datetime.now().strftime("%H:%M")
                     st.session_state[sent_key]["sent"] = True
                     st.session_state[sent_key]["time"] = now_str
-                    st.rerun() # On recharge pour afficher le statut vert
+                    st.rerun()
                 else:
                     st.error(f"Erreur d'envoi : {res}")

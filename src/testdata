@@ -1,0 +1,120 @@
+import streamlit as st
+from streamlit_gsheets import GSheetsConnection
+import pandas as pd
+import numpy as np
+import datetime
+from src.utils import normalize_month
+
+# --- CONFIGURATION ---
+SEASON_START_DATE = datetime.datetime(2025, 10, 21)
+
+@st.cache_data(ttl=300, show_spinner=False)
+def load_data():
+    try:
+        # 1. CONNEXION
+        conn = st.connection("gsheets", type=GSheetsConnection)
+        url = st.secrets["SPREADSHEET_URL"]
+        df_raw = conn.read(spreadsheet=url, worksheet="Valeurs", header=None).astype(str)
+
+        # 2. REPÉRAGE DES LIGNES
+        pick_row_idx = 2
+        deck_row_idx = 1
+        players_start_row = 3
+
+        if "Pick" not in str(df_raw.iloc[pick_row_idx, 0]):
+            for i, row in df_raw.head(10).iterrows():
+                if "Pick" in str(row[0]):
+                    pick_row_idx = i; deck_row_idx = i - 1; players_start_row = i + 1; break
+
+        # 3. JOUEURS
+        players = []
+        player_indices = []
+        for i in range(players_start_row, len(df_raw)):
+            val = str(df_raw.iloc[i, 0]).strip()
+            if val in ["nan", "None", "", "Team Raptors", "Score BP", "Classic", "Moyenne"]: break
+            players.append(val)
+            player_indices.append(i)
+
+        if not players: return pd.DataFrame(), 0, {}, [], {}
+
+        # 4. EXTRACTION & STRUCTURE
+        data_list = []
+        deck_tracks = {} # Stocke la structure théorique {deck_id: [pick_start, ... pick_end]}
+        deck_map = {}
+        current_deck = 0
+        
+        # Scan des entêtes pour construire la map des Decks et la Structure
+        for col_idx in range(1, df_raw.shape[1]):
+            # Gestion Deck
+            val_d = df_raw.iloc[deck_row_idx, col_idx]
+            if pd.notna(val_d) and val_d != "nan" and val_d.strip() != "":
+                try: current_deck = int(float(val_d.replace(',', '.')))
+                except: pass
+            deck_map[col_idx] = current_deck
+            
+            # Gestion Pick (Structure)
+            raw_pick = df_raw.iloc[pick_row_idx, col_idx]
+            if pd.notna(raw_pick) and raw_pick != "nan" and raw_pick.strip() != "":
+                try:
+                    p_num = int(float(raw_pick.replace(',', '.')))
+                    if current_deck > 0:
+                        if current_deck not in deck_tracks: deck_tracks[current_deck] = []
+                        deck_tracks[current_deck].append(p_num)
+                except: pass
+
+        # 5. LECTURE DES SCORES
+        for col_idx in range(1, df_raw.shape[1]):
+            raw_pick = df_raw.iloc[pick_row_idx, col_idx]
+            if pd.isna(raw_pick) or raw_pick == "nan" or raw_pick.strip() == "": continue
+            
+            try: pick_num = int(float(raw_pick.replace(',', '.')))
+            except: continue
+
+            deck_num = deck_map.get(col_idx, 0)
+            calc_date = SEASON_START_DATE + datetime.timedelta(days=pick_num - 1)
+
+            for player_name, row_idx in zip(players, player_indices):
+                raw_score = df_raw.iloc[row_idx, col_idx]
+                if pd.isna(raw_score) or raw_score == "nan" or raw_score.strip() == "": continue
+                
+                score_str = raw_score.strip().replace(',', '.')
+                is_bonus = '*' in score_str
+                is_bp = '!' in score_str
+                clean_str = score_str.replace('*', '').replace('!', '')
+                
+                try: score_val = float(clean_str)
+                except: continue
+                
+                final_score = score_val * 2 if is_bonus else score_val
+                
+                data_list.append({
+                    'Pick': pick_num,
+                    'Deck': deck_num,
+                    'Date': calc_date,
+                    'Player': player_name,
+                    'Score': int(final_score),
+                    'ScoreVal': int(score_val),
+                    'IsBonus': is_bonus,
+                    'IsBP': is_bp,
+                    'Month': normalize_month(calc_date.strftime("%B"))
+                })
+
+        # 6. RETOUR
+        df = pd.DataFrame(data_list)
+        if df.empty: return pd.DataFrame(), 0, {}, [], {}
+
+        # ATTACHER LA STRUCTURE AU DATAFRAME (C'est la clé du fix)
+        df.attrs['deck_tracks'] = deck_tracks 
+
+        df['ZScore'] = df.groupby('Pick')['Score'].transform(lambda x: (x - x.mean()) / x.std(ddof=0) if x.std(ddof=0) > 0 else 0).fillna(0)
+        team_rank = 1 
+        bp_map = df[df['IsBP'] == True].set_index('Pick')['Score'].to_dict()
+        if not bp_map: bp_map = df.groupby('Pick')['Score'].max().to_dict()
+        team_history = [1]
+        daily_max_map = df.groupby('Pick')['Score'].max().to_dict()
+
+        return df, team_rank, bp_map, team_history, daily_max_map
+
+    except Exception as e:
+        st.error(f"🔥 Erreur Data Loader : {str(e)}")
+        return pd.DataFrame(), 0, {}, [], {}

@@ -3,6 +3,8 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import numpy as np
+import datetime # Nécessaire pour l'heure d'envoi
+
 
 # Imports internes
 from src.config import *
@@ -846,7 +848,7 @@ def render_hall_of_fame(df_full_history, bp_map, daily_max_map):
             with cols[i]:
                 st.markdown(f"""<div class="glass-card" style="position:relative; overflow:hidden; margin-bottom:10px"><div style="position:absolute; right:-10px; top:-10px; font-size:5rem; opacity:0.05; pointer-events:none">{card['icon']}</div><div class="hof-badge" style="color:{card['color']}; border:1px solid {card['color']}">{card['icon']} {card['title']}</div><div style="display:flex; justify-content:space-between; align-items:flex-end;"><div><div class="hof-player">{card['player']}</div><div style="font-size:0.8rem; color:#888; margin-top:4px">{card['desc']}</div></div><div><div class="hof-stat" style="color:{card['color']}">{card['val']}</div><div class="hof-unit">{card['unit']}</div></div></div></div>""", unsafe_allow_html=True)
 
-# --- 8. WEEKLY REPORT (V25.0 - 2 COLS + HISTORIQUE) ---
+# --- 8. WEEKLY REPORT (V25.0 FINAL - SECURE & STATUS) ---
 def render_weekly_report(df_full_history):
     section_title("WEEKLY <span class='highlight'>REPORT</span>", "Générateur de Rapport Premium")
     
@@ -866,6 +868,15 @@ def render_weekly_report(df_full_history):
     stats = data['stats']
     lists = data['lists']
 
+    # --- GESTION ETAT (Envoyé ou Pas) ---
+    sent_key = f"sent_deck_{target_deck}"
+    if sent_key not in st.session_state:
+        st.session_state[sent_key] = {"sent": False, "time": None}
+    
+    is_sent = st.session_state[sent_key]["sent"]
+    sent_time = st.session_state[sent_key]["time"]
+    is_complete = meta['is_complete']
+
     c1, c2 = st.columns([2, 1], gap="large")
     
     with c1:
@@ -879,14 +890,13 @@ def render_weekly_report(df_full_history):
             items = [f"<b>{x[0]}</b> ({x[1]}{suffix})" for x in lst]
             return ", ".join(items)
 
-        # 1. Podium Semaine
         podium_html = ""
         medals = ["🥇", "🥈", "🥉"]
         for p in data['podium']:
             crown = " 👑" if p.get('is_winner') else ""
+            rotw_tag = f" (ROTW #{p['rotw_count']})" if p.get('is_winner') and p['rotw_count'] > 0 else ""
             podium_html += f'<div style="display:flex; justify-content:space-between; margin-bottom:4px;"><div>{medals[p["rank"]-1]} <b>{p["player"]}</b>{crown}</div><div style="text-align:right;"><b>{p["avg"]:.1f}</b> <span style="font-size:0.8em; color:#888;">(Tot: {p["total"]})</span></div></div>'
 
-        # 2. Palmarès ROTW (Tableau simple)
         rotw_html = ""
         if data.get('rotw_leaderboard'):
             for idx, (player, count) in enumerate(data['rotw_leaderboard'][:5]):
@@ -895,7 +905,6 @@ def render_weekly_report(df_full_history):
         else:
             rotw_html = "<div style='font-style:italic; color:#888;'>Aucun titre distribué.</div>"
 
-        # 3. Perfect
         perfect_disp = ", ".join([f"<b>{p}</b>" for p in data['perfect']]) if data['perfect'] else "Aucun joueur parfait cette semaine."
         
         daily_html = ""
@@ -915,20 +924,19 @@ def render_weekly_report(df_full_history):
         sunday_txt = fmt_list(lists['sunday'], " pts")
         diff_col = '#57F287' if '+' in stats['diff'] else '#ED4245'
 
-        # BLOC HTML FINAL (LAYOUT 2 COLS EN HAUT)
         html_content = f"""<div style="background:#2f3136; border-left: 5px solid {border_color}; padding:20px; border-radius:8px; font-family:sans-serif; color:#dcddde; font-size: 0.95rem; line-height: 1.5;">
 <div style="margin-bottom:20px; border-bottom:1px solid #444; padding-bottom:15px; display:flex; justify-content:space-between; align-items:center;">
 <div><div style="font-weight:900; color:#FFF; font-size:1.4rem; letter-spacing:1px;">🦖 ROTW • DECK #{target_deck}</div><div style="color:#b9bbbe; font-size:0.9rem; margin-top:4px;">Raptors Of The Week - {meta['dates']}</div></div>
 <div style="text-align:right;"><div style="font-weight:bold; color:#FFF; font-size:1.4rem;">{stats['avg']:.1f} PTS</div><div style="font-size:0.8rem; color:{diff_col}">{stats['diff']}</div></div>
 </div>
-<div style="display:flex; gap:20px; margin-bottom:20px;">
+<div style="display:flex; gap:15px; margin-bottom:20px;">
 <div style="flex:1;"><div style="font-weight:700; color:#FFF; font-size:0.9rem; margin-bottom:5px;">🏆 PODIUM SEMAINE</div>{podium_html}</div>
 <div style="flex:1; background:rgba(255,255,255,0.03); padding:10px; border-radius:5px;"><div style="font-weight:700; color:#d4af37; font-size:0.9rem; margin-bottom:5px;">👑 COURSE AU TRÔNE</div>{rotw_html}</div>
 </div>
 <div style="background:rgba(59, 130, 246, 0.1); padding:10px; border-radius:5px; margin-bottom:25px;"><div style="font-weight:700; color:#60A5FA; font-size:0.9rem; margin-bottom:3px;">💎 THE PERFECT (30+)</div><div style="font-size:0.85rem;">{perfect_disp}</div></div>
 <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px; margin-bottom:25px;">
 <div><div style="font-weight:700; color:#FFF;">🎯 SNIPER</div><div style="font-size:0.75rem; color:#888; font-style:italic; margin-bottom:4px;">Tous les joueurs ayant trouvé un Best Pick.</div>{sniper_txt}</div>
-<div><div style="font-weight:700; color:#FFF;">🛡️ MURAILLE</div><div style="font-size:0.75rem; color:#888; font-style:italic; margin-bottom:4px;">Le moins de carottes (&lt;20) encaissées.</div>{muraille_txt}</div>
+<div><div style="font-weight:700; color:#FFF;">🛡️ MURAILLE</div><div style="font-size:0.75rem; color:#888; font-style:italic; margin-bottom:4px;">Joueurs ayant terminé le Deck avec 0 carotte.</div>{muraille_txt}</div>
 <div><div style="font-weight:700; color:#FFF;">🚀 PROGRESSION</div><div style="font-size:0.75rem; color:#888; font-style:italic; margin-bottom:4px;">Plus forte hausse vs Deck précédent.</div>{remontada_txt}</div>
 <div><div style="font-weight:700; color:#FFF;">🌅 SUNDAY CLUTCH</div><div style="font-size:0.75rem; color:#888; font-style:italic; margin-bottom:4px;">Meilleur score sur le dernier pick du Deck.</div>{sunday_txt}</div>
 </div>
@@ -946,22 +954,54 @@ def render_weekly_report(df_full_history):
 
     with c2:
         st.markdown("### 📤 PARTAGE DISCORD")
-        st.markdown("""
-        <div style="background:rgba(255,255,255,0.05); padding:15px; border-radius:10px; border:1px solid rgba(255,255,255,0.1)">
-            <div style="font-weight:bold; color:#FFF; margin-bottom:10px">ℹ️ À PROPOS DU ROTW</div>
-            <div style="font-size:0.9rem; color:#AAA; line-height:1.4; margin-bottom:15px;">
-                Ceci est le <b>Raptors Of The Week</b> : le rapport hebdomadaire officiel résumant les performances du Deck écoulé.<br><br>
-                Il compile automatiquement les scores, identifie les MVP, analyse les séries en cours et attribue les médailles.<br><br>
-                👉 <b>Instruction :</b> Vérifiez que toutes les données (scores du dimanche inclus) sont à jour, puis cliquez sur le bouton ci-dessous pour publier le rapport sur le canal Discord de l'équipe.
-            </div>
-            <div style="font-size:0.8rem; color:#10B981; font-weight:bold;">✅ SYSTÈME PRÊT</div>
-        </div>
-        """, unsafe_allow_html=True)
         
+        # --- LOGIQUE DYNAMIQUE DES STATUS ---
+        if not is_complete:
+            # CAS 1 : DECK INCOMPLET
+            status_box = """
+            <div style="background:rgba(239, 68, 68, 0.1); padding:15px; border-radius:10px; border:1px solid #EF4444">
+                <div style="color:#EF4444; font-weight:bold; margin-bottom:5px">❌ DECK INCOMPLET</div>
+                <div style="font-size:0.8rem; color:#AAA;">Le dernier pick de ce Deck ne contient pas encore de scores. Attendez la fin des matchs.</div>
+            </div>
+            """
+            btn_disabled = True
+            btn_label = "⛔ ATTENTE SCORES"
+            
+        elif is_sent:
+            # CAS 2 : DEJA ENVOYE
+            status_box = f"""
+            <div style="background:rgba(16, 185, 129, 0.1); padding:15px; border-radius:10px; border:1px solid #10B981">
+                <div style="color:#10B981; font-weight:bold; margin-bottom:5px">✅ RÉCAPITULATIF ENVOYÉ</div>
+                <div style="font-size:0.8rem; color:#AAA;">Posté sur Discord à {sent_time}.<br>Pour renvoyer, rafraichissez la page.</div>
+            </div>
+            """
+            btn_disabled = True
+            btn_label = "✅ DÉJÀ PUBLIÉ"
+            
+        else:
+            # CAS 3 : PRET A POSTER
+            status_box = """
+            <div style="background:rgba(245, 158, 11, 0.1); padding:15px; border-radius:10px; border:1px solid #F59E0B">
+                <div style="color:#F59E0B; font-weight:bold; margin-bottom:5px">👌 RÉCAP PRÊT À POSTER</div>
+                <div style="font-size:0.8rem; color:#AAA;">Toutes les données sont valides. Cliquez ci-dessous pour publier le ROTW officiel.</div>
+            </div>
+            """
+            btn_disabled = False
+            btn_label = "🚀 PUBLIER LE ROTW"
+
+        # Affichage Box Info
+        st.markdown(status_box, unsafe_allow_html=True)
         st.markdown("<br>", unsafe_allow_html=True)
         
-        if st.button("🚀 PUBLIER LE ROTW", type="primary", use_container_width=True):
+        # Bouton d'action
+        if st.button(btn_label, type="primary", use_container_width=True, disabled=btn_disabled):
             with st.spinner("Envoi en cours sur Discord..."):
                 res = send_weekly_report_discord(data, "https://raptorsttfl-dashboard.streamlit.app/")
-                if res == "success": st.success("✅ Rapport publié avec succès !"); st.balloons()
-                else: st.error(f"Erreur d'envoi : {res}")
+                if res == "success":
+                    # Mise à jour Session State
+                    now_str = datetime.datetime.now().strftime("%H:%M")
+                    st.session_state[sent_key]["sent"] = True
+                    st.session_state[sent_key]["time"] = now_str
+                    st.rerun() # On recharge pour afficher le statut vert
+                else:
+                    st.error(f"Erreur d'envoi : {res}")

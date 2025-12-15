@@ -22,7 +22,7 @@ def get_uniform_color(score):
     if s < 20:  return "#EF4444"
     return "#374151"
 
-# --- FORMATAGE LISTES (Pour Discord) ---
+# --- NOUVELLES FONCTIONS DE FORMATAGE (Pour Weekly V25) ---
 def format_list_discord(lst, suffix=""):
     """Transforme une liste [(Joueur, Val), ...] en string pour Discord."""
     if not lst: return "Personne."
@@ -36,7 +36,25 @@ def format_simple_list(lst):
     names = [f"**{x[0]}**" for x in lst]
     return ", ".join(names)
 
-# --- FONCTION D'ENVOI ROTW (COMPATIBLE V25) ---
+# --- ANCIENNE FONCTION (Restaurée pour éviter le crash des imports) ---
+def format_winners_list(winners, suffix=""):
+    """
+    Legacy : Utilisée par d'autres vues (Dashboard).
+    Exemple : [('Gabeur', 2), ('Mims', 2)] -> "**Gabeur** & **Mims** (2)"
+    """
+    if not winners: return "Personne."
+    
+    names = [f"**{w[0]}**" for w in winners]
+    val = winners[0][1] 
+    
+    if len(names) == 1:
+        return f"{names[0]} ({val}{suffix})"
+    elif len(names) == 2:
+        return f"{names[0]} & {names[1]} ({val}{suffix})"
+    else:
+        return f"{', '.join(names[:-1])} & {names[-1]} ({val}{suffix})"
+
+# --- FONCTION D'ENVOI ROTW (V25) ---
 def send_weekly_report_discord(data, dashboard_url):
     """
     Envoie le rapport ROTW structuré vers Discord via Webhook.

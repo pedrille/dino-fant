@@ -48,17 +48,28 @@ def format_winners_list(winners, suffix=""):
 def send_weekly_report_discord(data, dashboard_url):
     if not WEBHOOK_URL: return "URL Webhook manquante."
 
-    meta = data['meta']
-    stats = data['stats']
-    lists = data['lists']
+    meta = data.get('meta', {})
+    stats = data.get('stats', {})
+    lists = data.get('lists', {})
     
-    # SEPARATEUR VISUEL (Pour élargir et aérer)
+    # SEPARATEUR VISUEL
     SEP = "〰️〰️〰️〰️〰️〰️〰️〰️〰️〰️〰️〰️"
+
+    # --- SÉCURITÉ 1 : COULEUR (INT OBLIGATOIRE) ---
+    raw_color = meta.get('color', DISCORD_COLOR_RED)
+    discord_color = DISCORD_COLOR_RED
+    if isinstance(raw_color, str):
+        try:
+            discord_color = int(raw_color.replace('#', ''), 16)
+        except:
+            pass
+    elif isinstance(raw_color, int):
+        discord_color = raw_color
 
     # 1. PODIUM
     podium_txt = ""
     medals = ["🥇", "🥈", "🥉"]
-    for p in data['podium']:
+    for p in data.get('podium', []):
         crown = " 👑" if p.get('is_winner') else ""
         podium_txt += f"{medals[p['rank']-1]} **{p['player']}**{crown} • {p['avg']:.1f} pts (Tot: {p['total']})\n"
     
@@ -68,59 +79,49 @@ def send_weekly_report_discord(data, dashboard_url):
         for idx, (player, count) in enumerate(data['rotw_leaderboard'][:10]):
             icon = "🏆" if idx == 0 else "▪️"
             rotw_txt += f"{icon} **{player}** : {count}\n"
-    else:
-        rotw_txt = "_Aucun titre._"
-
+    
     # 3. STATS & LISTES
-    sniper_txt = format_list_discord(lists['sniper'], " BP")
-    muraille_txt = format_simple_list(lists['muraille'])
-    remontada_txt = format_list_discord(lists['remontada'], " pts")
-    sunday_txt = format_list_discord(lists['sunday'], " pts")
-    perfect_txt = ", ".join([f"**{p}**" for p in data['perfect']]) if data['perfect'] else "Aucun."
+    sniper_txt = format_list_discord(lists.get('sniper', []), " BP")
+    muraille_txt = format_simple_list(lists.get('muraille', []))
+    remontada_txt = format_list_discord(lists.get('remontada', []), " pts")
+    sunday_txt = format_list_discord(lists.get('sunday', []), " pts")
+    
+    perfect_list = data.get('perfect', [])
+    perfect_txt = ", ".join([f"**{p}**" for p in perfect_list]) if perfect_list else "Aucun."
 
     # 4. ANALYSE
     analysis_txt = ""
     if data.get('analysis'):
-        # Ajout d'un tiret pour faire une liste propre
         analysis_txt = "\n".join([f"🔹 {line}" for line in data['analysis']])
-    else:
-        analysis_txt = "_Pas de dynamique majeure détectée._"
 
-   # 5. CONSTRUCTION EMBED AÉRÉ
-    
-    # --- CONVERTISSEUR DE COULEUR POUR DISCORD ---
-    # Convertit le "#10B981" (texte) en entier pour ne pas faire crasher l'API
-    discord_color = meta.get('color', DISCORD_COLOR_RED)
-    if isinstance(discord_color, str) and discord_color.startswith('#'):
-        try:
-            discord_color = int(discord_color.lstrip('#'), 16)
-        except:
-            discord_color = DISCORD_COLOR_RED
-    elif not isinstance(discord_color, int):
-        discord_color = DISCORD_COLOR_RED
+    # --- SÉCURITÉ 2 : BOUCLIER ANTI-VIDE ---
+    def safe_val(text, fallback="_Aucune donnée_"):
+        text = str(text).strip()
+        return text if text else fallback
 
+    # 5. CONSTRUCTION EMBED AÉRÉ
     embed = {
-        "title": f"🦖 RAPTORS OF THE WEEK • DECK #{meta['week_num']}",
-        "description": f"**{meta['dates']}**\n\n📊 **Moyenne Team :** {stats['avg']:.1f} pts ({stats['diff']})\n\n{SEP}",
-        "color": discord_color, # <--- La couleur sécurisée est injectée ici
+        "title": safe_val(f"🦖 RAPTORS OF THE WEEK • DECK #{meta.get('week_num', '?')}"),
+        "description": safe_val(f"**{meta.get('dates', '?')}**\n\n📊 **Moyenne Team :** {stats.get('avg', 0):.1f} pts ({stats.get('diff', '')})\n\n{SEP}"),
+        "color": discord_color,
         "fields": [
-            {"name": "🏆 PODIUM SEMAINE", "value": podium_txt, "inline": True},
-            {"name": "👑 COURSE AU TRÔNE", "value": rotw_txt, "inline": True},
+            {"name": "🏆 PODIUM SEMAINE", "value": safe_val(podium_txt), "inline": True},
+            {"name": "👑 COURSE AU TRÔNE", "value": safe_val(rotw_txt, "_Aucun titre._"), "inline": True},
             
-            {"name": "💎 THE PERFECT (30+)", "value": perfect_txt + f"\n\n{SEP}", "inline": False},
+            {"name": "💎 THE PERFECT (30+)", "value": safe_val(perfect_txt) + f"\n\n{SEP}", "inline": False},
             
-            {"name": "🎯 SNIPER & CLUTCH", "value": f"**Sniper :** {sniper_txt}\n**Sunday Clutch :** {sunday_txt}", "inline": False},
+            {"name": "🎯 SNIPER & CLUTCH", "value": safe_val(f"**Sniper :** {sniper_txt}\n**Sunday Clutch :** {sunday_txt}"), "inline": False},
             
-            {"name": "🛡️ DÉFENSE & PROGRESSION", "value": f"**Muraille (0 Carotte) :** {muraille_txt}\n**Progression :** {remontada_txt}\n\n{SEP}", "inline": False},
+            {"name": "🛡️ DÉFENSE & PROGRESSION", "value": safe_val(f"**Muraille (0 Carotte) :** {muraille_txt}\n**Progression :** {remontada_txt}") + f"\n\n{SEP}", "inline": False},
             
-            {"name": "🔬 ANALYSE & DYNAMIQUES", "value": analysis_txt + f"\n\n{SEP}", "inline": False},
+            {"name": "🔬 ANALYSE & DYNAMIQUES", "value": safe_val(analysis_txt, "_Pas de dynamique majeure._") + f"\n\n{SEP}", "inline": False},
             
-            {"name": "📈 TEAM PULSE", "value": f"🎯 **{stats['bp']}** Best Picks  |  🥕 **{stats['carrots']}** Carottes  |  🛡️ **{stats['safe_zone']}** Safe Zone (>30)", "inline": False},
+            {"name": "📈 TEAM PULSE", "value": safe_val(f"🎯 **{stats.get('bp', 0)}** Best Picks  |  🥕 **{stats.get('carrots', 0)}** Carottes  |  🛡️ **{stats.get('safe_zone', 0)}** Safe Zone (>30)"), "inline": False},
             
-            # Utilisation de l'espace invisible \u200B obligatoire pour Discord
-            {"name": "\u200B", "value": f"👉 [Accéder au Dashboard]({dashboard_url})", "inline": False}
+            # SÉCURITÉ 3 : Nom de champ valide garanti
+            {"name": "👉 LIEN RAPIDE", "value": f"[Accéder au Dashboard]({dashboard_url})", "inline": False}
         ],
-        "footer": {"text": "Raptors TTFL • STATS 🦖"}
+        "footer": {"text": "War Room V25 • Generated by Python 🦖"}
     }
 
     payload = {
@@ -132,6 +133,7 @@ def send_weekly_report_discord(data, dashboard_url):
     try:
         r = requests.post(WEBHOOK_URL, json=payload)
         if r.status_code in [200, 204]: return "success"
-        else: return f"Erreur {r.status_code}: {r.text}"
+        # Si ça plante encore, on affiche le message complet de Discord pour debugger !
+        else: return f"Erreur Discord {r.status_code}: {r.text}"
     except Exception as e:
         return str(e)

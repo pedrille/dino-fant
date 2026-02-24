@@ -89,10 +89,23 @@ def send_weekly_report_discord(data, dashboard_url):
     perfect_list = data.get('perfect', [])
     perfect_txt = ", ".join([f"**{p}**" for p in perfect_list]) if perfect_list else "Aucun."
 
-    # 4. ANALYSE
+    # 4. ANALYSE (AVEC SÉCURITÉ DES 1024 CARACTÈRES - 8 LIGNES RANDOM)
+    import random
     analysis_txt = ""
     if data.get('analysis'):
-        analysis_txt = "\n".join([f"🔹 {line}" for line in data['analysis']])
+        # On copie la liste pour pouvoir la mélanger
+        lignes_brutes = list(data['analysis'])
+        random.shuffle(lignes_brutes) # Mélange aléatoire des joueurs
+        
+        lignes = [f"🔹 {line}" for line in lignes_brutes]
+        
+        # On coupe à 8 lignes maximum
+        if len(lignes) > 8:
+            analysis_txt = "\n".join(lignes[:8]) + f"\n🔹 _... et {len(lignes)-8} autres séries en cours (Voir App) !_"
+        else:
+            analysis_txt = "\n".join(lignes)
+    else:
+        analysis_txt = "_Pas de dynamique majeure détectée._"
 
     # --- SÉCURITÉ 2 : BOUCLIER ANTI-VIDE ---
     def safe_val(text, fallback="_Aucune donnée_"):
